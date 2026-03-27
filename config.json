@@ -1,0 +1,21 @@
+{
+  "budget": 100,
+  "stop_loss_pct": 10,
+  "cycle_seconds": 60,
+  "watchlist": ["BTCUSDC", "ETHUSDC", "SOLUSDC", "XRPUSDC", "BNBUSDC"],
+  "llm_cooldown_seconds": 300,
+  "price_change_threshold_pct": 0.5,
+  "risk_level": 3,
+  "max_tokens": 1000,
+  "llm": {
+    "provider": "gemini",
+    "model": "gemini-3.1-flash-lite-preview"
+  },
+  "__llm_all_possibilities": {
+    "provider": ["claude", "gemini"],
+    "model": [
+      "claude-opus-4-5", "claude-haiku-4-5-20251001",
+      "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-3.1-flash-lite-preview"
+    ]
+  }
+}

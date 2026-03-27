@@ -1,0 +1,25 @@
+[tool.poetry]
+name        = "hellocrypto"
+version     = "0.1.0"
+description = "AI-powered crypto trading agent on Binance"
+readme      = "README.md"
+packages    = [{ include = "hellocrypto" }]
+
+[tool.poetry.dependencies]
+python        = "^3.11"
+anthropic     = ">=0.40"
+flask         = ">=3.0"
+requests      = ">=2.31"
+python-dotenv = ">=1.0"
+google-genai  = { version = ">=1.0", optional = true }
+
+[tool.poetry.extras]
+gemini = ["google-genai"]
+
+[tool.poetry.scripts]
+agent     = "hellocrypto.agent:run_agent"
+dashboard = "hellocrypto.dashboard:main"
+
+[build-system]
+requires      = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

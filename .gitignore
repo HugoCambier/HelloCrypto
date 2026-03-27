@@ -1,0 +1,18 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Virtual envs (Poetry manages its own, but just in case)
+.venv/
+
+# Runtime data (generated at runtime, not versioned)
+logs/
+data/
+
+# macOS
+.DS_Store
