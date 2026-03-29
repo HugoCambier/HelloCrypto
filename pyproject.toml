@@ -19,6 +19,7 @@ gemini = ["google-genai"]
 [tool.poetry.scripts]
 agent     = "hellocrypto.agent:run_agent"
 dashboard = "hellocrypto.dashboard:main"
+backtest  = "hellocrypto.backtest:main"
 
 [build-system]
 requires      = ["poetry-core"]

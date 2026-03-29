@@ -1,21 +1,42 @@
 {
   "budget": 100,
-  "stop_loss_pct": 10,
+  "stop_loss_pct": 20,
   "cycle_seconds": 60,
-  "watchlist": ["BTCUSDC", "ETHUSDC", "SOLUSDC", "XRPUSDC", "BNBUSDC"],
+  "watchlist": [
+    "BTCUSDC",
+    "ETHUSDC",
+    "SOLUSDC",
+    "XRPUSDC",
+    "BNBUSDC",
+    "ADAUSDC",
+    "AVAXUSDC"
+  ],
   "llm_cooldown_seconds": 300,
   "price_change_threshold_pct": 0.5,
   "risk_level": 3,
+  "trailing_stop_pct": 10,
+  "sell_cooldown_cycles": 3,
   "max_tokens": 1000,
   "llm": {
     "provider": "gemini",
     "model": "gemini-3.1-flash-lite-preview"
   },
-  "__llm_all_possibilities": {
-    "provider": ["claude", "gemini"],
-    "model": [
-      "claude-opus-4-5", "claude-haiku-4-5-20251001",
-      "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-3.1-flash-lite-preview"
+  "llm_models": {
+    "claude": [
+      "claude-sonnet-4-6",
+      "claude-opus-4-5",
+      "claude-haiku-4-5"
+    ],
+    "gemini": [
+      "gemini-3.1-flash-lite-preview",
+      "gemini-3-flash-live"
+    ],
+    "ollama": [
+      "mistral",
+      "mistral:7b",
+      "qwen2.5:14b",
+      "deepseek-r1",
+      "qwen2.5"
     ]
   }
 }

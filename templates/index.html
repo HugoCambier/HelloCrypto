@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>HelloCrypto Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -53,6 +54,12 @@
 
     .spinner { border: 2px solid #334155; border-top-color: #3b82f6; border-radius: 50%; width: 16px; height: 16px; animation: spin .6s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    .tip { position: relative; display: inline-flex; align-items: center; }
+    .tip .tip-icon { width: 14px; height: 14px; border-radius: 50%; background: #334155; color: #94a3b8; font-size: 9px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; cursor: default; flex-shrink: 0; }
+    .tip .tip-box { visibility: hidden; opacity: 0; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #1e293b; border: 1px solid #334155; color: #cbd5e1; font-size: 11px; line-height: 1.5; padding: 7px 10px; border-radius: 8px; width: 220px; z-index: 100; pointer-events: none; transition: opacity .15s; white-space: normal; }
+    .tip .tip-box::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #334155; }
+    .tip:hover .tip-box, .tip:focus-within .tip-box { visibility: visible; opacity: 1; }
   </style>
 </head>
 <body class="text-slate-100 h-full flex flex-col">
@@ -77,7 +84,7 @@
   </header>
 
   <!-- ── Tab bar ── -->
-  <nav class="bg-slate-800 border-b border-slate-700 px-6 flex gap-1 shrink-0">
+  <nav class="bg-slate-800 border-b border-slate-700 px-6 flex gap-1 shrink-0 items-center">
     <button class="tab-btn tab-active   px-5 py-3 text-sm font-medium transition-colors" data-tab="logs"        onclick="switchTab('logs')">
       ⬛ Logs en direct
     </button>
@@ -88,8 +95,80 @@
       💼 Portefeuille
     </button>
     <button class="tab-btn tab-inactive px-5 py-3 text-sm font-medium transition-colors" data-tab="simulation" onclick="switchTab('simulation')">
-      🧪 Simulation
+      🧪 Simulation Live
     </button>
+    <button class="tab-btn tab-inactive px-5 py-3 text-sm font-medium transition-colors" data-tab="backtest" onclick="switchTab('backtest')">
+      ⏪ Backtest
+    </button>
+    <button class="tab-btn tab-inactive px-5 py-3 text-sm font-medium transition-colors" data-tab="analyse" onclick="switchTab('analyse')">
+      🔭 Analyse IA
+    </button>
+
+    <!-- ── LLM Selector ── -->
+    <div class="ml-auto flex items-center gap-2 relative" id="llm-selector-wrap">
+      <button onclick="_toggleLlmPanel(event)"
+        class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-xs text-slate-300 transition-colors">
+        🤖 <span id="llm-selector-label">LLM</span> ▾
+      </button>
+      <div id="llm-panel" class="hidden absolute right-0 top-full mt-1 z-50 bg-slate-800 border border-slate-600 rounded-xl shadow-xl p-4 w-72 space-y-3">
+        <div class="text-xs font-semibold text-slate-300 mb-1">Modèle LLM actif</div>
+        <div class="space-y-1">
+          <label class="text-xs text-slate-400">Provider</label>
+          <select id="llm-provider-sel" onchange="_onLlmProviderChange()"
+            class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none">
+          </select>
+        </div>
+        <div class="space-y-1">
+          <label class="text-xs text-slate-400">Modèle</label>
+          <select id="llm-model-sel"
+            class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none">
+          </select>
+          <input id="llm-model-custom" type="text" placeholder="Ou saisir un nom de modèle…"
+            class="hidden w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none mt-1" />
+        </div>
+        <div id="llm-ollama-url-wrap" class="hidden space-y-1">
+          <label class="text-xs text-slate-400">URL Ollama</label>
+          <input id="llm-ollama-url" type="text" value="http://localhost:11434"
+            class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none" />
+          <div id="ollama-status-row" class="flex items-center justify-between pt-1">
+            <span id="ollama-status-badge" class="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-400">● Vérification…</span>
+            <button onclick="_startOllama()" id="ollama-start-btn"
+              class="hidden px-2 py-0.5 bg-amber-600 hover:bg-amber-500 text-white text-xs rounded-lg transition-colors">
+              Démarrer Ollama
+            </button>
+          </div>
+          <div id="ollama-models-row" class="hidden">
+            <label class="text-xs text-slate-400">Modèles installés</label>
+            <div id="ollama-models-list" class="text-xs text-slate-300 mt-0.5 space-y-0.5"></div>
+          </div>
+        </div>
+        <div class="space-y-1">
+          <label class="text-xs text-slate-400">Température — <span id="llm-temp-label" class="font-semibold text-slate-200">1.0</span></label>
+          <input id="llm-temperature" type="range" min="0" max="2" step="0.1" value="1.0"
+            oninput="document.getElementById('llm-temp-label').textContent = parseFloat(this.value).toFixed(1)"
+            class="w-full accent-blue-400" />
+          <div class="flex justify-between text-xs text-slate-600">
+            <span>0 précis</span><span>1 équilibré</span><span>2 créatif</span>
+          </div>
+        </div>
+        <div class="space-y-1">
+          <label class="text-xs text-slate-400">Max tokens</label>
+          <input id="llm-max-tokens" type="number" min="100" max="8000" step="100"
+            class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none" />
+        </div>
+        <div class="flex gap-2 pt-1">
+          <button onclick="_saveLlmConfig()"
+            class="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-lg transition-colors">
+            Appliquer
+          </button>
+          <button onclick="document.getElementById('llm-panel').classList.add('hidden')"
+            class="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-300 text-xs rounded-lg transition-colors">
+            Annuler
+          </button>
+        </div>
+        <div id="llm-save-status" class="text-xs text-center hidden"></div>
+      </div>
+    </div>
   </nav>
 
   <!-- ── Main ── -->
@@ -309,6 +388,23 @@
                 <input id="sim-cycle-sec" type="number" value="60" min="5" step="5"
                   class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500" />
               </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="text-xs text-slate-400 block mb-1">Stop-loss (%)</label>
+                  <input id="sim-stop-loss" type="number" value="10" min="1" max="50" step="0.5"
+                    class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label class="text-xs text-slate-400 block mb-1">Trailing stop (%)</label>
+                  <input id="sim-trailing-stop" type="number" value="5" min="1" max="50" step="0.5"
+                    class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">Cooldown vente (cycles)</label>
+                <input id="sim-sell-cooldown" type="number" value="3" min="0" max="20"
+                  class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500" />
+              </div>
               <p class="text-xs text-amber-300/80">Prix réels, <strong>aucun ordre Binance</strong>. Frais simulés : 0,1 %.</p>
             </div>
             <!-- Buttons + progress -->
@@ -337,15 +433,32 @@
 
         <!-- Trade history -->
         <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden flex-1 min-w-0">
-          <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-            <span class="text-sm font-medium text-slate-300">Trades simulés</span>
-            <span id="sim-history-count" class="text-xs text-slate-500">—</span>
+          <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between gap-2">
+            <span class="text-sm font-medium text-slate-300 shrink-0">Trades simulés</span>
+            <div class="flex items-center gap-2 min-w-0">
+              <span id="sim-history-count" class="text-xs text-slate-500 shrink-0">—</span>
+              <div class="relative shrink-0" id="sim-filter-wrap">
+                <button onclick="_toggleSimFilter(event)"
+                  class="flex items-center gap-1 px-2 py-1 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-xs text-slate-300 transition-colors whitespace-nowrap">
+                  <span id="sim-filter-summary">Toutes</span>
+                  <span class="text-slate-500">▼</span>
+                </button>
+                <div id="sim-filter-dropdown" class="hidden absolute right-0 z-30 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl" style="min-width:160px">
+                  <div class="flex items-center justify-between px-3 py-2 border-b border-slate-700">
+                    <span class="text-xs text-slate-400 font-medium">Filtrer</span>
+                    <button onclick="_simToggleAll()" class="text-xs text-slate-400 hover:text-slate-200 transition-colors">tout / aucun</button>
+                  </div>
+                  <div id="sim-filter-list" class="py-1 max-h-48 overflow-y-auto"></div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="overflow-x-auto max-h-48 overflow-y-auto">
+          <div class="overflow-x-auto overflow-y-auto" style="max-height:370px">
             <table class="w-full text-xs">
               <thead class="sticky top-0 bg-slate-800">
                 <tr class="text-slate-500 border-b border-slate-700">
                   <th class="px-4 py-2 text-left">Cycle</th>
+                  <th class="px-4 py-2 text-left">Date / Heure</th>
                   <th class="px-4 py-2 text-left">Action</th>
                   <th class="px-4 py-2 text-left">Symbole</th>
                   <th class="px-4 py-2 text-right">Montant / Qty</th>
@@ -356,7 +469,7 @@
                 </tr>
               </thead>
               <tbody id="sim-history-body" class="divide-y divide-slate-700/50">
-                <tr><td colspan="8" class="px-4 py-6 text-center text-slate-600 text-sm">Aucun trade</td></tr>
+                <tr><td colspan="9" class="px-4 py-6 text-center text-slate-600 text-sm">Aucun trade</td></tr>
               </tbody>
             </table>
           </div>
@@ -401,6 +514,331 @@
 
     </div>
 
+    <!-- ═══ TAB: BACKTEST ═══ -->
+    <div id="pane-backtest" class="hidden h-full overflow-y-auto p-4 space-y-4">
+
+      <!-- Top row: params + progress -->
+      <div class="flex gap-4 items-stretch flex-wrap lg:flex-nowrap">
+
+        <!-- Config panel -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 shrink-0 w-full lg:w-auto">
+          <div class="flex items-start gap-6 flex-wrap">
+            <!-- Inputs -->
+            <div class="space-y-3 min-w-[240px]">
+              <h2 class="text-sm font-semibold text-slate-200">Paramètres backtest</h2>
+
+              <!-- Symboles dropdown -->
+              <div>
+                <div class="flex items-center gap-1.5 mb-1">
+                  <span class="text-xs text-slate-400">Symboles</span>
+                  <span class="tip"><span class="tip-icon">?</span><span class="tip-box">Cryptos à inclure dans le backtest. Les données historiques sont téléchargées depuis Binance (bougies 1h).</span></span>
+                </div>
+                <div class="relative" id="bt-sym-wrap">
+                  <button onclick="_toggleSymDropdown(event)"
+                    class="w-full flex items-center justify-between bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 hover:bg-slate-600 transition-colors">
+                    <span id="bt-sym-summary" class="truncate">Chargement…</span>
+                    <svg class="w-4 h-4 text-slate-400 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                  </button>
+                  <div id="bt-sym-dropdown" class="hidden absolute z-30 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl">
+                    <div class="flex items-center justify-between px-3 py-2 border-b border-slate-700">
+                      <span class="text-xs text-slate-500">Sélectionner</span>
+                      <button onclick="_btToggleAll()" class="text-xs text-slate-400 hover:text-slate-200 transition-colors">tout / aucun</button>
+                    </div>
+                    <div id="bt-symbols-list" class="py-1 max-h-48 overflow-y-auto">
+                      <div class="px-3 py-2 text-xs text-slate-500">Chargement…</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Date de début -->
+              <div>
+                <div class="flex items-center gap-1.5 mb-1">
+                  <label class="text-xs text-slate-400">Date de début</label>
+                  <span class="tip"><span class="tip-icon">?</span><span class="tip-box">Le backtest rejoue les données historiques depuis cette date jusqu'à aujourd'hui. Plus la période est longue, plus le téléchargement initial est long.</span></span>
+                </div>
+                <input id="bt-start-date" type="date"
+                  class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500" />
+              </div>
+
+              <!-- Budget -->
+              <div>
+                <div class="flex items-center gap-1.5 mb-1">
+                  <label class="text-xs text-slate-400">Budget (USDC)</label>
+                  <span class="tip"><span class="tip-icon">?</span><span class="tip-box">Capital de départ virtuel en USDC. L'agent répartit les achats en pourcentage de ce budget selon le niveau de risque.</span></span>
+                </div>
+                <input id="bt-budget" type="number" value="1000" min="100" step="100"
+                  class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500" />
+              </div>
+
+              <!-- Risk level -->
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">
+                  Niveau de risque —
+                  <span id="bt-risk-label" class="font-semibold text-slate-200">3 / 10</span>
+                </label>
+                <input id="bt-risk" type="range" min="1" max="10" value="3"
+                  oninput="document.getElementById('bt-risk-label').textContent = this.value + ' / 10'"
+                  class="w-full accent-purple-500" />
+                <div class="flex justify-between text-xs text-slate-600 mt-0.5">
+                  <span>Prudent</span><span>Modéré</span><span>Agressif</span>
+                </div>
+              </div>
+
+              <!-- Stop-loss + trailing stop -->
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <div class="flex items-center gap-1.5 mb-1">
+                    <label class="text-xs text-slate-400">Stop-loss (%)</label>
+                    <span class="tip"><span class="tip-icon">?</span><span class="tip-box">Vente automatique si le prix chute de X% par rapport au prix d'achat. Protège contre les grosses pertes soudaines. Ex : 10% → vente si −10% depuis l'entrée.</span></span>
+                  </div>
+                  <input id="bt-stop-loss" type="number" value="10" min="1" max="50" step="0.5"
+                    class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <div class="flex items-center gap-1.5 mb-1">
+                    <label class="text-xs text-slate-400">Trailing stop (%)</label>
+                    <span class="tip"><span class="tip-icon">?</span><span class="tip-box">Vente si le prix recule de X% depuis son plus haut depuis l'achat. Sécurise les gains en suivant la hausse. Ex : 5% → vente si le prix retombe de 5% après un pic.</span></span>
+                  </div>
+                  <input id="bt-trailing-stop" type="number" value="5" min="1" max="50" step="0.5"
+                    class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+
+              <!-- Sell cooldown -->
+              <div>
+                <div class="flex items-center gap-1.5 mb-1">
+                  <label class="text-xs text-slate-400">Cooldown vente (bougies)</label>
+                  <span class="tip"><span class="tip-icon">?</span><span class="tip-box">Nombre de bougies à attendre après une vente avant de pouvoir racheter le même actif. Évite le sur-trading après un stop-loss.</span></span>
+                </div>
+                <input id="bt-sell-cooldown" type="number" value="3" min="0" max="20"
+                  class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500" />
+              </div>
+
+              <!-- LLM toggle -->
+              <div class="flex items-center gap-3 py-1">
+                <button id="bt-llm-btn" onclick="_toggleBtLlm()"
+                  class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors border-slate-600 bg-slate-700 text-slate-400">
+                  🤖 LLM Off
+                </button>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs text-slate-500" id="bt-llm-hint">Décisions rule-based (rapide)</span>
+                  <span class="tip"><span class="tip-icon">?</span><span class="tip-box"><strong>LLM Off</strong> : score calculé à partir de RSI + tendance SMA + volatilité. Rapide et gratuit.<br/><br/><strong>LLM On</strong> : le vrai agent Claude/Gemini analyse chaque période et décide d'acheter, vendre ou attendre. Plus réaliste, mais consomme des tokens API.</span></span>
+                </div>
+              </div>
+
+              <!-- Rule-based thresholds (hidden in LLM mode) -->
+              <div id="bt-rule-params" class="grid grid-cols-2 gap-2">
+                <div>
+                  <div class="flex items-center gap-1.5 mb-1">
+                    <label class="text-xs text-slate-400">Seuil achat ≥</label>
+                    <span class="tip"><span class="tip-icon">?</span><span class="tip-box">Score minimum (sur 10) pour déclencher un achat. Le score combine RSI, tendance SMA et volatilité 24h. Plus élevé = moins d'achats, mais plus sélectifs.</span></span>
+                  </div>
+                  <input id="bt-buy-thr" type="number" value="7" min="1" max="10"
+                    class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <div class="flex items-center gap-1.5 mb-1">
+                    <label class="text-xs text-slate-400">Seuil vente ≤</label>
+                    <span class="tip"><span class="tip-icon">?</span><span class="tip-box">Score maximum (sur 10) pour déclencher une vente. Si le signal se dégrade en dessous de ce seuil, la position est liquidée. Plus bas = vente plus tardive.</span></span>
+                  </div>
+                  <input id="bt-sell-thr" type="number" value="3" min="1" max="10"
+                    class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500" />
+                </div>
+              </div>
+
+              <!-- LLM frequency (hidden in rule-based mode) -->
+              <div id="bt-llm-params" class="hidden">
+                <div class="flex items-center gap-1.5 mb-1">
+                  <label class="text-xs text-slate-400">Fréquence LLM — <span id="bt-llm-every-label" class="font-semibold text-slate-200">toutes les 4 bougies</span></label>
+                  <span class="tip"><span class="tip-icon">?</span><span class="tip-box">Nombre de bougies 1h entre chaque appel LLM. 4 = l'agent est consulté toutes les 4h simulées (~180 appels sur 30 jours). Moins fréquent = moins de coûts API, mais décisions moins réactives.</span></span>
+                </div>
+                <input id="bt-llm-every" type="range" min="1" max="24" value="4"
+                  oninput="_updateLlmEveryLabel()"
+                  class="w-full accent-purple-400" />
+                <p class="text-xs text-amber-300/80 mt-1">⚠ Chaque appel LLM consomme des tokens API.</p>
+              </div>
+            </div>
+
+            <!-- Speed + buttons -->
+            <div class="flex flex-col gap-3 min-w-[180px] justify-start pt-5">
+              <div>
+                <div class="flex items-center gap-1.5 mb-1">
+                  <label class="text-xs text-slate-400">Vitesse — <span id="bt-speed-label" class="font-semibold text-slate-200">10×</span></label>
+                  <span class="tip"><span class="tip-icon">?</span><span class="tip-box">Nombre de bougies jouées par seconde. 1× = 1 bougie/s (1h simulée/s), 10× = 10 bougies/s, 500× = quasi-instantané. Modifiable en cours de lecture.</span></span>
+                </div>
+                <input id="bt-speed" type="range" min="1" max="500" value="10"
+                  oninput="_updateBtSpeedLabel()" onchange="_btSpeedChange()"
+                  class="w-full accent-purple-500" />
+                <div class="flex justify-between text-xs text-slate-600 mt-0.5">
+                  <span>1×</span><span>250×</span><span>500×</span>
+                </div>
+              </div>
+              <button id="bt-start-btn" onclick="startBacktest()"
+                class="py-2 px-4 bg-purple-700 hover:bg-purple-600 text-sm font-medium rounded-lg transition-colors">
+                ▶ Lancer
+              </button>
+              <button id="bt-stop-btn" onclick="stopBacktest()" disabled
+                class="py-2 px-4 bg-red-700 hover:bg-red-600 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-medium rounded-lg transition-colors">
+                ⏹ Arrêter
+              </button>
+              <!-- Progress -->
+              <div class="space-y-1 mt-1">
+                <div class="flex justify-between text-xs text-slate-400">
+                  <span id="bt-status-label">—</span>
+                  <span id="bt-progress-label"></span>
+                </div>
+                <div class="w-full bg-slate-700 rounded-full h-1.5">
+                  <div id="bt-progress-bar" class="bg-purple-500 h-1.5 rounded-full transition-all duration-300" style="width:0%"></div>
+                </div>
+                <div class="text-xs text-slate-500" id="bt-ts-label"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Backtest history -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden flex-1 min-w-0">
+          <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between gap-2">
+            <span class="text-sm font-medium text-slate-300 shrink-0">Trades backtest</span>
+            <div class="flex items-center gap-2 min-w-0">
+              <span id="bt-history-count" class="text-xs text-slate-500 shrink-0">—</span>
+              <div class="relative shrink-0" id="bt-hist-filter-wrap">
+                <button onclick="_toggleBtHistFilter(event)"
+                  class="flex items-center gap-1 px-2 py-1 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-xs text-slate-300 transition-colors whitespace-nowrap">
+                  <span id="bt-hist-filter-summary">Toutes</span>
+                  <span class="text-slate-500">▼</span>
+                </button>
+                <div id="bt-hist-filter-dropdown" class="hidden absolute right-0 z-30 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl" style="min-width:160px">
+                  <div class="flex items-center justify-between px-3 py-2 border-b border-slate-700">
+                    <span class="text-xs text-slate-400 font-medium">Filtrer</span>
+                    <button onclick="_btHistToggleAll()" class="text-xs text-slate-400 hover:text-slate-200 transition-colors">tout / aucun</button>
+                  </div>
+                  <div id="bt-hist-filter-list" class="py-1 max-h-48 overflow-y-auto"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="overflow-x-auto overflow-y-auto" style="max-height:370px">
+            <table class="w-full text-xs">
+              <thead class="sticky top-0 bg-slate-800">
+                <tr class="text-slate-500 border-b border-slate-700">
+                  <th class="px-4 py-2 text-left">Étape</th>
+                  <th class="px-4 py-2 text-left">Date</th>
+                  <th class="px-4 py-2 text-left">Action</th>
+                  <th class="px-4 py-2 text-left">Symbole</th>
+                  <th class="px-4 py-2 text-right">Montant USDC</th>
+                  <th class="px-4 py-2 text-right">Quantité</th>
+                  <th class="px-4 py-2 text-right">Prix unitaire</th>
+                  <th class="px-4 py-2 text-right text-amber-500">Frais</th>
+                  <th class="px-4 py-2 text-right">PnL</th>
+                  <th class="px-4 py-2 text-right">Score</th>
+                  <th class="px-4 py-2 text-left">Justification</th>
+                </tr>
+              </thead>
+              <tbody id="bt-history-body" class="divide-y divide-slate-700/50">
+                <tr><td colspan="11" class="px-4 py-6 text-center text-slate-600 text-sm">Lance un backtest pour voir les trades</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3" id="bt-kpi-cards">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Valeur totale</div><div class="text-xl font-bold text-slate-600">—</div></div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">PnL net</div><div class="text-xl font-bold text-slate-600">—</div></div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Buy & Hold</div><div class="text-xl font-bold text-slate-600">—</div></div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Alpha</div><div class="text-xl font-bold text-slate-600">—</div></div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Frais simulés</div><div class="text-xl font-bold text-slate-600">—</div></div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Trades</div><div class="text-xl font-bold text-slate-600">—</div></div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Stop-loss</div><div class="text-xl font-bold text-slate-600">—</div></div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Win rate</div><div class="text-xl font-bold text-slate-600">—</div></div>
+      </div>
+
+      <!-- Performance chart -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-sm font-medium text-slate-300">Performance au fil du temps</span>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-500 mr-1">% depuis le début</span>
+            <div class="flex gap-1 bg-slate-700 border border-slate-600 rounded-lg p-0.5">
+              <button class="bt-chart-filter active-chart-filter px-2 py-0.5 rounded text-xs font-medium bg-slate-600 text-slate-200 transition-colors" data-hours="24"   onclick="_filterBtChart(this)">1j</button>
+              <button class="bt-chart-filter px-2 py-0.5 rounded text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors" data-hours="168"  onclick="_filterBtChart(this)">7j</button>
+              <button class="bt-chart-filter px-2 py-0.5 rounded text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors" data-hours="720"  onclick="_filterBtChart(this)">30j</button>
+              <button class="bt-chart-filter px-2 py-0.5 rounded text-xs font-medium text-slate-400 hover:text-slate-200 transition-colors" data-hours="0"    onclick="_filterBtChart(this)">Tout</button>
+            </div>
+          </div>
+        </div>
+        <div style="position:relative; height:260px;">
+          <canvas id="bt-chart"></canvas>
+        </div>
+      </div>
+
+      <!-- Positions -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-700">
+          <span class="text-sm font-medium text-slate-300">Positions finales</span>
+        </div>
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="text-slate-500 border-b border-slate-700">
+              <th class="px-4 py-2 text-left">Actif</th>
+              <th class="px-4 py-2 text-right">Quantité</th>
+              <th class="px-4 py-2 text-right">Prix entrée</th>
+              <th class="px-4 py-2 text-right">Prix actuel</th>
+              <th class="px-4 py-2 text-right">Valeur</th>
+              <th class="px-4 py-2 text-right">PnL latent ($)</th>
+            </tr>
+          </thead>
+          <tbody id="bt-positions-body">
+            <tr><td colspan="6" class="px-4 py-6 text-center text-slate-600 text-sm">Lance un backtest pour voir les positions</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         PANE — Analyse IA
+    ════════════════════════════════════════════════════════════════════════ -->
+    <div id="pane-analyse" class="hidden h-full overflow-y-auto p-4 space-y-4">
+
+      <!-- Header -->
+      <div class="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 class="text-base font-semibold text-slate-200">Analyse IA des marchés</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Sentiment, niveaux clés et scénarios de prix générés par le LLM configuré</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <span id="analysis-ts" class="text-xs text-slate-500"></span>
+          <button id="analysis-btn" onclick="_startAnalysis()"
+            class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2">
+            <span id="analysis-btn-icon">🔭</span>
+            <span id="analysis-btn-label">Lancer l'analyse</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Error banner -->
+      <div id="analysis-error" class="hidden bg-red-900/40 border border-red-700 rounded-xl px-4 py-3 text-sm text-red-300"></div>
+
+      <!-- Global sentiment card -->
+      <div id="analysis-global" class="hidden bg-slate-800 border border-slate-700 rounded-xl p-4">
+        <div class="flex items-center gap-4 flex-wrap">
+          <div>
+            <div class="text-xs text-slate-500 mb-1">Sentiment global</div>
+            <div id="analysis-global-sentiment" class="text-2xl font-bold"></div>
+          </div>
+          <div class="flex-1 text-sm text-slate-300" id="analysis-global-summary"></div>
+        </div>
+      </div>
+
+      <!-- Per-symbol analysis cards -->
+      <div id="analysis-cards" class="space-y-3"></div>
+
+    </div>
+
   <!-- ── Toast ── -->
   <div id="toast" class="fixed bottom-5 right-5 hidden px-4 py-3 rounded-xl text-sm font-medium shadow-xl transition-all z-50"></div>
 
@@ -418,7 +856,7 @@ let portfolioTimer = null;
 // Tab switching
 // ─────────────────────────────────────────────
 function switchTab(tab) {
-  ['logs', 'performance', 'portfolio', 'simulation'].forEach(t => {
+  ['logs', 'performance', 'portfolio', 'simulation', 'backtest', 'analyse'].forEach(t => {
     document.getElementById('pane-' + t).classList.toggle('hidden', t !== tab);
   });
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -429,6 +867,7 @@ function switchTab(tab) {
   currentTab = tab;
   if (tab === 'performance') loadPerformance();
   if (tab === 'portfolio')   loadPortfolio();
+  if (tab === 'backtest' && !document.querySelector('#bt-symbols-list input')) _loadBtWatchlist();
 }
 
 // ─────────────────────────────────────────────
@@ -742,6 +1181,8 @@ function fmt4(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR', 
 // ─────────────────────────────────────────────
 let _simPollTimer   = null;
 let _simHistLen     = -1;
+let _simFilterSig   = '';
+let _lastSimHist    = [];
 let _simLastCycle   = 0;
 let _simLastCycleTs = 0;
 let _simCycleSec    = 60;  // stored at start from UI input
@@ -754,9 +1195,12 @@ function _updateRiskLabel() {
 }
 
 async function startSimulation() {
-  const b         = parseFloat(document.getElementById('sim-budget').value);
-  const risk      = parseInt(document.getElementById('sim-risk').value);
-  const cycleSec  = Math.max(5, parseInt(document.getElementById('sim-cycle-sec').value));
+  const b                = parseFloat(document.getElementById('sim-budget').value);
+  const risk             = parseInt(document.getElementById('sim-risk').value);
+  const cycleSec         = Math.max(5, parseInt(document.getElementById('sim-cycle-sec').value));
+  const stopLoss         = parseFloat(document.getElementById('sim-stop-loss').value);
+  const trailingStop     = parseFloat(document.getElementById('sim-trailing-stop').value);
+  const sellCooldown     = parseInt(document.getElementById('sim-sell-cooldown').value);
   document.getElementById('sim-start-btn').disabled = true;
   document.getElementById('sim-stop-btn').disabled  = false;
   _simHistLen = -1; _simLastCycle = 0; _simLastCycleTs = Date.now(); _simCycleSec = cycleSec;
@@ -766,7 +1210,7 @@ async function startSimulation() {
     const r = await fetch('/api/simulation/start', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ budget: b, risk_level: risk, cycle_seconds: cycleSec }),
+      body: JSON.stringify({ budget: b, risk_level: risk, cycle_seconds: cycleSec, stop_loss_pct: stopLoss, trailing_stop_pct: trailingStop, sell_cooldown_cycles: sellCooldown }),
     });
     const d = await r.json();
     if (d.error) { toast(d.error, 'err'); _simDone(); return; }
@@ -825,8 +1269,12 @@ async function _pollSimulation() {
 
     if (!running) {
       _simDone();
-      const sign = (s.pnl || 0) >= 0 ? '+' : '';
-      toast(`Simulation terminée — PnL: ${sign}$${fmt(s.pnl)}`, (s.pnl || 0) >= 0 ? 'ok' : 'warn');
+      if (s.error) {
+        toast('Erreur simulation : ' + s.error, 'err');
+      } else {
+        const sign = (s.pnl || 0) >= 0 ? '+' : '';
+        toast(`Simulation terminée — PnL: ${sign}$${fmt(s.pnl)}`, (s.pnl || 0) >= 0 ? 'ok' : 'warn');
+      }
     }
   } catch { /* ignore poll errors */ }
 }
@@ -843,7 +1291,11 @@ function _updateSimDisplay(r) {
   const bhSign   = bhPnl != null ? (bhPnl >= 0 ? '+' : '') : '';
   const bhColor  = bhPnl != null ? (bhPnl >= 0 ? 'pnl-pos' : 'pnl-neg') : '';
   const bhVal    = bhPnl != null ? bhSign + '$' + fmt(bhPnl) : '—';
-  const bhSub    = bhPnl != null ? bhSign + fmt(r.benchmark_pnl_pct) + '%' : 'données insuffisantes';
+  const bhPctStr = bhPnl != null ? bhSign + fmt(r.benchmark_pnl_pct) + '%' : '';
+  const btcPnl   = r.btc_bh_pnl;
+  const btcSign  = btcPnl != null ? (btcPnl >= 0 ? '+' : '') : '';
+  const btcStr   = btcPnl != null ? ` | BTC: ${btcSign}${fmt(r.btc_bh_pct)}%` : '';
+  const bhSub    = bhPnl != null ? bhPctStr + btcStr : 'données insuffisantes';
 
   const alpha    = r.alpha;
   const alphaSign  = alpha != null ? (alpha >= 0 ? '+' : '') : '';
@@ -887,59 +1339,964 @@ function _updateSimDisplay(r) {
     }).join('') + _cashRowSim;
   }
 
-  // History — only re-render when length changes to preserve expanded rows
+  // History
   const hist = r.history || [];
+  _lastSimHist = hist;
   const tradeCount = hist.filter(t => t.action !== 'ANALYSE').length;
   document.getElementById('sim-history-count').textContent = tradeCount + ' trades · ' + hist.filter(t => t.action === 'ANALYSE').length + ' analyses';
-  if (hist.length !== _simHistLen) {
-    _simHistLen = hist.length;
-    const hb = document.getElementById('sim-history-body');
-    if (!hist.length) {
-      hb.innerHTML = '<tr><td colspan="8" class="px-4 py-6 text-center text-slate-600">Aucune activité</td></tr>';
-    } else {
-      hb.innerHTML = hist.map(t => {
-        if (t.action === 'ANALYSE') {
-          const sColor = t.sentiment === 'bullish' ? 'text-emerald-400' : t.sentiment === 'bearish' ? 'text-red-400' : 'text-slate-400';
-          return `<tr class="hover:bg-slate-700/20 bg-slate-800/40">
-            <td class="px-4 py-2 text-slate-500 text-xs">${t.cycle}</td>
-            <td class="px-4 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-700 text-slate-300">ANALYSE</span></td>
-            <td class="px-4 py-2 text-xs ${sColor}" colspan="5">${t.sentiment || ''}</td>
-            <td class="px-4 py-2 text-slate-400 text-xs max-w-xs">
-              <span class="cursor-pointer select-none line-clamp-1 hover:text-slate-200 transition-colors"
-                    onclick="this.classList.toggle('line-clamp-1')">${t.reason || '—'}</span>
-            </td>
-          </tr>`;
-        }
-        const isBuy    = t.action === 'BUY';
-        const badgeCls = isBuy ? 'badge-buy' : t.action.includes('stop') ? 'badge-sl' : 'badge-sell';
-        const pnlHtml  = t.pnl != null
-          ? `<span class="${t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">${t.pnl >= 0 ? '+' : ''}$${fmt(t.pnl)}</span>` : '—';
-        const qty = isBuy ? `$${fmt(t.amount)}` : fmt4(t.qty);
-        return `<tr class="hover:bg-slate-700/30">
-          <td class="px-4 py-2.5 text-slate-400">${t.cycle}</td>
-          <td class="px-4 py-2.5"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${badgeCls}">${t.action}</span></td>
-          <td class="px-4 py-2.5 font-medium">${t.symbol}</td>
-          <td class="px-4 py-2.5 text-right text-slate-300">${qty}</td>
-          <td class="px-4 py-2.5 text-right text-slate-300">$${fmt(t.price)}</td>
-          <td class="px-4 py-2.5 text-right text-amber-400/80">$${fmt(t.fee)}</td>
-          <td class="px-4 py-2.5 text-right">${pnlHtml}</td>
-          <td class="px-4 py-2.5 text-slate-400 max-w-xs">
-            <span class="cursor-pointer select-none line-clamp-1 hover:text-slate-200 transition-colors"
-                  onclick="this.classList.toggle('line-clamp-1')">${t.reason || '—'}</span>
-          </td>
-        </tr>`;
-      }).join('');
-    }
+  const filterSig = [...document.querySelectorAll('#sim-filter-list input[type=checkbox]:checked')].map(b => b.value).join(',');
+  if (hist.length !== _simHistLen || filterSig !== _simFilterSig) {
+    _simHistLen   = hist.length;
+    _simFilterSig = filterSig;
+    _redrawSimHistory(hist);
   }
+}
+
+function _redrawSimHistory(hist) {
+  const checkedSyms = [...document.querySelectorAll('#sim-filter-list input[type=checkbox]:checked')].map(b => b.value);
+  const allSyms     = [...document.querySelectorAll('#sim-filter-list input[type=checkbox]')].map(b => b.value);
+  const filterOn    = checkedSyms.length > 0 && checkedSyms.length < allSyms.length;
+  const rows        = filterOn ? hist.filter(t => t.action === 'ANALYSE' || checkedSyms.includes(t.symbol)) : hist;
+  const hb = document.getElementById('sim-history-body');
+  if (!rows.length) {
+    hb.innerHTML = '<tr><td colspan="9" class="px-4 py-6 text-center text-slate-600">Aucune activité</td></tr>';
+    return;
+  }
+  hb.innerHTML = rows.map(t => {
+    const dtStr = t.timestamp
+      ? new Date(t.timestamp + 'Z').toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})
+      : '—';
+    if (t.action === 'ANALYSE') {
+      const sColor = t.sentiment === 'bullish' ? 'text-emerald-400' : t.sentiment === 'bearish' ? 'text-red-400' : 'text-slate-400';
+      return `<tr class="hover:bg-slate-700/20 bg-slate-800/40">
+        <td class="px-4 py-2 text-slate-500 text-xs">${t.cycle}</td>
+        <td class="px-4 py-2 text-slate-500 text-xs whitespace-nowrap">${dtStr}</td>
+        <td class="px-4 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-700 text-slate-300">ANALYSE</span></td>
+        <td class="px-4 py-2 text-xs ${sColor}" colspan="5">${t.sentiment || ''}</td>
+        <td class="px-4 py-2 text-slate-400 text-xs max-w-xs">
+          <span class="cursor-pointer select-none line-clamp-1 hover:text-slate-200 transition-colors"
+                onclick="this.classList.toggle('line-clamp-1')">${t.reason || '—'}</span>
+        </td>
+      </tr>`;
+    }
+    const isBuy    = t.action === 'BUY';
+    const badgeCls = isBuy ? 'badge-buy' : t.action.includes('stop') ? 'badge-sl' : 'badge-sell';
+    const pnlHtml  = t.pnl != null
+      ? `<span class="${t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">${t.pnl >= 0 ? '+' : ''}$${fmt(t.pnl)}</span>` : '—';
+    const qty = isBuy ? `$${fmt(t.amount)}` : fmt4(t.qty);
+    return `<tr class="hover:bg-slate-700/30">
+      <td class="px-4 py-2.5 text-slate-400">${t.cycle}</td>
+      <td class="px-4 py-2.5 text-slate-400 whitespace-nowrap">${dtStr}</td>
+      <td class="px-4 py-2.5"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${badgeCls}">${t.action}</span></td>
+      <td class="px-4 py-2.5 font-medium">${t.symbol}</td>
+      <td class="px-4 py-2.5 text-right text-slate-300">${qty}</td>
+      <td class="px-4 py-2.5 text-right text-slate-300">$${fmt(t.price)}</td>
+      <td class="px-4 py-2.5 text-right text-amber-400/80">$${fmt(t.fee)}</td>
+      <td class="px-4 py-2.5 text-right">${pnlHtml}</td>
+      <td class="px-4 py-2.5 text-slate-400 max-w-xs">
+        <span class="cursor-pointer select-none line-clamp-1 hover:text-slate-200 transition-colors"
+              onclick="this.classList.toggle('line-clamp-1')">${t.reason || '—'}</span>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────────────
+// Backtest chart
+// ─────────────────────────────────────────────
+let _btChart        = null;
+let _btChartInitP   = {};
+let _btChartLastTs  = null;
+let _btChartSymbols = [];
+let _btChartRaw     = [];   // [{label, portfolio, bh, cryptos:{sym:pct}}]
+let _btChartHours   = 24;   // current filter (0 = all)
+
+const _BT_PALETTE = ['#f59e0b','#6366f1','#8b5cf6','#06b6d4','#eab308','#ec4899','#10b981','#f87171'];
+const _BT_KNOWN   = { BTC:'#f59e0b', ETH:'#6366f1', SOL:'#8b5cf6', XRP:'#06b6d4', BNB:'#eab308' };
+
+function _filterBtChart(btn) {
+  document.querySelectorAll('.bt-chart-filter').forEach(b => {
+    b.classList.toggle('bg-slate-600', false);
+    b.classList.toggle('text-slate-200', false);
+    b.classList.toggle('text-slate-400', true);
+  });
+  btn.classList.add('bg-slate-600', 'text-slate-200');
+  btn.classList.remove('text-slate-400');
+  _btChartHours = parseInt(btn.dataset.hours);
+  _redrawBtChart();
+}
+
+function _redrawBtChart() {
+  if (!_btChart) return;
+  const raw = _btChartHours === 0
+    ? _btChartRaw
+    : _btChartRaw.slice(-Math.max(1, _btChartHours));   // 1 point per hour
+
+  _btChart.data.labels = raw.map(d => d.label);
+  _btChart.data.datasets[0].data = raw.map(d => d.portfolio);
+  _btChart.data.datasets[1].data = raw.map(d => d.bh);
+  _btChart.data.datasets.slice(2).forEach(ds => {
+    ds.data = raw.map(d => d.cryptos[ds.symbolKey] ?? null);
+  });
+  _btChart.update('none');
+}
+
+function _initBtChart(symbols) {
+  _btChartSymbols = symbols;
+  _btChartInitP   = {};
+  _btChartLastTs  = null;
+  _btChartRaw     = [];
+
+  if (_btChart) { _btChart.destroy(); _btChart = null; }
+
+  const cryptoDatasets = symbols.map((sym, idx) => {
+    const short = sym.replace('USDC','').replace('USDT','');
+    const color = _BT_KNOWN[short] || _BT_PALETTE[idx % _BT_PALETTE.length];
+    return { label: short, symbolKey: sym, data: [], borderColor: color,
+             backgroundColor: color + '18', borderWidth: 1.5, pointRadius: 0, tension: 0.2 };
+  });
+
+  _btChart = new Chart(document.getElementById('bt-chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label: 'Portfolio',   data: [], borderColor: '#3b82f6', backgroundColor: '#3b82f618',
+          borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 0 },
+        { label: 'Buy & Hold', data: [], borderColor: '#64748b', backgroundColor: 'transparent',
+          borderWidth: 1.5, borderDash: [5, 4], pointRadius: 0, tension: 0.2, order: 1 },
+        ...cryptoDatasets,
+      ],
+    },
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#94a3b8', font: { size: 11 }, boxWidth: 16, padding: 16 } },
+        tooltip: {
+          backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1,
+          titleColor: '#94a3b8', bodyColor: '#e2e8f0',
+          callbacks: {
+            label: c => ` ${c.dataset.label}: ${c.parsed.y >= 0 ? '+' : ''}${c.parsed.y.toFixed(2)}%`,
+          },
+        },
+      },
+      scales: {
+        x: { ticks: { color: '#475569', font: { size: 10 }, maxTicksLimit: 10 },
+             grid: { color: '#1e293b' } },
+        y: { ticks: { color: '#475569', font: { size: 10 },
+                      callback: v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%' },
+             grid: { color: '#334155' } },
+      },
+    },
+  });
+}
+
+function _updateBtChart(snap) {
+  if (!_btChart || snap.loading || !snap.current_ts) return;
+  if (snap.current_ts === _btChartLastTs) return;
+  _btChartLastTs = snap.current_ts;
+
+  const prices = snap.prices || {};
+  if (!Object.keys(_btChartInitP).length && Object.keys(prices).length)
+    _btChartInitP = { ...prices };
+
+  const dt    = new Date(snap.current_ts.replace(' ', 'T') + 'Z');
+  const label = dt.toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+
+  const cryptos = {};
+  _btChartSymbols.forEach(sym => {
+    const p = prices[sym], p0 = _btChartInitP[sym];
+    cryptos[sym] = (p && p0) ? +((p / p0 - 1) * 100).toFixed(2) : null;
+  });
+
+  _btChartRaw.push({
+    label,
+    portfolio: +(snap.pnl_pct           || 0).toFixed(2),
+    bh:        +(snap.benchmark_pnl_pct  || 0).toFixed(2),
+    cryptos,
+  });
+
+  _redrawBtChart();
+}
+
+// ─────────────────────────────────────────────
+// Backtest
+// ─────────────────────────────────────────────
+let _btPollTimer  = null;
+let _btHistLen       = -1;
+let _btHistFilterSig = '';
+let _lastBtHist      = [];
+let _btLlmMode    = false;
+
+function _updateBtSpeedLabel() {
+  const v = parseInt(document.getElementById('bt-speed').value);
+  document.getElementById('bt-speed-label').textContent = v + '×';
+}
+
+async function _sendBtSpeed() {
+  const v = parseInt(document.getElementById('bt-speed').value);
+  try {
+    await fetch('/api/backtest/speed', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ speed: v }),
+    });
+  } catch {}
+}
+
+function _btSpeedChange() { _sendBtSpeed(); }
+
+function _toggleBtLlm() {
+  _btLlmMode = !_btLlmMode;
+  const btn  = document.getElementById('bt-llm-btn');
+  const hint = document.getElementById('bt-llm-hint');
+  const ruleP = document.getElementById('bt-rule-params');
+  const llmP  = document.getElementById('bt-llm-params');
+  if (_btLlmMode) {
+    btn.textContent  = '🤖 LLM On';
+    btn.className    = 'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors border-purple-500 bg-purple-900/50 text-purple-300';
+    hint.textContent = 'Agent Claude/Gemini (réaliste, coûts API)';
+    ruleP.classList.add('hidden');
+    llmP.classList.remove('hidden');
+  } else {
+    btn.textContent  = '🤖 LLM Off';
+    btn.className    = 'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors border-slate-600 bg-slate-700 text-slate-400';
+    hint.textContent = 'Décisions rule-based (rapide, gratuit)';
+    ruleP.classList.remove('hidden');
+    llmP.classList.add('hidden');
+  }
+}
+
+function _updateLlmEveryLabel() {
+  const v = parseInt(document.getElementById('bt-llm-every').value);
+  document.getElementById('bt-llm-every-label').textContent =
+    v === 1 ? 'chaque bougie (1h)' : `toutes les ${v} bougies (${v}h)`;
+}
+
+
+async function startBacktest() {
+  const checked      = [...document.querySelectorAll('#bt-symbols-list input[type=checkbox]:checked')];
+  const symbols      = checked.map(cb => cb.value).join(',');
+  if (!symbols) { toast('Sélectionne au moins un symbole', 'warn'); return; }
+  const startDate    = document.getElementById('bt-start-date').value;
+  const budget       = parseFloat(document.getElementById('bt-budget').value);
+  const stopLoss     = parseFloat(document.getElementById('bt-stop-loss').value);
+  const trailingStop = parseFloat(document.getElementById('bt-trailing-stop').value);
+  const buyThr       = parseInt(document.getElementById('bt-buy-thr').value);
+  const sellThr      = parseInt(document.getElementById('bt-sell-thr').value);
+  const risk         = parseInt(document.getElementById('bt-risk').value);
+  const sellCooldown = parseInt(document.getElementById('bt-sell-cooldown').value);
+  const speed        = parseInt(document.getElementById('bt-speed').value);
+  const llmEvery     = parseInt(document.getElementById('bt-llm-every').value);
+
+  document.getElementById('bt-start-btn').disabled = true;
+  document.getElementById('bt-stop-btn').disabled  = false;
+  _btHistLen = -1; _btHistFilterSig = '';
+  _setBtUI(null, false);
+  _initBtChart(symbols.split(',').map(s => s.trim()).filter(Boolean));
+  document.getElementById('bt-status-label').textContent = 'Chargement données…';
+  document.getElementById('bt-progress-bar').style.width = '0%';
+  document.getElementById('bt-progress-bar').classList.add('animate-pulse');
+
+  try {
+    const r = await fetch('/api/backtest/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        symbols, start_date: startDate || null,
+        budget, stop_loss_pct: stopLoss, trailing_stop_pct: trailingStop,
+        risk_level: risk, buy_threshold: buyThr, sell_threshold: sellThr,
+        sell_cooldown_cycles: sellCooldown,
+        speed, llm_mode: _btLlmMode, llm_every_n_candles: llmEvery,
+      }),
+    });
+    const d = await r.json();
+    if (d.error) { toast(d.error, 'err'); _btDone(); return; }
+    _btPollTimer = setInterval(_pollBacktest, 300);
+  } catch {
+    toast('Erreur de connexion', 'err');
+    _btDone();
+  }
+}
+
+async function stopBacktest() {
+  document.getElementById('bt-stop-btn').disabled = true;
+  await fetch('/api/backtest/stop', { method: 'POST' });
+}
+
+function _btDone() {
+  clearInterval(_btPollTimer);
+  document.getElementById('bt-start-btn').disabled = false;
+  document.getElementById('bt-stop-btn').disabled  = true;
+  document.getElementById('bt-progress-bar').classList.remove('animate-pulse');
+}
+
+function _setBtUI(snap, running) {
+  const bar   = document.getElementById('bt-progress-bar');
+  const label = document.getElementById('bt-status-label');
+  const prog  = document.getElementById('bt-progress-label');
+  const tsEl  = document.getElementById('bt-ts-label');
+
+  if (!snap) return;
+
+  if (snap.loading) {
+    label.textContent = snap.message || 'Chargement…';
+    bar.style.width   = '5%';
+    prog.textContent  = '';
+    tsEl.textContent  = '';
+    return;
+  }
+
+  const step  = snap.cycle  || 0;
+  const total = snap.total_steps || 0;
+  const pct   = total > 0 ? Math.round(step / total * 100) : 0;
+  bar.style.width = pct + '%';
+  if (!running && step > 0) bar.style.width = '100%';
+
+  label.textContent = running ? `Étape ${step} / ${total}` : (step > 0 ? '✓ Terminé' : '—');
+  prog.textContent  = total > 0 ? pct + '%' : '';
+
+  if (snap.current_ts) {
+    const d = new Date(snap.current_ts);
+    tsEl.textContent = d.toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  } else {
+    tsEl.textContent = '';
+  }
+}
+
+async function _pollBacktest() {
+  try {
+    const r = await fetch('/api/backtest/status');
+    const d = await r.json();
+    const s = d.snapshot || {};
+    const running = d.running;
+
+    _setBtUI(s, running);
+    if (s && !s.error && !s.loading) { _updateBtChart(s); _updateBtDisplay(s); }
+
+    if (!running) {
+      _btDone();
+      if (s && !s.error && (s.pnl !== undefined)) {
+        const sign = (s.pnl || 0) >= 0 ? '+' : '';
+        toast(`Backtest terminé — PnL: ${sign}$${fmt(s.pnl)}`, (s.pnl || 0) >= 0 ? 'ok' : 'warn');
+      }
+    }
+  } catch {}
+}
+
+function _updateBtDisplay(r) {
+  if (!r || r.error || r.loading) return;
+
+  // KPI cards
+  const pnlColor = (r.pnl || 0) >= 0 ? 'pnl-pos' : 'pnl-neg';
+  const sign     = (r.pnl || 0) >= 0 ? '+' : '';
+  const wr       = r.win_rate != null ? r.win_rate + '%' : '—';
+
+  const bhPnl   = r.benchmark_pnl;
+  const bhSign  = bhPnl != null ? (bhPnl >= 0 ? '+' : '') : '';
+  const bhColor = bhPnl != null ? (bhPnl >= 0 ? 'pnl-pos' : 'pnl-neg') : '';
+  const bhVal   = bhPnl != null ? bhSign + '$' + fmt(bhPnl) : '—';
+  const btcPnl  = r.btc_bh_pnl;
+  const btcSign = btcPnl != null ? (btcPnl >= 0 ? '+' : '') : '';
+  const btcStr  = btcPnl != null ? ` | BTC: ${btcSign}${fmt(r.btc_bh_pct)}%` : '';
+  const bhSub   = bhPnl != null ? bhSign + fmt(r.benchmark_pnl_pct) + '%' + btcStr : '—';
+
+  const alpha      = r.alpha;
+  const alphaSign  = alpha != null ? (alpha >= 0 ? '+' : '') : '';
+  const alphaColor = alpha != null ? (alpha >= 0 ? 'pnl-pos' : 'pnl-neg') : '';
+  const alphaVal   = alpha != null ? alphaSign + '$' + fmt(alpha) : '—';
+  const alphaSub   = alpha != null ? (alpha >= 0 ? '▲ au-dessus du marché' : '▼ sous le marché') : '';
+
+  document.getElementById('bt-kpi-cards').innerHTML =
+    kpiCard('Valeur totale',  '$' + fmt(r.total_value),  '') +
+    kpiCard('PnL net',        sign + '$' + fmt(r.pnl),   sign + fmt(r.pnl_pct) + '%', pnlColor) +
+    kpiCard('Buy & Hold',     bhVal,                     bhSub, bhColor) +
+    kpiCard('Alpha',          alphaVal,                  alphaSub, alphaColor) +
+    kpiCard('Frais simulés',  '$' + fmt(r.total_fees),   '@ 0.1%', 'text-amber-400') +
+    kpiCard('Trades',         r.trades || 0,             `${r.buys || 0} achats / ${r.sells || 0} ventes`) +
+    kpiCard('Stop-loss',      r.stop_losses || 0,        '', (r.stop_losses || 0) > 0 ? 'text-red-400' : '') +
+    (r.llm_calls != null
+      ? kpiCard('Appels LLM', r.llm_calls, r.llm_last_error ? '⚠ erreur' : 'OK',
+          r.llm_last_error ? 'text-red-400' : 'text-emerald-400')
+      : kpiCard('Win rate', wr, 'ventes profitables'));
+
+  // LLM error banner
+  let errBanner = document.getElementById('bt-llm-error-banner');
+  if (r.llm_last_error) {
+    if (!errBanner) {
+      errBanner = document.createElement('div');
+      errBanner.id = 'bt-llm-error-banner';
+      errBanner.className = 'mt-2 px-4 py-2 bg-red-900/40 border border-red-700/50 rounded-lg text-xs text-red-300 font-mono break-all';
+      document.getElementById('bt-kpi-cards').after(errBanner);
+    }
+    errBanner.textContent = 'Erreur LLM : ' + r.llm_last_error;
+  } else if (errBanner) {
+    errBanner.remove();
+  }
+
+  // Positions
+  const pb = document.getElementById('bt-positions-body');
+  const _cashRow = `<tr class="border-t border-slate-600/40">
+    <td class="px-4 py-2.5 font-medium text-slate-400">USDC <span class="text-xs text-slate-600 ml-1">cash</span></td>
+    <td class="px-4 py-2.5 text-right text-slate-400">${fmt(r.cash)}</td>
+    <td class="px-4 py-2.5 text-right text-slate-600">$1.0000</td>
+    <td class="px-4 py-2.5 text-right text-slate-600">$1.0000</td>
+    <td class="px-4 py-2.5 text-right text-slate-400">$${fmt(r.cash)}</td>
+    <td class="px-4 py-2.5 text-right text-slate-600">—</td>
+  </tr>`;
+  if (!(r.positions || []).length) {
+    pb.innerHTML = _cashRow;
+  } else {
+    pb.innerHTML = (r.positions || []).map(p => {
+      const pnlUsd = p.current_price != null ? (p.current_price - p.avg_price) * p.qty : null;
+      const pc     = pnlUsd != null ? (pnlUsd >= 0 ? 'pnl-pos' : 'pnl-neg') : '';
+      const pnlStr = pnlUsd != null ? `<span class="${pc}">${pnlUsd >= 0 ? '+' : ''}$${fmt(pnlUsd)}</span>` : '—';
+      return `<tr class="hover:bg-slate-700/30 border-b border-slate-700/50">
+        <td class="px-4 py-2.5 font-medium">${p.symbol.replace('USDC','').replace('USDT','')}</td>
+        <td class="px-4 py-2.5 text-right text-slate-300">${fmt4(p.qty)}</td>
+        <td class="px-4 py-2.5 text-right text-slate-300">$${fmt(p.avg_price)}</td>
+        <td class="px-4 py-2.5 text-right text-slate-300">${p.current_price ? '$'+fmt(p.current_price) : '—'}</td>
+        <td class="px-4 py-2.5 text-right text-slate-300">$${fmt(p.value)}</td>
+        <td class="px-4 py-2.5 text-right font-medium">${pnlStr}</td>
+      </tr>`;
+    }).join('') + _cashRow;
+  }
+
+  // History
+  const hist = (r.history || []).filter(t => t.action !== 'ANALYSE');
+  _lastBtHist = hist;
+  const tradeCount = hist.length;
+  const llmInfo = r.llm_calls != null ? ` · ${r.llm_calls} appels LLM` : '';
+  document.getElementById('bt-history-count').textContent = tradeCount + ' trades' + llmInfo;
+  const btFilterSig = [...document.querySelectorAll('#bt-hist-filter-list input[type=checkbox]:checked')].map(b => b.value).join(',');
+  if (hist.length !== _btHistLen || btFilterSig !== _btHistFilterSig) {
+    _btHistLen       = hist.length;
+    _btHistFilterSig = btFilterSig;
+    _redrawBtHistory(hist);
+  }
+}
+
+function _redrawBtHistory(hist) {
+  const checkedSyms = [...document.querySelectorAll('#bt-hist-filter-list input[type=checkbox]:checked')].map(b => b.value);
+  const allSyms     = [...document.querySelectorAll('#bt-hist-filter-list input[type=checkbox]')].map(b => b.value);
+  const filterOn    = checkedSyms.length > 0 && checkedSyms.length < allSyms.length;
+  const rows        = filterOn ? hist.filter(t => checkedSyms.includes(t.symbol)) : hist;
+  const hb = document.getElementById('bt-history-body');
+  if (!rows.length) {
+    hb.innerHTML = '<tr><td colspan="11" class="px-4 py-6 text-center text-slate-600">Aucun trade</td></tr>';
+    return;
+  }
+  hb.innerHTML = rows.map(t => {
+    const isBuy    = t.action === 'BUY';
+    const badgeCls = isBuy ? 'badge-buy' : t.action.includes('stop') ? 'badge-sl' : 'badge-sell';
+    const pnlHtml  = t.pnl != null
+      ? `<span class="${t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">${t.pnl >= 0 ? '+' : ''}$${fmt(t.pnl)}</span>` : '—';
+    const dtStr = t.timestamp
+      ? new Date(t.timestamp + (t.timestamp.endsWith('Z') ? '' : 'Z')).toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})
+      : '—';
+    const scoreHtml = t.score != null
+      ? `<span class="px-1.5 py-0.5 rounded text-xs font-mono ${t.score >= 7 ? 'bg-green-900/60 text-green-400' : t.score <= 3 ? 'bg-red-900/60 text-red-400' : 'bg-slate-700 text-slate-300'}">${t.score}/10</span>`
+      : '—';
+    const amountHtml = t.amount != null ? `$${fmt(t.amount)}` : '—';
+    const qtyHtml    = t.qty    != null ? fmt4(t.qty)          : '—';
+    return `<tr class="hover:bg-slate-700/30">
+      <td class="px-4 py-2.5 text-slate-400">${t.cycle || '—'}</td>
+      <td class="px-4 py-2.5 text-slate-400 whitespace-nowrap">${dtStr}</td>
+      <td class="px-4 py-2.5"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${badgeCls}">${t.action}</span></td>
+      <td class="px-4 py-2.5 font-medium">${t.symbol}</td>
+      <td class="px-4 py-2.5 text-right text-slate-300">${amountHtml}</td>
+      <td class="px-4 py-2.5 text-right text-slate-300">${qtyHtml}</td>
+      <td class="px-4 py-2.5 text-right text-slate-300">$${fmt(t.price)}</td>
+      <td class="px-4 py-2.5 text-right text-amber-400/80">$${fmt(t.fee)}</td>
+      <td class="px-4 py-2.5 text-right">${pnlHtml}</td>
+      <td class="px-4 py-2.5 text-right">${scoreHtml}</td>
+      <td class="px-4 py-2.5 text-slate-400 max-w-xs"><span class="line-clamp-2 cursor-pointer text-xs" title="${(t.reason||'').replace(/"/g,'&quot;')}" onclick="this.classList.toggle('line-clamp-2')">${t.reason || '—'}</span></td>
+    </tr>`;
+  }).join('');
 }
 
 // ─────────────────────────────────────────────
 // Boot
 // ─────────────────────────────────────────────
+// Init backtest date picker to 30 days ago
+(function() {
+  const d = new Date();
+  d.setDate(d.getDate() - 30);
+  document.getElementById('bt-start-date').value = d.toISOString().split('T')[0];
+})();
+
+// ── Dropdown watchlist ────────────────────────────────────────────────────────
+function _toggleBtHistFilter(e) {
+  e.stopPropagation();
+  document.getElementById('bt-hist-filter-dropdown').classList.toggle('hidden');
+}
+function _updateBtHistFilterSummary() {
+  const all     = [...document.querySelectorAll('#bt-hist-filter-list input[type=checkbox]')];
+  const checked = all.filter(b => b.checked);
+  const el = document.getElementById('bt-hist-filter-summary');
+  if (!all.length)                        el.textContent = 'Toutes';
+  else if (!checked.length)              el.textContent = 'Aucune';
+  else if (checked.length === all.length) el.textContent = `Toutes (${all.length})`;
+  else el.textContent = checked.map(b => b.value.replace('USDC','').replace('USDT','')).join(', ');
+  _btHistFilterSig = '';
+  _redrawBtHistory(_lastBtHist);
+}
+function _btHistToggleAll() {
+  const boxes = [...document.querySelectorAll('#bt-hist-filter-list input[type=checkbox]')];
+  const allChecked = boxes.every(b => b.checked);
+  boxes.forEach(b => { b.checked = !allChecked; });
+  _updateBtHistFilterSummary();
+}
+async function _loadBtHistWatchlist() {
+  try {
+    const r = await fetch('/api/watchlist');
+    const d = await r.json();
+    const syms = d.watchlist || [];
+    const container = document.getElementById('bt-hist-filter-list');
+    if (!syms.length) {
+      container.innerHTML = '<div class="px-3 py-2 text-xs text-slate-500">Aucun symbole</div>';
+      return;
+    }
+    container.innerHTML = syms.map(sym => {
+      const label = sym.replace('USDC','').replace('USDT','');
+      return `<label class="flex items-center gap-2 px-3 py-2 hover:bg-slate-700 cursor-pointer transition-colors select-none">
+        <input type="checkbox" value="${sym}" checked onchange="_updateBtHistFilterSummary()" class="accent-purple-500 cursor-pointer" />
+        <span class="text-sm text-slate-200">${label}</span>
+      </label>`;
+    }).join('');
+    _updateBtHistFilterSummary();
+  } catch {
+    document.getElementById('bt-hist-filter-list').innerHTML =
+      '<div class="px-3 py-2 text-xs text-red-400">Erreur chargement</div>';
+  }
+}
+
+function _toggleSimFilter(e) {
+  e.stopPropagation();
+  document.getElementById('sim-filter-dropdown').classList.toggle('hidden');
+}
+function _updateSimFilterSummary() {
+  const all     = [...document.querySelectorAll('#sim-filter-list input[type=checkbox]')];
+  const checked = all.filter(b => b.checked);
+  const el = document.getElementById('sim-filter-summary');
+  if (!all.length)                        el.textContent = 'Toutes';
+  else if (!checked.length)              el.textContent = 'Aucune';
+  else if (checked.length === all.length) el.textContent = `Toutes (${all.length})`;
+  else el.textContent = checked.map(b => b.value.replace('USDC','').replace('USDT','')).join(', ');
+  _simFilterSig = '';
+  _redrawSimHistory(_lastSimHist);
+}
+function _simToggleAll() {
+  const boxes = [...document.querySelectorAll('#sim-filter-list input[type=checkbox]')];
+  const allChecked = boxes.every(b => b.checked);
+  boxes.forEach(b => { b.checked = !allChecked; });
+  _updateSimFilterSummary();
+}
+async function _loadSimWatchlist() {
+  try {
+    const r = await fetch('/api/watchlist');
+    const d = await r.json();
+    if (d.stop_loss_pct     != null) document.getElementById('sim-stop-loss').value     = d.stop_loss_pct;
+    if (d.trailing_stop_pct != null) document.getElementById('sim-trailing-stop').value = d.trailing_stop_pct;
+    if (d.risk_level        != null) { const el = document.getElementById('sim-risk'); el.value = d.risk_level; _updateRiskLabel(); }
+    const syms = d.watchlist || [];
+    const container = document.getElementById('sim-filter-list');
+    if (!syms.length) {
+      container.innerHTML = '<div class="px-3 py-2 text-xs text-slate-500">Aucun symbole</div>';
+      return;
+    }
+    container.innerHTML = syms.map(sym => {
+      const label = sym.replace('USDC','').replace('USDT','');
+      return `<label class="flex items-center gap-2 px-3 py-2 hover:bg-slate-700 cursor-pointer transition-colors select-none">
+        <input type="checkbox" value="${sym}" checked onchange="_updateSimFilterSummary()" class="accent-blue-500 cursor-pointer" />
+        <span class="text-sm text-slate-200">${label}</span>
+      </label>`;
+    }).join('');
+    _updateSimFilterSummary();
+  } catch {
+    document.getElementById('sim-filter-list').innerHTML =
+      '<div class="px-3 py-2 text-xs text-red-400">Erreur chargement</div>';
+  }
+}
+
+function _toggleSymDropdown(e) {
+  e.stopPropagation();
+  document.getElementById('bt-sym-dropdown').classList.toggle('hidden');
+}
+document.addEventListener('click', () => {
+  document.getElementById('bt-sym-dropdown')?.classList.add('hidden');
+  document.getElementById('sim-filter-dropdown')?.classList.add('hidden');
+  document.getElementById('bt-hist-filter-dropdown')?.classList.add('hidden');
+});
+
+function _updateSymSummary() {
+  const all     = [...document.querySelectorAll('#bt-symbols-list input[type=checkbox]')];
+  const checked = all.filter(b => b.checked);
+  const el = document.getElementById('bt-sym-summary');
+  if (!all.length)                    el.textContent = 'Chargement…';
+  else if (!checked.length)           el.textContent = 'Aucun sélectionné';
+  else if (checked.length === all.length) el.textContent = `Toutes (${all.length})`;
+  else el.textContent = checked.map(b => b.value.replace('USDC','').replace('USDT','')).join(', ');
+}
+
+async function _loadBtWatchlist() {
+  try {
+    const r = await fetch('/api/watchlist');
+    const d = await r.json();
+
+    if (d.stop_loss_pct     != null) document.getElementById('bt-stop-loss').value     = d.stop_loss_pct;
+    if (d.trailing_stop_pct != null) document.getElementById('bt-trailing-stop').value = d.trailing_stop_pct;
+    if (d.risk_level        != null) { document.getElementById('bt-risk').value = d.risk_level; document.getElementById('bt-risk-label').textContent = d.risk_level + ' / 10'; }
+    if (d.sell_cooldown_cycles != null) { document.getElementById('bt-sell-cooldown').value = d.sell_cooldown_cycles; document.getElementById('sim-sell-cooldown').value = d.sell_cooldown_cycles; }
+
+    const syms = d.watchlist || [];
+    const container = document.getElementById('bt-symbols-list');
+    if (!syms.length) {
+      container.innerHTML = '<div class="px-3 py-2 text-xs text-slate-500">Aucun symbole dans config.json</div>';
+      _updateSymSummary(); return;
+    }
+    container.innerHTML = syms.map(sym => {
+      const label = sym.replace('USDC','').replace('USDT','');
+      return `<label class="flex items-center gap-2 px-3 py-2 hover:bg-slate-700 cursor-pointer transition-colors select-none">
+        <input type="checkbox" value="${sym}" checked onchange="_updateSymSummary()" class="accent-purple-500 cursor-pointer" />
+        <span class="text-sm text-slate-200">${label}</span>
+        <span class="text-xs text-slate-500 ml-auto">${sym}</span>
+      </label>`;
+    }).join('');
+    _updateSymSummary();
+  } catch {
+    document.getElementById('bt-symbols-list').innerHTML =
+      '<div class="px-3 py-2 text-xs text-red-400">Erreur chargement watchlist</div>';
+  }
+}
+
+function _btToggleAll() {
+  const boxes = [...document.querySelectorAll('#bt-symbols-list input[type=checkbox]')];
+  const allChecked = boxes.every(b => b.checked);
+  boxes.forEach(b => { b.checked = !allChecked; });
+  _updateSymSummary();
+}
+
+_loadSimWatchlist();
+_loadBtWatchlist();
+_loadBtHistWatchlist();
 fetchAgentStatus();
 setInterval(fetchAgentStatus, 5000);
 startSSE();
 setInterval(() => { if (currentTab === 'portfolio') loadPortfolio(); }, 30000);
+_loadLlmConfig();
+
+// ─────────────────────────────────────────────
+// Analysis tab
+// ─────────────────────────────────────────────
+let _analysisPolling = null;
+
+function _startAnalysis() {
+  document.getElementById('analysis-btn').disabled = true;
+  document.getElementById('analysis-btn-icon').textContent  = '⏳';
+  document.getElementById('analysis-btn-label').textContent = 'Analyse en cours…';
+  document.getElementById('analysis-error').classList.add('hidden');
+
+  fetch('/api/analysis/start', { method: 'POST' })
+    .then(r => r.json())
+    .then(d => {
+      if (d.error) { _analysisError(d.error); return; }
+      _analysisPolling = setInterval(_pollAnalysis, 1500);
+    })
+    .catch(e => _analysisError(e.toString()));
+}
+
+function _pollAnalysis() {
+  fetch('/api/analysis/status')
+    .then(r => r.json())
+    .then(d => {
+      if (!d.running) {
+        clearInterval(_analysisPolling);
+        _analysisPolling = null;
+        document.getElementById('analysis-btn').disabled = false;
+        document.getElementById('analysis-btn-icon').textContent  = '🔄';
+        document.getElementById('analysis-btn-label').textContent = 'Mettre à jour';
+        if (d.error) { _analysisError(d.error); return; }
+        if (d.result) _renderAnalysis(d.result);
+      }
+    })
+    .catch(() => {});
+}
+
+function _analysisError(msg) {
+  const el = document.getElementById('analysis-error');
+  el.textContent = '⚠ Erreur : ' + msg;
+  el.classList.remove('hidden');
+  document.getElementById('analysis-btn').disabled = false;
+  document.getElementById('analysis-btn-icon').textContent  = '🔭';
+  document.getElementById('analysis-btn-label').textContent = 'Réessayer';
+}
+
+function _renderAnalysis(r) {
+  // Timestamp
+  if (r.generated_at) {
+    const d = new Date(r.generated_at + 'Z');
+    document.getElementById('analysis-ts').textContent =
+      'Mis à jour : ' + d.toLocaleTimeString('fr-FR');
+  }
+
+  // Global sentiment
+  const sentColors = { bullish: 'text-emerald-400', neutral: 'text-yellow-400', bearish: 'text-red-400' };
+  const sentLabels = { bullish: '📈 Haussier', neutral: '↔ Neutre', bearish: '📉 Baissier' };
+  const gs = (r.global_sentiment || 'neutral').toLowerCase();
+  const globalEl = document.getElementById('analysis-global');
+  globalEl.classList.remove('hidden');
+  document.getElementById('analysis-global-sentiment').className =
+    'text-2xl font-bold ' + (sentColors[gs] || 'text-slate-300');
+  document.getElementById('analysis-global-sentiment').textContent = sentLabels[gs] || gs;
+  document.getElementById('analysis-global-summary').textContent = r.market_summary || '';
+
+  // Per-symbol cards
+  const container = document.getElementById('analysis-cards');
+  container.innerHTML = (r.analyses || []).map(a => _analysisCard(a)).join('');
+}
+
+function _analysisCard(a) {
+  const sentColors = { bullish: 'text-emerald-400 bg-emerald-900/30 border-emerald-800',
+                       neutral: 'text-yellow-400 bg-yellow-900/20 border-yellow-800',
+                       bearish: 'text-red-400 bg-red-900/30 border-red-800' };
+  const sentLabels = { bullish: '📈 Haussier', neutral: '↔ Neutre', bearish: '📉 Baissier' };
+  const sc = (a.sentiment || 'neutral').toLowerCase();
+  const scClass = sentColors[sc] || 'text-slate-300 bg-slate-800 border-slate-700';
+  const sentLabel = sentLabels[sc] || sc;
+  const conf = a.confidence != null ? `<span class="text-xs text-slate-500">(confiance ${a.confidence}/10)</span>` : '';
+  const sym = (a.symbol || '').replace('USDC','');
+  const price = a.current_price != null ? '$' + fmt(a.current_price) : '—';
+  const support    = a.support    != null ? '$' + fmt(a.support)    : '—';
+  const resistance = a.resistance != null ? '$' + fmt(a.resistance) : '—';
+
+  const scenarioBadge = { bear: 'bg-red-900/40 border-red-800 text-red-300',
+                           base: 'bg-slate-700 border-slate-600 text-slate-200',
+                           bull: 'bg-emerald-900/40 border-emerald-800 text-emerald-300' };
+  const scenarioLabel = { bear: '🐻 Baissier', base: '➡ Base', bull: '🐂 Haussier' };
+
+  const scenariosHtml = (a.scenarios || []).map(s => {
+    const badge   = scenarioBadge[s.name] || 'bg-slate-700 border-slate-600 text-slate-200';
+    const label   = scenarioLabel[s.name] || s.name;
+    const p24  = s.price_24h  != null ? '$' + fmt(s.price_24h)  : '—';
+    const p7j  = s.price_7j   != null ? '$' + fmt(s.price_7j)   : '—';
+    const p30j = s.price_30j  != null ? '$' + fmt(s.price_30j)  : '—';
+    const prob = s.probability != null ? s.probability + '%' : '—';
+    return `
+    <div class="border ${badge} rounded-lg p-3 flex flex-col gap-1.5">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold">${label}</span>
+        <span class="text-xs opacity-70">Probabilité : ${prob}</span>
+      </div>
+      <div class="grid grid-cols-3 gap-2 text-center">
+        <div><div class="text-xs opacity-60">24h</div><div class="text-sm font-mono font-semibold">${p24}</div></div>
+        <div><div class="text-xs opacity-60">7 jours</div><div class="text-sm font-mono font-semibold">${p7j}</div></div>
+        <div><div class="text-xs opacity-60">30 jours</div><div class="text-sm font-mono font-semibold">${p30j}</div></div>
+      </div>
+      ${s.trigger ? `<div class="text-xs opacity-60 italic mt-0.5">${s.trigger}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const actionColors = { buy: 'bg-emerald-900/50 border-emerald-700 text-emerald-300',
+                         sell: 'bg-red-900/50 border-red-700 text-red-300',
+                         hold: 'bg-slate-700 border-slate-600 text-slate-300' };
+  const actionLabels = { buy: '▲ ACHETER', sell: '▼ VENDRE', hold: '— CONSERVER' };
+  const act = (a.action || 'hold').toLowerCase();
+  const actClass = actionColors[act] || actionColors.hold;
+  const actLabel = actionLabels[act] || act.toUpperCase();
+  const actionHtml = `
+    <div class="flex items-start gap-3 rounded-lg border px-3 py-2.5 ${actClass}">
+      <span class="text-xs font-bold whitespace-nowrap mt-0.5">${actLabel}</span>
+      ${a.action_reason ? `<span class="text-xs opacity-80">${a.action_reason}</span>` : ''}
+    </div>`;
+
+  return `
+  <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3">
+    <!-- Header row -->
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+      <div class="flex items-center gap-3">
+        <div class="text-lg font-bold text-slate-100">${sym}</div>
+        <div class="text-sm text-slate-400 font-mono">${price}</div>
+      </div>
+      <div class="flex items-center gap-2">
+        ${conf}
+        <span class="px-2.5 py-1 rounded-full text-xs font-semibold border ${scClass}">${sentLabel}</span>
+      </div>
+    </div>
+    <!-- Summary -->
+    ${a.summary ? `<p class="text-sm text-slate-300">${a.summary}</p>` : ''}
+    <!-- Action recommendation -->
+    ${actionHtml}
+    <!-- Key levels -->
+    <div class="flex gap-4 text-xs">
+      <span class="text-slate-500">Support : <span class="text-slate-300 font-mono">${support}</span></span>
+      <span class="text-slate-500">Résistance : <span class="text-slate-300 font-mono">${resistance}</span></span>
+    </div>
+    <!-- Scenarios -->
+    ${scenariosHtml ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-2">${scenariosHtml}</div>` : ''}
+  </div>`;
+}
+
+// ─────────────────────────────────────────────
+// LLM Selector
+// ─────────────────────────────────────────────
+let _llmModels = {};
+
+function _toggleLlmPanel(e) {
+  e.stopPropagation();
+  const p = document.getElementById('llm-panel');
+  p.classList.toggle('hidden');
+}
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('llm-selector-wrap');
+  if (wrap && !wrap.contains(e.target))
+    document.getElementById('llm-panel').classList.add('hidden');
+});
+
+async function _loadLlmConfig() {
+  try {
+    const d = await fetch('/api/config/llm').then(r => r.json());
+    _llmModels = d.models || {};
+    // Populate provider dropdown
+    const pSel = document.getElementById('llm-provider-sel');
+    pSel.innerHTML = (d.providers || []).map(p =>
+      `<option value="${p}" ${p === d.provider ? 'selected' : ''}>${p.charAt(0).toUpperCase() + p.slice(1)}</option>`
+    ).join('');
+    _populateLlmModels(d.provider, d.model);
+    document.getElementById('llm-max-tokens').value = d.max_tokens || 1000;
+    document.getElementById('llm-ollama-url').value = d.base_url || 'http://localhost:11434';
+    _showOllamaUrl(d.provider === 'ollama');
+    document.getElementById('llm-selector-label').textContent = `${d.provider} / ${d.model}`;
+  } catch {}
+}
+
+function _populateLlmModels(provider, currentModel) {
+  const models = _llmModels[provider] || [];
+  const sel = document.getElementById('llm-model-sel');
+  const isKnown = models.includes(currentModel);
+  sel.innerHTML = models.map(m =>
+    `<option value="${m}" ${m === currentModel ? 'selected' : ''}>${m}</option>`
+  ).join('') + `<option value="__custom__" ${!isKnown && currentModel ? 'selected' : ''}>Autre…</option>`;
+  const custom = document.getElementById('llm-model-custom');
+  if (!isKnown && currentModel) {
+    custom.value = currentModel;
+    custom.classList.remove('hidden');
+  } else {
+    custom.classList.add('hidden');
+  }
+  sel.onchange = () => {
+    const isC = sel.value === '__custom__';
+    custom.classList.toggle('hidden', !isC);
+  };
+}
+
+function _onLlmProviderChange() {
+  const provider = document.getElementById('llm-provider-sel').value;
+  _populateLlmModels(provider, '');
+  _showOllamaUrl(provider === 'ollama');
+}
+
+function _showOllamaUrl(show) {
+  document.getElementById('llm-ollama-url-wrap').classList.toggle('hidden', !show);
+  if (show) _checkOllamaStatus();
+}
+
+async function _checkOllamaStatus() {
+  const badge      = document.getElementById('ollama-status-badge');
+  const startBtn   = document.getElementById('ollama-start-btn');
+  const modelsRow  = document.getElementById('ollama-models-row');
+  const modelsList = document.getElementById('ollama-models-list');
+  badge.textContent = '● Vérification\u2026';
+  badge.className = 'text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-400';
+  try {
+    const d = await fetch('/api/ollama/status').then(r => r.json());
+    if (d.running) {
+      badge.textContent = '● En ligne';
+      badge.className = 'text-xs px-2 py-0.5 rounded-full bg-emerald-900/50 text-emerald-400';
+      startBtn.classList.add('hidden');
+      if (d.models && d.models.length) {
+        modelsRow.classList.remove('hidden');
+        modelsList.innerHTML = d.models.map(m =>
+          `<div class="text-slate-400 font-mono">${m}</div>`
+        ).join('');
+        // Auto-populate model dropdown with installed models
+        const sel = document.getElementById('llm-model-sel');
+        const cur = sel.value;
+        const opts = d.models.map(m => `<option value="${m}" ${m===cur?'selected':''}>${m}</option>`).join('');
+        sel.innerHTML = opts + '<option value="__custom__">Autre\u2026</option>';
+      } else {
+        modelsRow.classList.add('hidden');
+      }
+    } else {
+      badge.textContent = '● Hors ligne';
+      badge.className = 'text-xs px-2 py-0.5 rounded-full bg-red-900/50 text-red-400';
+      startBtn.classList.remove('hidden');
+      modelsRow.classList.add('hidden');
+    }
+  } catch {
+    badge.textContent = '● Erreur';
+    badge.className = 'text-xs px-2 py-0.5 rounded-full bg-red-900/50 text-red-400';
+    startBtn.classList.remove('hidden');
+  }
+}
+
+async function _startOllama() {
+  const btn = document.getElementById('ollama-start-btn');
+  btn.textContent = 'Démarrage\u2026';
+  btn.disabled = true;
+  try {
+    await fetch('/api/ollama/start', { method: 'POST' });
+    for (let i = 0; i < 15; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      const d = await fetch('/api/ollama/status').then(r => r.json());
+      if (d.running) { await _checkOllamaStatus(); btn.disabled = false; return; }
+    }
+    btn.textContent = 'Démarrer Ollama';
+    btn.disabled = false;
+    _checkOllamaStatus();
+  } catch {
+    btn.textContent = 'Démarrer Ollama';
+    btn.disabled = false;
+  }
+}
+
+async function _saveLlmConfig() {
+  const provider  = document.getElementById('llm-provider-sel').value;
+  const selModel  = document.getElementById('llm-model-sel').value;
+  const model     = selModel === '__custom__'
+    ? document.getElementById('llm-model-custom').value.trim()
+    : selModel;
+  const base_url  = document.getElementById('llm-ollama-url').value.trim();
+  const max_tokens = parseInt(document.getElementById('llm-max-tokens').value) || 1000;
+  const status = document.getElementById('llm-save-status');
+
+  if (!model) { status.textContent = '⚠ Modèle requis'; status.className = 'text-xs text-center text-red-400'; status.classList.remove('hidden'); return; }
+
+  try {
+    const d = await fetch('/api/config/llm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider, model, base_url, max_tokens }),
+    }).then(r => r.json());
+
+    if (d.error) throw new Error(d.error);
+    status.textContent = '✓ Sauvegardé';
+    status.className = 'text-xs text-center text-emerald-400';
+    status.classList.remove('hidden');
+    document.getElementById('llm-selector-label').textContent = `${provider} / ${model}`;
+    setTimeout(() => {
+      status.classList.add('hidden');
+      document.getElementById('llm-panel').classList.add('hidden');
+    }, 1200);
+  } catch(e) {
+    status.textContent = '⚠ ' + e.message;
+    status.className = 'text-xs text-center text-red-400';
+    status.classList.remove('hidden');
+  }
+}
 </script>
 </body>
 </html>

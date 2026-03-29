@@ -1,4 +1,4 @@
-.PHONY: install install-gemini agent dashboard shell clean gemini-models
+.PHONY: install install-gemini agent dashboard shell clean gemini-models backtest
 
 install:         ## Install core dependencies (Claude only)
 	poetry install
@@ -17,6 +17,9 @@ shell:      ## Activate the Poetry virtual environment
 
 gemini-models: ## List available Gemini models for your API key
 	poetry run python -c "from dotenv import load_dotenv; load_dotenv()" && poetry run python get_google_llm_versions.py
+
+backtest:   ## Run the rule-based backtester  (pass args via ARGS="--days 30 --budget 1000")
+	poetry run backtest $(ARGS)
 
 clean:      ## Remove Python cache files
 	find . -type d -name __pycache__ -exec rm -rf {} +

@@ -93,6 +93,16 @@ def get_klines(symbol: str, interval: str = "1h", limit: int = 26) -> list[list]
     return api_get("/api/v3/klines", {"symbol": symbol, "interval": interval, "limit": limit})
 
 
+def _cycle_to_interval(cycle_seconds: int) -> str:
+    """Map a cycle duration (seconds) to the closest Binance kline interval."""
+    if cycle_seconds < 180:   return "1m"
+    if cycle_seconds < 360:   return "3m"
+    if cycle_seconds < 900:   return "5m"
+    if cycle_seconds < 1800:  return "15m"
+    if cycle_seconds < 3600:  return "30m"
+    return "1h"
+
+
 def _compute_rsi(closes: list[float], period: int = 14) -> float | None:
     if len(closes) < period + 1:
         return None
@@ -115,6 +125,40 @@ def _compute_sma(closes: list[float], period: int) -> float | None:
     return sum(closes[-period:]) / period
 
 
+def compute_score(d: dict) -> int:
+    """Compute a 0-10 buy-signal score for a single symbol's enriched data dict."""
+    score = 5  # neutral base
+    # RSI sub-score
+    rsi = d.get("rsi14")
+    if rsi is not None:
+        if rsi < 25:   score += 3
+        elif rsi < 35: score += 2
+        elif rsi < 45: score += 1
+        elif rsi < 55: pass
+        elif rsi < 65: score -= 1
+        elif rsi < 75: score -= 2
+        else:          score -= 3
+    # Trend sub-score (1h)
+    trend = d.get("trend", "neutre")
+    if trend == "haussier":  score += 1
+    elif trend == "baissier": score -= 1
+    # Daily trend sub-score
+    trend_1d = d.get("trend_1d")
+    if trend_1d == "haussier":  score += 2
+    elif trend_1d == "baissier": score -= 2
+    # Volatility sub-score (low vol = stable = safer)
+    vola = d.get("range_pct_24h")
+    if vola is not None:
+        if vola < 3:   score += 1
+        elif vola > 8: score -= 1
+    return max(0, min(10, score))
+
+
+def compute_scores(data: dict) -> dict:
+    """Return {symbol: score} for all symbols in *data*."""
+    return {sym: compute_score(d) for sym, d in data.items()}
+
+
 def format_market_data(data: dict[str, dict], watchlist: list[str]) -> str:
     """Format enriched market data dict into a prompt-ready string."""
     lines = []
@@ -132,22 +176,71 @@ def format_market_data(data: dict[str, dict], watchlist: list[str]) -> str:
             vol_str,
         ]
         if d.get("rsi14") is not None:
-            parts.append(f"RSI(14): {d['rsi14']}")
+            parts.append(f"RSI(1h): {d['rsi14']}")
         if d.get("trend"):
-            parts.append(f"Tendance: {d['trend']}")
+            parts.append(f"Tendance1h: {d['trend']}")
         if d.get("range_pct_24h") is not None:
             parts.append(f"Volatilité24h: {d['range_pct_24h']:.1f}%")
+        if d.get("rsi_short") is not None:
+            ivl = d.get("interval_short", "court")
+            parts.append(f"RSI({ivl}): {d['rsi_short']}")
+        if d.get("trend_short"):
+            ivl = d.get("interval_short", "court")
+            parts.append(f"Tendance{ivl}: {d['trend_short']}")
+        if d.get("trend_1d"):
+            parts.append(f"TendanceJ: {d['trend_1d']}")
+        if d.get("spread_pct") is not None:
+            parts.append(f"Spread: {d['spread_pct']:.3f}%")
         lines.append(" | ".join(parts))
     return "\n".join(lines)
 
 
-def get_enriched_market_data(watchlist: list[str]) -> dict[str, dict]:
+_EXTERNAL_CACHE: dict = {}
+_CACHE_TTL = 300  # seconds
+
+
+def _cached(key: str, fetcher):
+    """Simple TTL cache for external API calls."""
+    entry = _EXTERNAL_CACHE.get(key)
+    if entry and time.time() - entry["ts"] < _CACHE_TTL:
+        return entry["value"]
+    try:
+        value = fetcher()
+    except Exception:
+        value = None
+    _EXTERNAL_CACHE[key] = {"ts": time.time(), "value": value}
+    return value
+
+
+def get_fear_and_greed() -> dict | None:
+    """Return the Crypto Fear & Greed Index (cached 5 min)."""
+    def _fetch():
+        r = requests.get("https://api.alternative.me/fng/?limit=1", timeout=5)
+        d = r.json()["data"][0]
+        return {"value": int(d["value"]), "label": d["value_classification"]}
+    return _cached("fng", _fetch)
+
+
+def get_btc_dominance() -> float | None:
+    """Return BTC market cap dominance % from CoinGecko (cached 5 min)."""
+    def _fetch():
+        r = requests.get("https://api.coingecko.com/api/v3/global", timeout=5)
+        return round(r.json()["data"]["market_cap_percentage"]["btc"], 1)
+    return _cached("btc_dom", _fetch)
+
+
+def get_enriched_market_data(watchlist: list[str], cycle_seconds: int = 60) -> dict[str, dict]:
     """Fetch price + 24h stats + RSI + SMA for each symbol in *watchlist*.
 
     Returns ``{symbol: {price, change_pct_24h, volume_usdc, rsi14,
-                         sma7, sma25, trend, change_pct_1h}}``.
+                         sma7, sma25, trend, change_pct_1h,
+                         rsi_short, trend_short, interval_short}}``.
+    ``cycle_seconds`` controls the short-term candle interval: the closest
+    Binance interval to the cycle frequency is used, giving the LLM a
+    micro-trend signal that matches the simulation's actual refresh rate.
     Failures are silently skipped so one bad symbol never blocks the rest.
     """
+    interval_short = _cycle_to_interval(cycle_seconds)
     result: dict[str, dict] = {}
     for sym in watchlist:
         try:
@@ -169,6 +262,43 @@ def get_enriched_market_data(watchlist: list[str]) -> dict[str, dict]:
             price       = stats["price"]
             range_pct   = (stats["high_24h"] - stats["low_24h"]) / price * 100 if price else 0.0
 
+            # Short-term candles (interval matches cycle frequency)
+            rsi_short   = None
+            trend_short = None
+            if interval_short != "1h":
+                try:
+                    klines_s  = get_klines(sym, interval=interval_short, limit=30)
+                    closes_s  = [float(k[4]) for k in klines_s]
+                    rsi_short = _compute_rsi(closes_s)
+                    sma7_s    = _compute_sma(closes_s, 7)
+                    sma14_s   = _compute_sma(closes_s, 14)
+                    if sma7_s and sma14_s:
+                        trend_short = "haussier" if sma7_s > sma14_s else "baissier"
+                except Exception:
+                    pass
+
+            # Daily trend
+            trend_1d = None
+            try:
+                klines_1d  = get_klines(sym, interval="1d", limit=30)
+                closes_1d  = [float(k[4]) for k in klines_1d]
+                sma7_1d    = _compute_sma(closes_1d, 7)
+                sma25_1d   = _compute_sma(closes_1d, 25)
+                if sma7_1d and sma25_1d:
+                    trend_1d = "haussier" if sma7_1d > sma25_1d else "baissier"
+            except Exception:
+                pass
+
+            # Order book spread
+            spread_pct = None
+            try:
+                depth      = api_get("/api/v3/depth", {"symbol": sym, "limit": 5})
+                best_bid   = float(depth["bids"][0][0])
+                best_ask   = float(depth["asks"][0][0])
+                spread_pct = round((best_ask - best_bid) / best_bid * 100, 4)
+            except Exception:
+                pass
+
             result[sym] = {
                 **stats,
                 "rsi14":          rsi14,
@@ -177,6 +307,11 @@ def get_enriched_market_data(watchlist: list[str]) -> dict[str, dict]:
                 "trend":          trend,
                 "change_pct_1h":  round(change_1h, 2),
                 "range_pct_24h":  round(range_pct, 2),
+                "rsi_short":      rsi_short,
+                "trend_short":    trend_short,
+                "interval_short": interval_short,
+                "trend_1d":       trend_1d,
+                "spread_pct":     spread_pct,
             }
         except Exception as exc:
             import logging
@@ -335,3 +470,7 @@ def load_config() -> dict:
         return json.loads(CONFIG_FILE.read_text())
     except FileNotFoundError:
         return _DEFAULT_CONFIG
+
+
+def save_config(cfg: dict) -> None:
+    CONFIG_FILE.write_text(json.dumps(cfg, indent=2, ensure_ascii=False))
