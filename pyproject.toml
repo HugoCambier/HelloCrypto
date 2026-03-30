@@ -3,7 +3,7 @@ name        = "hellocrypto"
 version     = "0.1.0"
 description = "AI-powered crypto trading agent on Binance"
 readme      = "README.md"
-packages    = [{ include = "hellocrypto" }]
+packages    = [{ include = "hellocrypto" }, { include = "db" }, { include = "dashboard" }]
 
 [tool.poetry.dependencies]
 python        = "^3.11"
@@ -12,13 +12,16 @@ flask         = ">=3.0"
 requests      = ">=2.31"
 python-dotenv = ">=1.0"
 google-genai  = { version = ">=1.0", optional = true }
+google-auth-oauthlib = ">=1.0"
+google-cloud-firestore = { version = ">=2.13", optional = true }
 
 [tool.poetry.extras]
 gemini = ["google-genai"]
+gcp    = ["google-cloud-firestore"]
 
 [tool.poetry.scripts]
 agent     = "hellocrypto.agent:run_agent"
-dashboard = "hellocrypto.dashboard:main"
+dashboard = "dashboard.app:main"
 backtest  = "hellocrypto.backtest:main"
 
 [build-system]

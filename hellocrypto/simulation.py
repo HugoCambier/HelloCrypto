@@ -56,6 +56,13 @@ def _paper_sell(symbol: str, qty: float, price: float, holdings: dict) -> tuple[
 
 def _save_state(state: dict) -> None:
     try:
+        from db.store import set_state
+        set_state("simulation", {**state, "saved_at": datetime.utcnow().isoformat(), "schema_version": 1})
+        return
+    except ImportError:
+        pass
+    # JSON fallback
+    try:
         SIM_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         SIM_STATE_FILE.write_text(json.dumps({**state, "saved_at": datetime.utcnow().isoformat()}, indent=2))
     except Exception as exc:
@@ -63,6 +70,16 @@ def _save_state(state: dict) -> None:
 
 
 def _load_state() -> dict | None:
+    try:
+        from db.store import get_state
+        data = get_state("simulation")
+        if data and data.get("schema_version", 1) != 1:
+            log.warning("[SIM] Version de schéma incompatible — démarrage propre")
+            return None
+        return data
+    except ImportError:
+        pass
+    # JSON fallback
     try:
         data = json.loads(SIM_STATE_FILE.read_text())
         if data.get("schema_version", 1) != 1:

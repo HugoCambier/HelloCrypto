@@ -55,6 +55,8 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
+_stop_requested: bool = False
+
 
 def _fetch_market_data() -> dict:
     data = get_enriched_market_data(WATCHLIST, cycle_seconds=CYCLE_SEC)
@@ -137,7 +139,7 @@ def run_agent() -> None:
     peak_prices: dict  = {}   # sym → highest price seen since entry
     cooldown_map: dict = {}   # sym → last sell cycle
 
-    while True:
+    while not _stop_requested:
         cycle += 1
         log.info(f"═══ Cycle #{cycle} ═══")
         try:

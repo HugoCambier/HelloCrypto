@@ -434,6 +434,13 @@ def market_sell(symbol: str, qty: float) -> tuple[dict, float, str]:
 # ── Persistence ───────────────────────────────────────────────────────────────
 
 def load_history() -> list:
+    """Load trade history (database or JSON fallback)."""
+    try:
+        from db.store import load_history as _db_load
+        return _db_load(mode="real")
+    except ImportError:
+        pass
+    # JSON fallback
     try:
         return json.loads(HISTORY_FILE.read_text())
     except FileNotFoundError:
@@ -449,7 +456,15 @@ def save_trade(
     fee: float = 0.0,
     fee_asset: str = "USDC",
 ) -> None:
-    """Append a trade record to the local JSON history."""
+    """Append a trade record (database or JSON fallback)."""
+    try:
+        from db.store import save_trade as _db_save
+        _db_save(action=action, symbol=symbol, amount=amount, price=price,
+                 reason=reason, fee=fee, fee_asset=fee_asset, mode="real")
+        return
+    except ImportError:
+        pass
+    # JSON fallback (local without db package)
     history = load_history()
     history.append({
         "timestamp": datetime.utcnow().isoformat(),

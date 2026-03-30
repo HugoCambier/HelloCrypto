@@ -16,3 +16,14 @@ data/
 
 # macOS
 .DS_Store
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Docker
+.docker/
+
+# GCP
+.gcloud/

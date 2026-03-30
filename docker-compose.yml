@@ -1,0 +1,30 @@
+# Développement local — partage la même DB SQLite via volumes
+# Usage: docker compose up
+
+services:
+  runner:
+    build:
+      context: .
+      dockerfile: runner/Dockerfile
+    command: ["--mode", "simulation"]
+    env_file: .env
+    environment:
+      DATABASE_URL: "data/hellocrypto.db"   # force SQLite même si GOOGLE_CLOUD_PROJECT est set
+    volumes:
+      - ./data:/app/data
+      - ./config.json:/app/config.json:ro
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    ports:
+      - "5000:5000"
+    env_file: .env
+    environment:
+      DATABASE_URL: "data/hellocrypto.db"
+    volumes:
+      - ./data:/app/data
+      - ./config.json:/app/config.json:ro
+    restart: unless-stopped

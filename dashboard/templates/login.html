@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HelloCrypto — Connexion</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: #0f172a; }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center">
+  <div class="w-full max-w-sm">
+    <!-- Logo / title -->
+    <div class="text-center mb-8">
+      <div class="text-4xl mb-3">&#8383;</div>
+      <h1 class="text-2xl font-bold text-slate-100">HelloCrypto</h1>
+      <p class="text-sm text-slate-500 mt-1">Agent de trading IA</p>
+    </div>
+
+    <!-- Card -->
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-8 shadow-2xl">
+
+      {% if error %}
+      <div class="mb-5 bg-red-900/40 border border-red-700 rounded-xl px-4 py-3 text-sm text-red-300">
+        {{ error }}
+      </div>
+      {% endif %}
+
+      {% if auth_enabled %}
+      <a href="/auth/start"
+         class="flex items-center justify-center gap-3 w-full px-4 py-3
+                bg-white hover:bg-gray-50 text-gray-800 font-medium rounded-xl
+                transition-colors shadow-md">
+        <!-- Google logo SVG -->
+        <svg width="20" height="20" viewBox="0 0 48 48">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          <path fill="none" d="M0 0h48v48H0z"/>
+        </svg>
+        Se connecter avec Google
+      </a>
+      {% else %}
+      <div class="text-center text-slate-400 text-sm">
+        <p>Auth désactivée (mode local).</p>
+        <a href="/" class="text-blue-400 hover:text-blue-300 mt-2 inline-block">&#8594; Accéder au dashboard</a>
+      </div>
+      {% endif %}
+    </div>
+
+    <p class="text-center text-xs text-slate-600 mt-6">
+      Accès restreint — compte Google autorisé uniquement
+    </p>
+  </div>
+</body>
+</html>

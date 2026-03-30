@@ -1,7 +1,7 @@
 {
   "budget": 100,
-  "stop_loss_pct": 20,
-  "cycle_seconds": 60,
+  "stop_loss_pct": 21,
+  "cycle_seconds": 1800,
   "watchlist": [
     "BTCUSDC",
     "ETHUSDC",
@@ -13,7 +13,7 @@
   ],
   "llm_cooldown_seconds": 300,
   "price_change_threshold_pct": 0.5,
-  "risk_level": 3,
+  "risk_level": 5,
   "trailing_stop_pct": 10,
   "sell_cooldown_cycles": 3,
   "max_tokens": 1000,
