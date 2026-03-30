@@ -100,13 +100,9 @@ ok "Registry : $REGION-docker.pkg.dev/$PROJECT/$REPO"
 # ── 5. Build & Push (via Cloud Build — pas de Docker local requis) ────────────
 step "Build Docker (Cloud Build)"
 gcloud builds submit . \
-    --tag="$RUNNER_IMAGE" \
-    --dockerfile=runner/Dockerfile \
-    --project="$PROJECT" --quiet
-gcloud builds submit . \
-    --tag="$DASHBOARD_IMAGE" \
-    --dockerfile=dashboard/Dockerfile \
-    --project="$PROJECT" --quiet
+    --config=deploy/cloudbuild.yaml \
+    --substitutions="_RUNNER_IMAGE=$RUNNER_IMAGE,_DASHBOARD_IMAGE=$DASHBOARD_IMAGE" \
+    --project="$PROJECT"
 ok "Images publiées"
 
 # ── 6. Firestore ──────────────────────────────────────────────────────────────

@@ -1,0 +1,8 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-f', 'runner/Dockerfile', '-t', '$_RUNNER_IMAGE', '.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-f', 'dashboard/Dockerfile', '-t', '$_DASHBOARD_IMAGE', '.']
+images:
+  - '$_RUNNER_IMAGE'
+  - '$_DASHBOARD_IMAGE'
