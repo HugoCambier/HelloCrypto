@@ -52,7 +52,7 @@ gcloud iam service-accounts create "$SA" \
 for role in roles/datastore.user roles/secretmanager.secretAccessor roles/run.invoker; do
     gcloud projects add-iam-policy-binding "$PROJECT" \
         --member="serviceAccount:$SA@$PROJECT.iam.gserviceaccount.com" \
-        --role="$role" --quiet 2>&1 | grep -v "^Updated\|^bindings\|^etag\|^version\|^  -\|^  role\|^  members" || true
+        --role="$role" --condition=None --quiet 2>&1 | grep -v "^Updated\|^bindings\|^etag\|^version\|^  -\|^  role\|^  members" || true
 done
 ok "Service account prêt ($SA)"
 
