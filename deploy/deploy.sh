@@ -206,13 +206,15 @@ ok "Scheduler en pause — démarre les cycles depuis le dashboard"
 step "Utilisateur admin"
 OWNER_EMAIL="${ALLOWED_EMAILS:-$(gcloud config get-value account 2>/dev/null)}"
 if [ -n "$OWNER_EMAIL" ]; then
-    python3 - <<PYEOF
-import sys; sys.path.insert(0,".")
-import os; os.environ["GOOGLE_CLOUD_PROJECT"] = "$PROJECT"
-from db.store import add_user
-add_user("$OWNER_EMAIL", "admin")
-print("  → $OWNER_EMAIL ajouté comme admin")
-PYEOF
+    TOKEN=$(gcloud auth print-access-token)
+    NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    curl -s -X PATCH \
+        "https://firestore.googleapis.com/v1/projects/$PROJECT/databases/(default)/documents/users/$OWNER_EMAIL" \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{\"fields\":{\"email\":{\"stringValue\":\"$OWNER_EMAIL\"},\"role\":{\"stringValue\":\"admin\"},\"added_at\":{\"stringValue\":\"$NOW\"}}}" \
+        > /dev/null
+    ok "$OWNER_EMAIL ajouté comme admin"
 fi
 
 # ── Résumé ────────────────────────────────────────────────────────────────────
