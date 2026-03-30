@@ -55,6 +55,12 @@ def main() -> None:
         default=os.getenv("RUNNER_MODE", "real"),
         help="Trading mode: real (Binance) or simulation (paper trading)",
     )
+    parser.add_argument(
+        "--loop",
+        action="store_true",
+        default=os.getenv("RUNNER_LOOP", "").lower() in ("1", "true", "yes"),
+        help="Loop continuously (VM/local mode). Default: single cycle then exit (Cloud Run Job mode).",
+    )
     args = parser.parse_args()
 
     # Initialise the data store (creates SQLite tables if needed)
@@ -63,8 +69,12 @@ def main() -> None:
 
     from hellocrypto.api import load_config
     cfg = load_config()
+    cycle_sec = int(cfg.get("cycle_seconds", 1800))
 
-    log.info("Runner démarré | mode=%s | cycle=%ss", args.mode, cfg.get("cycle_seconds", 60))
+    log.info(
+        "Runner démarré | mode=%s | loop=%s | cycle=%ss",
+        args.mode, args.loop, cycle_sec,
+    )
 
     if args.mode == "simulation":
         from hellocrypto import simulation as sim
@@ -74,9 +84,18 @@ def main() -> None:
             stop_event=_stop,
             resume=True,
         )
+    elif args.loop:
+        # VM / local mode : boucle infinie avec sleep entre cycles
+        import time
+        from hellocrypto.agent import run_one_cycle
+        while not _stop.is_set():
+            run_one_cycle()
+            _stop.wait(timeout=cycle_sec)
     else:
-        from hellocrypto.agent import run_agent
-        run_agent()
+        # Cloud Run Job mode : un seul cycle puis exit
+        # Cloud Scheduler se charge de déclencher au bon interval
+        from hellocrypto.agent import run_one_cycle
+        run_one_cycle()
 
     log.info("Runner terminé proprement.")
 

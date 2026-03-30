@@ -57,6 +57,29 @@ log = logging.getLogger(__name__)
 
 _stop_requested: bool = False
 
+# Keys persisted in DB between Cloud Run Job invocations
+_STATE_KEY = "agent_real"
+
+
+def _load_state() -> dict:
+    try:
+        from db.store import get_state
+        saved = get_state(_STATE_KEY)
+        if saved:
+            return saved
+    except ImportError:
+        pass
+    return {}
+
+
+def _save_state(state: dict) -> None:
+    try:
+        from db.store import set_state
+        set_state(_STATE_KEY, state)
+        return
+    except ImportError:
+        pass
+
 
 def _fetch_market_data() -> dict:
     data = get_enriched_market_data(WATCHLIST, cycle_seconds=CYCLE_SEC)
@@ -120,6 +143,134 @@ def _performance_report(prices: dict, positions: dict, cash: float) -> str:
         pnl_pos = (cur - p["avg_price"]) / p["avg_price"] * 100
         lines.append(f"  {sym}: {p['qty']:.6f} qty  (PnL {pnl_pos:+.2f}%)")
     return "\n".join(lines)
+
+
+def run_one_cycle() -> None:
+    """Execute a single trading cycle — designed for Cloud Run Jobs.
+
+    State (peak_prices, cooldown_map, etc.) is persisted in Firestore/SQLite
+    so it survives across invocations triggered by Cloud Scheduler.
+    """
+    state          = _load_state()
+    cycle          = state.get("cycle", 0) + 1
+    last_llm_call  = state.get("last_llm_call", 0.0)
+    llm_call_count = state.get("llm_call_count", 0)
+    ref_prices     = state.get("ref_prices", {})
+    recent_decisions = state.get("recent_decisions", [])
+    peak_prices    = state.get("peak_prices", {})
+    cooldown_map   = state.get("cooldown_map", {})
+
+    provider = _cfg.get("llm", {}).get("provider", "claude")
+    model    = _cfg.get("llm", {}).get("model", "—")
+    log.info(
+        f"Cycle #{cycle} | Budget: ${BUDGET} USDC | LLM: {provider}/{model} | Risque: {RISK_LEVEL}/10"
+    )
+
+    try:
+        positions       = get_open_positions(WATCHLIST)
+        cash            = get_balance("USDC")
+        market_data_raw = _fetch_market_data()
+        prices          = _prices_from_data(market_data_raw)
+
+        log.info(f"Cash: ${cash:.2f} USDC | Positions: {list(positions.keys())}")
+
+        for sym in positions:
+            if sym in prices:
+                peak_prices[sym] = max(peak_prices.get(sym, prices[sym]), prices[sym])
+
+        for sym, qty, price, reason_tag, _ in _check_stops(positions, prices, peak_prices):
+            _, fee, fee_asset = market_sell(sym, qty)
+            save_trade(
+                f"SELL ({reason_tag})", sym, qty, price,
+                f"{reason_tag.replace('-', ' ').title()} déclenché", fee, fee_asset,
+            )
+            peak_prices.pop(sym, None)
+            cooldown_map[sym] = cycle
+            del positions[sym]
+
+        now             = time.time()
+        cooldown_ok     = (now - last_llm_call) >= LLM_COOLDOWN
+        delta           = _max_price_change(prices, ref_prices)
+        price_change_ok = delta >= PRICE_THRESHOLD
+
+        if not cooldown_ok:
+            log.info(f"Skip LLM — cooldown: {max(0, LLM_COOLDOWN - (now - last_llm_call)):.0f}s restants")
+        elif not price_change_ok:
+            log.info(f"Skip LLM — Δmax {delta*100:.2f}% < seuil {PRICE_THRESHOLD*100:.1f}%")
+        else:
+            fear_greed    = get_fear_and_greed()
+            btc_dominance = get_btc_dominance()
+            scores        = compute_scores(market_data_raw)
+            market_data   = format_market_data(market_data_raw, WATCHLIST)
+
+            decision = llm_call(
+                prompt=build_analysis(
+                    market_data, positions, cash, BUDGET, RISK_LEVEL,
+                    recent_decisions, fear_greed, btc_dominance, scores,
+                ),
+                system=SYSTEM, config=_cfg,
+            )
+
+            last_llm_call    = time.time()
+            ref_prices       = dict(prices)
+            llm_call_count  += 1
+            recent_decisions = (recent_decisions + [decision])[-3:]
+
+            log.info(f"LLM #{llm_call_count} | Sentiment: {decision['market_sentiment']} | {decision['summary']}")
+
+            for action in decision.get("actions", []):
+                atype  = action.get("type", "")
+                sym    = action.get("symbol", "")
+                if not atype or not sym:
+                    continue
+                reason = action.get("reason", "")
+
+                if atype == "buy" and cash > 10:
+                    last_sell = cooldown_map.get(sym, 0)
+                    if cycle - last_sell < SELL_COOLDOWN_CYC:
+                        log.info(f"COOLDOWN {sym} — {SELL_COOLDOWN_CYC - (cycle - last_sell)} cycles restants")
+                        continue
+
+                    max_pct    = (5 + RISK_LEVEL * 4) / 100
+                    rsi        = market_data_raw.get(sym, {}).get("rsi14")
+                    rsi_factor = max(0.5, min(1.5, 1.5 - (rsi - 20) / 60)) if rsi is not None else 1.0
+                    amount     = min(action.get("usdc_amount", 0), cash * max_pct * rsi_factor)
+                    if amount >= 10:
+                        _, fee, fee_asset = market_buy(sym, amount)
+                        price = prices.get(sym) or get_ticker(sym)
+                        save_trade("BUY", sym, amount, price, reason, fee, fee_asset)
+                        peak_prices[sym] = price
+                        cash -= amount
+                        log.info(f"BUY  ${amount:.2f} {sym} @ ${price:.4f} (RSI={rsi or 0:.0f} ×{rsi_factor:.2f})")
+
+                elif atype == "sell" and sym in positions:
+                    qty   = action.get("qty", positions[sym]["qty"])
+                    price = prices.get(sym) or get_ticker(sym)
+                    _, fee, fee_asset = market_sell(sym, qty)
+                    save_trade("SELL", sym, qty, price, reason, fee, fee_asset)
+                    peak_prices.pop(sym, None)
+                    cooldown_map[sym] = cycle
+                    log.info(f"SELL {qty:.6f} {sym} @ ${price:.4f}")
+
+                else:
+                    log.info(f"HOLD {sym} — {reason}")
+
+        if cycle % 10 == 0:
+            report = _performance_report(prices, positions, cash)
+            log.info("\n" + report)
+
+    except Exception as exc:
+        log.error(f"Erreur cycle #{cycle}: {exc}", exc_info=True)
+    finally:
+        _save_state({
+            "cycle": cycle,
+            "last_llm_call": last_llm_call,
+            "llm_call_count": llm_call_count,
+            "ref_prices": ref_prices,
+            "recent_decisions": recent_decisions,
+            "peak_prices": peak_prices,
+            "cooldown_map": cooldown_map,
+        })
 
 
 def run_agent() -> None:

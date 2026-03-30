@@ -286,8 +286,10 @@ def main() -> None:
     from pathlib import Path
     Path("logs").mkdir(exist_ok=True)
     Path("data").mkdir(exist_ok=True)
-    print("Dashboard → http://localhost:5000")
-    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+    host = os.getenv("FLASK_HOST", "127.0.0.1")
+    port = int(os.getenv("FLASK_PORT", "5000"))
+    print(f"Dashboard → http://{host}:{port}")
+    app.run(host=host, port=port, debug=False, threaded=True)
 
 
 if __name__ == "__main__":

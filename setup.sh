@@ -17,11 +17,22 @@ echo -e "${BLD}═══ HelloCrypto — setup GCP ═══${NC}"
 echo "Répertoire : $WORK_DIR"
 echo "Utilisateur : $(whoami)"
 
+# ── 0. Paramètres SSL ─────────────────────────────────────────────────────────
+echo ""
+echo -e "${YEL}Configuration HTTPS (optionnel)${NC}"
+echo "  Pour un certificat SSL gratuit (Let's Encrypt), tu as besoin d'un domaine"
+echo "  pointant sur cette VM. Ex: DuckDNS (gratuit) → monapp.duckdns.org"
+echo ""
+read -rp "Domaine (laisser vide pour ignorer SSL) : " DOMAIN
+if [ -n "$DOMAIN" ]; then
+    read -rp "Email (pour Let's Encrypt) : " LE_EMAIL
+fi
+
 # ── 1. Paquets système ────────────────────────────────────────────────────────
 step "Paquets système"
 sudo apt-get update -qq
-sudo apt-get install -y -qq python3.11 python3.11-venv python3-pip curl git
-ok "Python $(python3.11 --version) installé"
+sudo apt-get install -y -qq python3.11 python3.11-venv python3-pip curl git nginx
+ok "Python $(python3.11 --version) + nginx installés"
 
 # ── 2. Poetry ─────────────────────────────────────────────────────────────────
 step "Poetry"
@@ -32,7 +43,6 @@ else
     ok "Poetry déjà présent"
 fi
 export PATH="$HOME/.local/bin:$PATH"
-# Persistant pour les prochaines sessions
 grep -qxF 'export PATH="$HOME/.local/bin:$PATH"' ~/.bashrc \
     || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
@@ -62,7 +72,7 @@ fi
 step "Services systemd"
 USER_NAME="$(whoami)"
 
-# Service : agent de trading (boucle infinie, redémarre automatiquement)
+# Service : agent de trading
 sudo tee /etc/systemd/system/hellocrypto-agent.service > /dev/null << UNIT
 [Unit]
 Description=HelloCrypto Trading Agent
@@ -84,7 +94,7 @@ StandardError=append:${WORK_DIR}/logs/agent.log
 WantedBy=multi-user.target
 UNIT
 
-# Service : dashboard web (Flask sur port 5000)
+# Service : dashboard web (Flask sur 127.0.0.1:5000 — nginx expose vers l'extérieur)
 sudo tee /etc/systemd/system/hellocrypto-dashboard.service > /dev/null << UNIT
 [Unit]
 Description=HelloCrypto Dashboard
@@ -96,6 +106,8 @@ Type=simple
 User=${USER_NAME}
 WorkingDirectory=${WORK_DIR}
 EnvironmentFile=${WORK_DIR}/.env
+Environment=FLASK_HOST=127.0.0.1
+Environment=FLASK_PORT=5000
 ExecStart=${POETRY_BIN} run dashboard
 Restart=on-failure
 RestartSec=10
@@ -124,6 +136,79 @@ ${WORK_DIR}/logs/*.log {
 CONF
 ok "Rotation automatique (14 jours)"
 
+# ── 8. nginx — reverse proxy ──────────────────────────────────────────────────
+step "nginx"
+
+if [ -n "${DOMAIN:-}" ]; then
+    SERVER_NAME="$DOMAIN"
+else
+    # Utilise l'IP publique GCP si disponible, sinon localhost
+    SERVER_NAME="$(curl -sf --max-time 2 http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/externalIp -H 'Metadata-Flavor: Google' || echo '_')"
+fi
+
+sudo tee /etc/nginx/sites-available/hellocrypto > /dev/null << NGINX
+server {
+    listen 80;
+    server_name ${SERVER_NAME};
+
+    # Taille max upload (backtest fichiers)
+    client_max_body_size 10M;
+
+    location / {
+        proxy_pass         http://127.0.0.1:5000;
+        proxy_set_header   Host              \$host;
+        proxy_set_header   X-Real-IP         \$remote_addr;
+        proxy_set_header   X-Forwarded-For   \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
+        proxy_read_timeout 120s;
+
+        # WebSocket (simulation live)
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade    \$http_upgrade;
+        proxy_set_header   Connection "upgrade";
+    }
+}
+NGINX
+
+# Activer le site, désactiver le défaut
+sudo ln -sf /etc/nginx/sites-available/hellocrypto /etc/nginx/sites-enabled/hellocrypto
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl enable nginx && sudo systemctl restart nginx
+ok "nginx configuré (reverse proxy → 127.0.0.1:5000)"
+
+# ── 9. SSL — Let's Encrypt (certbot) ─────────────────────────────────────────
+if [ -n "${DOMAIN:-}" ]; then
+    step "SSL — Let's Encrypt pour $DOMAIN"
+
+    # Installe certbot via snap (méthode recommandée sur Ubuntu/Debian)
+    if ! command -v certbot &>/dev/null; then
+        sudo apt-get install -y -qq snapd
+        sudo snap install --classic certbot 2>/dev/null || sudo apt-get install -y -qq certbot python3-certbot-nginx
+        ok "certbot installé"
+    else
+        ok "certbot déjà présent"
+    fi
+
+    sudo certbot --nginx \
+        -d "$DOMAIN" \
+        --non-interactive \
+        --agree-tos \
+        --email "$LE_EMAIL" \
+        --redirect
+    ok "Certificat SSL obtenu — HTTPS activé pour $DOMAIN"
+    ok "Renouvellement automatique via systemd timer certbot"
+
+    # Redémarre nginx après certbot (certbot le fait aussi, mais au cas où)
+    sudo systemctl reload nginx
+
+    DASHBOARD_URL="https://$DOMAIN"
+else
+    warn "Pas de domaine fourni — dashboard accessible en HTTP sur le port 80"
+    warn "Pour activer HTTPS plus tard : relance setup.sh avec un domaine"
+    EXTERNAL_IP="$(curl -sf --max-time 2 http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/externalIp -H 'Metadata-Flavor: Google' || echo 'EXTERNAL_IP')"
+    DASHBOARD_URL="http://$EXTERNAL_IP"
+fi
+
 # ── Résumé ─────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BLD}═══ Installation terminée ═══${NC}"
@@ -133,6 +218,9 @@ echo ""
 echo -e "  ${BLD}1. Configurer les secrets${NC}"
 echo "     nano $WORK_DIR/.env"
 echo "     (BINANCE_API_KEY, BINANCE_API_SECRET, GEMINI_API_KEY)"
+if [ -n "${LE_EMAIL:-}" ]; then
+    echo "     (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET pour l'auth Google)"
+fi
 echo ""
 echo -e "  ${BLD}2. Vérifier config.json${NC} (budget, watchlist, LLM...)"
 echo "     nano $WORK_DIR/config.json"
@@ -146,14 +234,24 @@ echo "     journalctl -u hellocrypto-agent -f"
 echo "     tail -f $WORK_DIR/logs/agent.log"
 echo ""
 echo -e "  ${BLD}5. Dashboard web${NC}"
-echo "     http://EXTERNAL_IP:5000"
-echo "     (ouvre le port 5000 dans les règles de pare-feu GCP)"
+echo "     $DASHBOARD_URL"
+echo "     (assure-toi que le port 80/443 est ouvert dans les règles de pare-feu GCP)"
+if [ -n "${DOMAIN:-}" ]; then
+    echo ""
+    echo -e "  ${BLD}6. OAuth2 Google — callback URI à enregistrer${NC}"
+    echo "     https://console.cloud.google.com/apis/credentials"
+    echo "     Ajoute : https://$DOMAIN/callback"
+fi
 echo ""
-echo -e "${YEL}Cloud Scheduler (optionnel — économie de coûts) :${NC}"
-echo "  Arrêt auto la nuit :"
+echo -e "${YEL}Pare-feu GCP (si pas déjà fait) :${NC}"
+echo "  gcloud compute firewall-rules create allow-http-https \\"
+echo "    --allow tcp:80,tcp:443 --target-tags=http-server,https-server"
+echo ""
+echo -e "${YEL}Arrêt/démarrage automatique (économie de coûts) :${NC}"
+echo "  Arrêt la nuit (2h) :"
 echo "    gcloud scheduler jobs create http stop-vm \\"
 echo "      --schedule='0 2 * * *' --time-zone='Europe/Paris' \\"
 echo "      --uri='https://compute.googleapis.com/compute/v1/projects/PROJECT/zones/ZONE/instances/INSTANCE/stop' \\"
 echo "      --oauth-service-account-email=SA@PROJECT.iam.gserviceaccount.com"
-echo "  Redémarrage le matin :"
-echo "    (remplace 'stop' par 'start' et '0 2' par '8 0')"
+echo "  Redémarrage le matin (8h) :"
+echo "    (remplace 'stop' par 'start' et '0 2' par '0 8')"
