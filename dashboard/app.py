@@ -332,8 +332,10 @@ def main() -> None:
     from pathlib import Path
     Path("logs").mkdir(exist_ok=True)
     Path("data").mkdir(exist_ok=True)
-    host = os.getenv("FLASK_HOST", "127.0.0.1")
-    port = int(os.getenv("FLASK_PORT", "5000"))
+    # Cloud Run sets PORT; FLASK_HOST defaults to 0.0.0.0 (required by Cloud Run).
+    # On a VM behind nginx, set FLASK_HOST=127.0.0.1 in the systemd service.
+    host = os.getenv("FLASK_HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", os.getenv("FLASK_PORT", "5000")))
     print(f"Dashboard → http://{host}:{port}")
     app.run(host=host, port=port, debug=False, threaded=True)
 
