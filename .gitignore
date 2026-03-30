@@ -27,3 +27,6 @@ data/
 
 # GCP
 .gcloud/
+
+# Claude Code
+.claude/

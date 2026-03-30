@@ -71,14 +71,24 @@
       <span class="text-slate-600 text-sm">|</span>
       <span class="text-slate-400 text-sm">Dashboard</span>
     </div>
-    <div class="flex items-center gap-4">
+    <div class="flex items-center gap-3">
+      <select id="runner-mode"
+        class="bg-slate-700 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
+        <option value="simulation" selected>Simulation</option>
+        <option value="real">Réel</option>
+      </select>
       <div class="flex items-center gap-2 text-sm" id="agent-badge">
         <div class="w-2 h-2 rounded-full bg-slate-500" id="status-dot"></div>
-        <span class="text-slate-400" id="status-label">...</span>
+        <span class="text-slate-400" id="status-label">Inactif</span>
       </div>
-      <button id="agent-btn" onclick="toggleAgent()"
+      <!-- Auto-schedule toggle (Cloud Run only) -->
+      <button id="schedule-btn" onclick="toggleSchedule()" title="Activer/désactiver le trading automatique"
+        class="hidden px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 border-slate-600 text-slate-400 hover:border-slate-400">
+        Auto <span id="schedule-label">OFF</span>
+      </button>
+      <button id="agent-btn" onclick="triggerRun()"
         class="px-4 py-1.5 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-500 transition-colors disabled:opacity-50">
-        —
+        Lancer un cycle
       </button>
     </div>
   </header>
@@ -871,40 +881,131 @@ function switchTab(tab) {
 }
 
 // ─────────────────────────────────────────────
-// Agent status
+// Runner status (Cloud Run Job or local agent)
 // ─────────────────────────────────────────────
+let _isCloudRun = null;  // null=unknown, true/false after first check
+
 async function fetchAgentStatus() {
+  const dot   = document.getElementById('status-dot');
+  const label = document.getElementById('status-label');
+  const btn   = document.getElementById('agent-btn');
+  const schedBtn = document.getElementById('schedule-btn');
+  try {
+    // Try Cloud Run runner first
+    const r = await fetch('/api/runner/status');
+    const d = await r.json();
+    if (d.cloud_run) {
+      _isCloudRun = true;
+      if (d.running) {
+        dot.className     = 'w-2 h-2 rounded-full bg-green-400 animate-pulse-dot';
+        label.textContent = 'Cycle en cours…';
+        btn.disabled      = true;
+      } else {
+        dot.className     = 'w-2 h-2 rounded-full bg-slate-500';
+        label.textContent = 'Inactif';
+        btn.disabled      = false;
+      }
+      // Show auto-schedule toggle and refresh its state
+      schedBtn.classList.remove('hidden');
+      _refreshScheduleBtn();
+      return;
+    }
+  } catch {}
+
+  // Fallback : local agent
+  _isCloudRun = false;
+  schedBtn.classList.add('hidden');
   try {
     const r = await fetch('/api/agent/status');
     const d = await r.json();
-    const dot   = document.getElementById('status-dot');
-    const label = document.getElementById('status-label');
-    const btn   = document.getElementById('agent-btn');
     if (d.running) {
-      dot.className   = 'w-2 h-2 rounded-full bg-green-400 animate-pulse-dot';
-      label.textContent = `En cours (PID ${d.pid})`;
-      btn.textContent   = 'Arrêter l\'agent';
-      btn.className     = 'px-4 py-1.5 rounded-lg text-sm font-medium bg-red-700 hover:bg-red-600 transition-colors';
+      dot.className     = 'w-2 h-2 rounded-full bg-green-400 animate-pulse-dot';
+      label.textContent = `Local (PID ${d.pid})`;
     } else {
-      dot.className   = 'w-2 h-2 rounded-full bg-slate-500';
-      label.textContent = 'Agent arrêté';
-      btn.textContent   = 'Démarrer l\'agent';
-      btn.className     = 'px-4 py-1.5 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-500 transition-colors';
+      dot.className     = 'w-2 h-2 rounded-full bg-slate-500';
+      label.textContent = 'Inactif';
     }
   } catch {}
 }
 
-async function toggleAgent() {
-  const btn = document.getElementById('agent-btn');
-  const r   = await fetch('/api/agent/status');
-  const d   = await r.json();
-  const url = d.running ? '/api/agent/stop' : '/api/agent/start';
+async function _refreshScheduleBtn() {
+  const schedBtn   = document.getElementById('schedule-btn');
+  const schedLabel = document.getElementById('schedule-label');
+  try {
+    const r = await fetch('/api/runner/schedule');
+    const d = await r.json();
+    if (d.enabled) {
+      schedLabel.textContent = 'ON';
+      schedBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 border-green-500 text-green-400 hover:border-green-400';
+      schedBtn.title = `Trading automatique actif (${d.schedule})`;
+    } else {
+      schedLabel.textContent = 'OFF';
+      schedBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 border-slate-600 text-slate-400 hover:border-slate-400';
+      schedBtn.title = 'Activer le trading automatique';
+    }
+  } catch {}
+}
+
+async function toggleSchedule() {
+  const schedBtn   = document.getElementById('schedule-btn');
+  const schedLabel = document.getElementById('schedule-label');
+  schedBtn.disabled = true;
+  const enabling = schedLabel.textContent === 'OFF';
+  try {
+    const url = enabling ? '/api/runner/schedule/enable' : '/api/runner/schedule/disable';
+    const r = await fetch(url, { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      toast(enabling ? 'Trading automatique activé' : 'Trading automatique désactivé', enabling ? 'ok' : 'warn');
+      await _refreshScheduleBtn();
+    } else {
+      toast(d.error || 'Erreur', 'error');
+    }
+  } finally {
+    schedBtn.disabled = false;
+  }
+}
+
+async function triggerRun() {
+  const btn  = document.getElementById('agent-btn');
+  const mode = document.getElementById('runner-mode').value;
   btn.disabled = true;
   try {
-    await fetch(url, { method: 'POST' });
-    await fetchAgentStatus();
-    toast(d.running ? 'Agent arrêté' : 'Agent démarré', d.running ? 'warn' : 'ok');
-  } finally {
+    if (_isCloudRun) {
+      // Cloud Run: trigger one job execution
+      const r = await fetch('/api/runner/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast(`Cycle ${mode} lancé`, 'ok');
+        // Poll status for ~3 min until job finishes
+        let polls = 0;
+        const iv = setInterval(async () => {
+          await fetchAgentStatus();
+          if (++polls > 36 || !document.getElementById('status-dot').className.includes('green')) {
+            clearInterval(iv);
+            btn.disabled = false;
+          }
+        }, 5000);
+      } else {
+        toast(d.error || 'Erreur', 'error');
+        btn.disabled = false;
+      }
+    } else {
+      // Local fallback: toggle agent
+      const r = await fetch('/api/agent/status');
+      const d = await r.json();
+      const url = d.running ? '/api/agent/stop' : '/api/agent/start';
+      await fetch(url, { method: 'POST' });
+      await fetchAgentStatus();
+      toast(d.running ? 'Agent arrêté' : 'Agent démarré', d.running ? 'warn' : 'ok');
+      btn.disabled = false;
+    }
+  } catch (e) {
+    toast('Erreur : ' + e.message, 'error');
     btn.disabled = false;
   }
 }

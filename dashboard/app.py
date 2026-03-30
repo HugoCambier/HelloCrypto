@@ -225,6 +225,52 @@ def runner_stop():
         return jsonify({"error": str(exc)}), 500
 
 
+def _scheduler_action(action: str):
+    """Pause or resume the Cloud Scheduler job. action = 'pause' | 'resume'."""
+    from flask import jsonify
+    if not _GCP_PROJECT:
+        return jsonify({"error": "GCP_PROJECT non configuré"}), 400
+    try:
+        token = _gcp_token()
+        url   = (f"https://cloudscheduler.googleapis.com/v1/projects/{_GCP_PROJECT}"
+                 f"/locations/{_GCP_REGION}/jobs/{_SCHEDULER_JOB}:{action}")
+        r = _req.post(url, headers={"Authorization": f"Bearer {token}"}, timeout=10)
+        r.raise_for_status()
+        return jsonify({"ok": True, "action": action})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.get("/api/runner/schedule")
+def runner_schedule_status():
+    """Return scheduler state: enabled (resumed) or disabled (paused)."""
+    from flask import jsonify
+    if not _GCP_PROJECT:
+        return jsonify({"cloud_run": False, "enabled": False})
+    try:
+        token = _gcp_token()
+        url   = (f"https://cloudscheduler.googleapis.com/v1/projects/{_GCP_PROJECT}"
+                 f"/locations/{_GCP_REGION}/jobs/{_SCHEDULER_JOB}")
+        r = _req.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=8)
+        r.raise_for_status()
+        state   = r.json().get("state", "")
+        enabled = state == "ENABLED"
+        schedule = r.json().get("schedule", "")
+        return jsonify({"cloud_run": True, "enabled": enabled, "schedule": schedule})
+    except Exception as exc:
+        return jsonify({"cloud_run": True, "enabled": False, "error": str(exc)})
+
+
+@app.post("/api/runner/schedule/enable")
+def runner_schedule_enable():
+    return _scheduler_action("resume")
+
+
+@app.post("/api/runner/schedule/disable")
+def runner_schedule_disable():
+    return _scheduler_action("pause")
+
+
 @app.post("/api/runner/frequency")
 def runner_frequency():
     """Update Cloud Scheduler interval (minimum 1 minute)."""

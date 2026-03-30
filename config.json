@@ -1,7 +1,7 @@
 {
   "budget": 100,
   "stop_loss_pct": 21,
-  "cycle_seconds": 1800,
+  "cycle_seconds": 3600,
   "watchlist": [
     "BTCUSDC",
     "ETHUSDC",

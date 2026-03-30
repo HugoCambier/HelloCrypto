@@ -1,26 +1,26 @@
-.PHONY: install install-gemini agent dashboard shell clean gemini-models backtest
+.PHONY: install agent dashboard simulation shell deploy clean backtest
 
-install:         ## Install core dependencies (Claude only)
-	poetry install
-
-install-gemini:  ## Install with Gemini support
+install:     ## Install dependencies (with Gemini support)
 	poetry install --extras gemini
 
-agent:      ## Run the autonomous trading agent
-	poetry run agent
+agent:       ## Run the trading agent locally (loops)
+	RUNNER_LOOP=true poetry run python runner/main.py --mode real
 
-dashboard:  ## Start the web dashboard  →  http://localhost:5000
+simulation:  ## Run paper trading locally (loops)
+	RUNNER_LOOP=true poetry run python runner/main.py --mode simulation
+
+dashboard:   ## Start the web dashboard  →  http://localhost:5000
 	poetry run dashboard
 
-shell:      ## Activate the Poetry virtual environment
+shell:       ## Activate the Poetry virtual environment
 	poetry shell
 
-gemini-models: ## List available Gemini models for your API key
-	poetry run python -c "from dotenv import load_dotenv; load_dotenv()" && poetry run python get_google_llm_versions.py
+deploy:      ## Deploy to GCP (Cloud Run + Firestore + Scheduler)
+	bash deploy/deploy.sh
 
-backtest:   ## Run the rule-based backtester  (pass args via ARGS="--days 30 --budget 1000")
+backtest:    ## Run the backtester (pass args via ARGS="--days 30 --budget 1000")
 	poetry run backtest $(ARGS)
 
-clean:      ## Remove Python cache files
+clean:       ## Remove Python cache files
 	find . -type d -name __pycache__ -exec rm -rf {} +
 	find . -name "*.pyc" -delete

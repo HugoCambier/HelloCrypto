@@ -180,7 +180,12 @@ gcloud scheduler jobs create http "$SCHEDULER_JOB" \
     --schedule="$CRON" \
     --uri="$JOB_URI" \
     --project="$PROJECT" --quiet
-ok "Scheduler : $CRON (toutes les $MINUTES min)"
+ok "Scheduler créé : $CRON (toutes les $MINUTES min)"
+
+# Pause immédiatement — le run se déclenche depuis le dashboard
+gcloud scheduler jobs pause "$SCHEDULER_JOB" \
+    --location="$REGION" --project="$PROJECT" --quiet
+ok "Scheduler en pause — démarre les cycles depuis le dashboard"
 
 # ── 10. Ajouter le propriétaire comme utilisateur autorisé ───────────────────
 step "Utilisateur admin"
