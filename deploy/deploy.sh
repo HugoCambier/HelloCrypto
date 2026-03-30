@@ -15,6 +15,8 @@ set -euo pipefail
 # ── Configuration ─────────────────────────────────────────────────────────────
 PROJECT="${GCP_PROJECT:-$(gcloud config get-value project 2>/dev/null)}"
 REGION="${GCP_REGION:-europe-west9}"
+# Cloud Scheduler doesn't support all regions — europe-west1 (Belgium) is the closest supported
+SCHEDULER_REGION="${GCP_SCHEDULER_REGION:-europe-west1}"
 REPO="hellocrypto"
 RUNNER_IMAGE="$REGION-docker.pkg.dev/$PROJECT/$REPO/runner"
 DASHBOARD_IMAGE="$REGION-docker.pkg.dev/$PROJECT/$REPO/dashboard"
@@ -132,7 +134,7 @@ gcloud run deploy "$DASHBOARD_SVC" \
     --min-instances=0 \
     --max-instances=2 \
     --service-account="$SA@$PROJECT.iam.gserviceaccount.com" \
-    --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT,GCP_REGION=$REGION,RUNNER_JOB=$RUNNER_JOB,SCHEDULER_JOB=$SCHEDULER_JOB" \
+    --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT,GCP_REGION=$REGION,SCHEDULER_REGION=$SCHEDULER_REGION,RUNNER_JOB=$RUNNER_JOB,SCHEDULER_JOB=$SCHEDULER_JOB" \
     --set-secrets="$_SECRETS" \
     --project="$PROJECT" --quiet
 
@@ -171,22 +173,22 @@ CRON="*/$MINUTES * * * *"
 JOB_URI="https://run.googleapis.com/v2/projects/$PROJECT/locations/$REGION/jobs/$RUNNER_JOB:run"
 
 gcloud scheduler jobs create http "$SCHEDULER_JOB" \
-    --location="$REGION" \
+    --location="$SCHEDULER_REGION" \
     --schedule="$CRON" \
     --uri="$JOB_URI" \
     --message-body='{"overrides":{"containerOverrides":[{"args":["--mode","real"]}]}}' \
     --oauth-service-account-email="$SA@$PROJECT.iam.gserviceaccount.com" \
     --project="$PROJECT" --quiet 2>/dev/null \
 || gcloud scheduler jobs update http "$SCHEDULER_JOB" \
-    --location="$REGION" \
+    --location="$SCHEDULER_REGION" \
     --schedule="$CRON" \
     --uri="$JOB_URI" \
     --project="$PROJECT" --quiet
-ok "Scheduler créé : $CRON (toutes les $MINUTES min)"
+ok "Scheduler créé : $CRON (toutes les $MINUTES min) [région: $SCHEDULER_REGION]"
 
 # Pause immédiatement — le run se déclenche depuis le dashboard
 gcloud scheduler jobs pause "$SCHEDULER_JOB" \
-    --location="$REGION" --project="$PROJECT" --quiet
+    --location="$SCHEDULER_REGION" --project="$PROJECT" --quiet
 ok "Scheduler en pause — démarre les cycles depuis le dashboard"
 
 # ── 10. Ajouter le propriétaire comme utilisateur autorisé ───────────────────

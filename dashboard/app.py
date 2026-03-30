@@ -155,10 +155,11 @@ def healthz():
 
 # ── Cloud Run Job control ─────────────────────────────────────────────────────
 
-_GCP_PROJECT  = os.getenv("GOOGLE_CLOUD_PROJECT")
-_GCP_REGION   = os.getenv("GCP_REGION", "europe-west9")
-_RUNNER_JOB   = os.getenv("RUNNER_JOB", "hellocrypto-runner")
-_SCHEDULER_JOB = os.getenv("SCHEDULER_JOB", "hellocrypto-trigger")
+_GCP_PROJECT     = os.getenv("GOOGLE_CLOUD_PROJECT")
+_GCP_REGION      = os.getenv("GCP_REGION", "europe-west9")
+_SCHEDULER_REGION = os.getenv("SCHEDULER_REGION", "europe-west1")
+_RUNNER_JOB      = os.getenv("RUNNER_JOB", "hellocrypto-runner")
+_SCHEDULER_JOB   = os.getenv("SCHEDULER_JOB", "hellocrypto-trigger")
 
 
 @app.get("/api/runner/status")
@@ -233,7 +234,7 @@ def _scheduler_action(action: str):
     try:
         token = _gcp_token()
         url   = (f"https://cloudscheduler.googleapis.com/v1/projects/{_GCP_PROJECT}"
-                 f"/locations/{_GCP_REGION}/jobs/{_SCHEDULER_JOB}:{action}")
+                 f"/locations/{_SCHEDULER_REGION}/jobs/{_SCHEDULER_JOB}:{action}")
         r = _req.post(url, headers={"Authorization": f"Bearer {token}"}, timeout=10)
         r.raise_for_status()
         return jsonify({"ok": True, "action": action})
@@ -250,7 +251,7 @@ def runner_schedule_status():
     try:
         token = _gcp_token()
         url   = (f"https://cloudscheduler.googleapis.com/v1/projects/{_GCP_PROJECT}"
-                 f"/locations/{_GCP_REGION}/jobs/{_SCHEDULER_JOB}")
+                 f"/locations/{_SCHEDULER_REGION}/jobs/{_SCHEDULER_JOB}")
         r = _req.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=8)
         r.raise_for_status()
         state   = r.json().get("state", "")
@@ -283,7 +284,7 @@ def runner_frequency():
     try:
         token = _gcp_token()
         url   = (f"https://cloudscheduler.googleapis.com/v1/projects/{_GCP_PROJECT}"
-                 f"/locations/{_GCP_REGION}/jobs/{_SCHEDULER_JOB}")
+                 f"/locations/{_SCHEDULER_REGION}/jobs/{_SCHEDULER_JOB}")
         r = _req.patch(
             url,
             headers={"Authorization": f"Bearer {token}"},
