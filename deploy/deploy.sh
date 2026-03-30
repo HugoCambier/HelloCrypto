@@ -167,9 +167,14 @@ ok "Runner Job : $RUNNER_JOB"
 
 # ── 9. Cloud Scheduler ────────────────────────────────────────────────────────
 step "Cloud Scheduler"
-CYCLE_SEC=$(python3 -c "import json; print(json.load(open('config.json')).get('cycle_seconds', 60))")
-MINUTES=$(python3 -c "print(max(1, $CYCLE_SEC // 60))")
-CRON="*/$MINUTES * * * *"
+CYCLE_SEC=$(python3 -c "import json; print(json.load(open('config.json')).get('cycle_seconds', 1800))" 2>/dev/null || echo "1800")
+MINUTES=$(python3 -c "print(max(1, int('$CYCLE_SEC') // 60))" 2>/dev/null || echo "30")
+# Use explicit minute list instead of */N to avoid Cloud Scheduler parsing issues
+CRON=$(python3 -c "
+m = max(1, int('$MINUTES'))
+slots = ','.join(str(i) for i in range(0, 60, m))
+print(f'{slots} * * * *')
+" 2>/dev/null || echo "0,30 * * * *")
 JOB_URI="https://run.googleapis.com/v2/projects/$PROJECT/locations/$REGION/jobs/$RUNNER_JOB:run"
 
 if gcloud scheduler jobs describe "$SCHEDULER_JOB" \
@@ -177,12 +182,14 @@ if gcloud scheduler jobs describe "$SCHEDULER_JOB" \
     gcloud scheduler jobs update http "$SCHEDULER_JOB" \
         --location="$SCHEDULER_REGION" \
         --schedule="$CRON" \
+        --time-zone="Europe/Paris" \
         --uri="$JOB_URI" \
         --project="$PROJECT" --quiet
 else
     gcloud scheduler jobs create http "$SCHEDULER_JOB" \
         --location="$SCHEDULER_REGION" \
         --schedule="$CRON" \
+        --time-zone="Europe/Paris" \
         --uri="$JOB_URI" \
         --message-body='{"overrides":{"containerOverrides":[{"args":["--mode","real"]}]}}' \
         --oauth-service-account-email="$SA@$PROJECT.iam.gserviceaccount.com" \
