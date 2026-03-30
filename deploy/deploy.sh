@@ -102,6 +102,7 @@ step "Build Docker (Cloud Build)"
 gcloud builds submit . \
     --config=deploy/cloudbuild.yaml \
     --substitutions="_RUNNER_IMAGE=$RUNNER_IMAGE,_DASHBOARD_IMAGE=$DASHBOARD_IMAGE" \
+    --suppress-logs \
     --project="$PROJECT"
 ok "Images publiées"
 
