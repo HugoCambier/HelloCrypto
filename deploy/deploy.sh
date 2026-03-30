@@ -172,18 +172,22 @@ MINUTES=$(python3 -c "print(max(1, $CYCLE_SEC // 60))")
 CRON="*/$MINUTES * * * *"
 JOB_URI="https://run.googleapis.com/v2/projects/$PROJECT/locations/$REGION/jobs/$RUNNER_JOB:run"
 
-gcloud scheduler jobs create http "$SCHEDULER_JOB" \
-    --location="$SCHEDULER_REGION" \
-    --schedule="$CRON" \
-    --uri="$JOB_URI" \
-    --message-body='{"overrides":{"containerOverrides":[{"args":["--mode","real"]}]}}' \
-    --oauth-service-account-email="$SA@$PROJECT.iam.gserviceaccount.com" \
-    --project="$PROJECT" --quiet 2>/dev/null \
-|| gcloud scheduler jobs update http "$SCHEDULER_JOB" \
-    --location="$SCHEDULER_REGION" \
-    --schedule="$CRON" \
-    --uri="$JOB_URI" \
-    --project="$PROJECT" --quiet
+if gcloud scheduler jobs describe "$SCHEDULER_JOB" \
+    --location="$SCHEDULER_REGION" --project="$PROJECT" &>/dev/null; then
+    gcloud scheduler jobs update http "$SCHEDULER_JOB" \
+        --location="$SCHEDULER_REGION" \
+        --schedule="$CRON" \
+        --uri="$JOB_URI" \
+        --project="$PROJECT" --quiet
+else
+    gcloud scheduler jobs create http "$SCHEDULER_JOB" \
+        --location="$SCHEDULER_REGION" \
+        --schedule="$CRON" \
+        --uri="$JOB_URI" \
+        --message-body='{"overrides":{"containerOverrides":[{"args":["--mode","real"]}]}}' \
+        --oauth-service-account-email="$SA@$PROJECT.iam.gserviceaccount.com" \
+        --project="$PROJECT" --quiet
+fi
 ok "Scheduler créé : $CRON (toutes les $MINUTES min) [région: $SCHEDULER_REGION]"
 
 # Pause immédiatement — le run se déclenche depuis le dashboard
