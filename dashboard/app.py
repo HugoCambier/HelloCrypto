@@ -13,6 +13,7 @@ from pathlib import Path
 import requests as _req
 from flask import redirect, render_template, request, session, url_for
 from jinja2 import ChoiceLoader, FileSystemLoader
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # ── project root on path ──────────────────────────────────────────────────────
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -23,6 +24,9 @@ load_dotenv()
 # ── import existing Flask app ─────────────────────────────────────────────────
 from hellocrypto.dashboard import app, log  # noqa: E402  (must be after sys.path)
 from db.store import add_user, is_user_allowed, list_users, remove_user  # noqa: E402
+
+# Trust Cloud Run's X-Forwarded-Proto so request.url uses https://
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # ── Jinja: look in dashboard/templates/ first (login page), then templates/ ──
 _DASH_TPL = str(Path(__file__).parent / "templates")
@@ -91,7 +95,7 @@ def require_login(f):
 def _auth_gate():
     if not _AUTH_ENABLED:
         return  # Auth disabled locally
-    public = ("/login", "/callback", "/healthz")
+    public = ("/login", "/auth/", "/callback", "/healthz", "/debug/")
     if request.path.startswith(public):
         return
     if not session.get("user"):
@@ -151,6 +155,18 @@ def logout():
 def healthz():
     from flask import jsonify
     return jsonify({"ok": True})
+
+
+@app.get("/debug/auth")
+def debug_auth():
+    """Check auth config — remove after troubleshooting."""
+    from flask import jsonify
+    return jsonify({
+        "auth_enabled": _AUTH_ENABLED,
+        "client_id_set": bool(_CLIENT_ID),
+        "client_secret_set": bool(_CLIENT_SECRET),
+        "redirect_uri_would_be": request.url_root.rstrip("/") + "/callback",
+    })
 
 
 # ── Cloud Run Job control ─────────────────────────────────────────────────────
