@@ -38,6 +38,7 @@ echo "Projet : $PROJECT  |  Région : $REGION"
 step "Activation des APIs GCP"
 gcloud services enable \
     run.googleapis.com \
+    cloudbuild.googleapis.com \
     cloudscheduler.googleapis.com \
     firestore.googleapis.com \
     secretmanager.googleapis.com \
@@ -96,12 +97,16 @@ gcloud artifacts repositories create "$REPO" \
 gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
 ok "Registry : $REGION-docker.pkg.dev/$PROJECT/$REPO"
 
-# ── 5. Build & Push ───────────────────────────────────────────────────────────
-step "Build Docker"
-docker build -f runner/Dockerfile    -t "$RUNNER_IMAGE"    . --quiet
-docker build -f dashboard/Dockerfile -t "$DASHBOARD_IMAGE" . --quiet
-docker push "$RUNNER_IMAGE"    --quiet
-docker push "$DASHBOARD_IMAGE" --quiet
+# ── 5. Build & Push (via Cloud Build — pas de Docker local requis) ────────────
+step "Build Docker (Cloud Build)"
+gcloud builds submit . \
+    --tag="$RUNNER_IMAGE" \
+    --dockerfile=runner/Dockerfile \
+    --project="$PROJECT" --quiet
+gcloud builds submit . \
+    --tag="$DASHBOARD_IMAGE" \
+    --dockerfile=dashboard/Dockerfile \
+    --project="$PROJECT" --quiet
 ok "Images publiées"
 
 # ── 6. Firestore ──────────────────────────────────────────────────────────────
