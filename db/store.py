@@ -117,10 +117,11 @@ def load_history(mode: str | None = None, limit: int = 500) -> list[dict]:
         from google.cloud import firestore as _firestore  # type: ignore
         q = _fs().collection("trades").order_by(
             "timestamp", direction=_firestore.Query.DESCENDING
-        ).limit(limit)
+        ).limit(limit * 3 if mode else limit)
+        docs = [doc.to_dict() for doc in q.stream()]
         if mode:
-            q = q.where(filter=_firestore.FieldFilter("mode", "==", mode))
-        return [doc.to_dict() for doc in q.stream()]
+            docs = [d for d in docs if d.get("mode") == mode]
+        return docs[:limit]
     else:
         with _sqlite() as c:
             if mode:
@@ -190,14 +191,16 @@ def load_logs(
 ) -> list[dict]:
     if _USE_FIRESTORE:
         from google.cloud import firestore as _firestore  # type: ignore
+        # Avoid composite index requirement by filtering in Python
         q = _fs().collection("logs").order_by(
             "timestamp", direction=_firestore.Query.DESCENDING
-        ).limit(limit)
+        ).limit(limit * 4 if (category or mode) else limit)
+        docs = [doc.to_dict() for doc in q.stream()]
         if category:
-            q = q.where(filter=_firestore.FieldFilter("category", "==", category))
+            docs = [d for d in docs if d.get("category") == category]
         if mode:
-            q = q.where(filter=_firestore.FieldFilter("mode", "==", mode))
-        return [doc.to_dict() for doc in q.stream()]
+            docs = [d for d in docs if d.get("mode") == mode]
+        return docs[:limit]
     else:
         with _sqlite() as c:
             conditions, params = [], []
@@ -219,10 +222,17 @@ def load_logs(
 class DBLogHandler(logging.Handler):
     """Python logging handler that writes to the DB with auto-categorization."""
 
-    _TRADE_KEYWORDS   = ("BUY", "SELL", "HOLD", "stop-loss", "trailing", "STOP-LOSS", "TRAILING")
-    _MARKET_KEYWORDS  = ("LLM", "Sentiment", "sentiment", "RSI", "score", "Score",
-                         "BTCUSDC", "ETHUSDC", "SOLUSDC", "analyse", "market",
-                         "fear", "dominance", "prix", "price", "Δmax", "Skip LLM")
+    _TRADE_KEYWORDS  = ("BUY", "SELL", "HOLD", "stop-loss", "trailing", "STOP-LOSS", "TRAILING",
+                        "Acheté", "Vendu", "COOLDOWN")
+    _MARKET_KEYWORDS = ("LLM", "Sentiment", "sentiment", "RSI", "score", "Score",
+                        "BTCUSDC", "ETHUSDC", "SOLUSDC", "XRPUSDC", "BNBUSDC", "ADAUSDC", "AVAXUSDC",
+                        "BTC", "ETH", "SOL", "XRP", "BNB", "ADA", "AVAX",
+                        "analyse", "market", "Market", "marché",
+                        "Fear", "Greed", "fear", "dominance", "dominance BTC",
+                        "prix", "price", "Price", "Δmax", "Skip LLM",
+                        "haussier", "baissier", "bullish", "bearish",
+                        "signal", "Signal", "tendance", "Tendance",
+                        "spread", "volume", "volatil")
 
     def __init__(self, mode: str = "real"):
         super().__init__()

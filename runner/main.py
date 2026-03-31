@@ -83,6 +83,7 @@ def main() -> None:
             config=cfg,
             stop_event=_stop,
             resume=True,
+            max_cycles=None if args.loop else 1,
         )
     elif args.loop:
         # VM / local mode : boucle infinie avec sleep entre cycles

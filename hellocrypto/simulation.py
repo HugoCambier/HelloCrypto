@@ -165,6 +165,7 @@ def run(
     on_cycle: Callable | None = None,
     stop_event: threading.Event | None = None,
     resume: bool = False,
+    max_cycles: int | None = None,
 ) -> dict:
     import time
 
@@ -215,6 +216,9 @@ def run(
     while True:
         if stop_event and stop_event.is_set():
             log.info("[SIM] Arrêtée par l'utilisateur au cycle %d", cycle)
+            break
+        if max_cycles is not None and cycle >= max_cycles:
+            log.info("[SIM] max_cycles=%d atteint — arrêt", max_cycles)
             break
 
         cycle += 1
