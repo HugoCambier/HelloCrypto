@@ -1095,10 +1095,9 @@ async function pollLogs() {
     const colorLogs   = document.getElementById('color-logs').checked;
     const autoScroll  = document.getElementById('auto-scroll').checked;
 
-    // logs come newest-first from API; reverse to display oldest-first
-    const ordered = [...logs].reverse();
+    // logs come newest-first from API; display newest-first (prepend)
     let added = false;
-    for (const entry of ordered) {
+    for (const entry of logs) {
       const key = entry.timestamp + entry.message;
       if (_logsSeen.has(key)) continue;
       _logsSeen.add(key);
@@ -1107,6 +1106,9 @@ async function pollLogs() {
       const cls = colorLogs ? (classifyLine(entry.message) || _logCategory(entry)) : '';
       div.className = `log-line text-xs font-mono leading-5 ${cls}`;
 
+      const ts = entry.timestamp
+        ? `<span class="text-slate-500 mr-2 select-none font-sans">${entry.timestamp.replace('T', ' ').substring(0, 19)}</span>`
+        : '';
       const badge = entry.category
         ? `<span class="inline-block text-[10px] px-1 rounded mr-1 opacity-60 font-sans ${
             entry.category === 'trade' ? 'bg-green-900 text-green-300' :
@@ -1114,13 +1116,13 @@ async function pollLogs() {
           }">${entry.category}</span>`
         : '';
 
-      div.innerHTML = badge + escHtml(entry.message);
-      container.appendChild(div);
+      div.innerHTML = ts + badge + escHtml(entry.message);
+      container.prepend(div);
       added = true;
     }
 
     document.getElementById('log-count').textContent = `${_logsSeen.size} entrées`;
-    if (added && autoScroll) container.scrollTop = container.scrollHeight;
+    if (added && autoScroll) container.scrollTop = 0;
   } catch {}
 }
 
