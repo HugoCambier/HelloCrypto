@@ -60,6 +60,10 @@
     .tip .tip-box { visibility: hidden; opacity: 0; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #1e293b; border: 1px solid #334155; color: #cbd5e1; font-size: 11px; line-height: 1.5; padding: 7px 10px; border-radius: 8px; width: 220px; z-index: 100; pointer-events: none; transition: opacity .15s; white-space: normal; }
     .tip .tip-box::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #334155; }
     .tip:hover .tip-box, .tip:focus-within .tip-box { visibility: visible; opacity: 1; }
+
+    .log-filter-btn { background: transparent; color: #94a3b8; transition: background .15s, color .15s; }
+    .log-filter-btn:hover { background: #334155; color: #e2e8f0; }
+    .log-filter-btn.active { background: #1d4ed8; color: #fff; }
   </style>
 </head>
 <body class="text-slate-100 h-full flex flex-col">
@@ -187,13 +191,20 @@
     <!-- ═══ TAB: LOGS ═══ -->
     <div id="pane-logs" class="h-full flex flex-col p-4 gap-3">
       <div class="bg-slate-800 border border-slate-700 rounded-xl flex flex-col flex-1 overflow-hidden">
-        <div class="flex items-center justify-between px-4 py-2.5 border-b border-slate-700 shrink-0">
-          <div class="flex items-center gap-2">
-            <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse-dot"></div>
-            <span class="text-sm font-medium text-slate-300">Flux en temps réel</span>
-            <span class="text-xs text-slate-500 ml-1" id="log-count">0 lignes</span>
-          </div>
+        <div class="flex items-center justify-between px-4 py-2.5 border-b border-slate-700 shrink-0 flex-wrap gap-2">
           <div class="flex items-center gap-3">
+            <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse-dot" id="log-live-dot"></div>
+            <span class="text-sm font-medium text-slate-300">Logs</span>
+            <span class="text-xs text-slate-500" id="log-count">0 entrées</span>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <!-- Category filters -->
+            <div class="flex rounded-lg overflow-hidden border border-slate-600 text-xs">
+              <button onclick="setLogFilter('all')"     id="lf-all"       class="log-filter-btn active px-3 py-1">Tous</button>
+              <button onclick="setLogFilter('technical')" id="lf-technical" class="log-filter-btn px-3 py-1 border-l border-slate-600">Technique</button>
+              <button onclick="setLogFilter('market')"  id="lf-market"    class="log-filter-btn px-3 py-1 border-l border-slate-600">Marché</button>
+              <button onclick="setLogFilter('trade')"   id="lf-trade"     class="log-filter-btn px-3 py-1 border-l border-slate-600">Trades</button>
+            </div>
             <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer select-none">
               <input type="checkbox" id="auto-scroll" checked class="accent-blue-500 cursor-pointer" />
               Auto-scroll
@@ -859,7 +870,6 @@
 let currentTab    = 'logs';
 let currentPeriod = '24h';
 let logCount      = 0;
-let evtSource     = null;
 let portfolioTimer = null;
 
 // ─────────────────────────────────────────────
@@ -1011,7 +1021,7 @@ async function triggerRun() {
 }
 
 // ─────────────────────────────────────────────
-// Real-time logs (SSE)
+// Logs — polling from DB
 // ─────────────────────────────────────────────
 function classifyLine(text) {
   if (/\[ERROR\]/.test(text))     return 'log-error';
@@ -1024,34 +1034,79 @@ function classifyLine(text) {
   return 'log-info';
 }
 
-function appendLog(text) {
-  if (!text.trim()) return;
-  const container   = document.getElementById('log-container');
-  const colorLogs   = document.getElementById('color-logs').checked;
-  const div         = document.createElement('div');
-  div.className     = 'log-line ' + (colorLogs ? classifyLine(text) : 'log-info');
-  div.textContent   = text;
-  container.appendChild(div);
-  logCount++;
-  document.getElementById('log-count').textContent = logCount + ' ligne' + (logCount > 1 ? 's' : '');
-  if (document.getElementById('auto-scroll').checked) {
-    container.scrollTop = container.scrollHeight;
-  }
-  // Keep max 2000 lines
-  while (container.children.length > 2000) container.removeChild(container.firstChild);
+let _logFilter   = 'all';
+let _logsSeen    = new Set();   // track already-displayed log timestamps+messages
+let _logPollIv   = null;
+
+function setLogFilter(cat) {
+  _logFilter = cat;
+  document.querySelectorAll('.log-filter-btn').forEach(b => {
+    b.classList.toggle('active', b.id === 'lf-' + (cat === 'all' ? 'all' : cat));
+  });
+  // Clear and reload with new filter
+  _logsSeen.clear();
+  document.getElementById('log-container').innerHTML = '';
+  pollLogs();
 }
 
-function startSSE() {
-  if (evtSource) evtSource.close();
-  evtSource = new EventSource('/api/logs/stream');
-  evtSource.onmessage = e => appendLog(JSON.parse(e.data));
-  evtSource.onerror   = () => setTimeout(startSSE, 3000);
+function _logCategory(entry) {
+  if (!entry.category) return '';
+  const map = { trade: 'log-buy', market: 'log-hold', technical: 'log-info' };
+  return map[entry.category] || 'log-info';
+}
+
+async function pollLogs() {
+  try {
+    const cat   = _logFilter === 'all' ? '' : `&category=${_logFilter}`;
+    const r     = await fetch(`/api/logs?limit=200${cat}`);
+    const logs  = await r.json();
+    const container   = document.getElementById('log-container');
+    const colorLogs   = document.getElementById('color-logs').checked;
+    const autoScroll  = document.getElementById('auto-scroll').checked;
+
+    // logs come newest-first from API; reverse to display oldest-first
+    const ordered = [...logs].reverse();
+    let added = false;
+    for (const entry of ordered) {
+      const key = entry.timestamp + entry.message;
+      if (_logsSeen.has(key)) continue;
+      _logsSeen.add(key);
+
+      const div = document.createElement('div');
+      const cls = colorLogs ? (classifyLine(entry.message) || _logCategory(entry)) : '';
+      div.className = `log-line text-xs font-mono leading-5 ${cls}`;
+
+      const badge = entry.category
+        ? `<span class="inline-block text-[10px] px-1 rounded mr-1 opacity-60 font-sans ${
+            entry.category === 'trade' ? 'bg-green-900 text-green-300' :
+            entry.category === 'market' ? 'bg-blue-900 text-blue-300' : 'bg-slate-700 text-slate-400'
+          }">${entry.category}</span>`
+        : '';
+
+      div.innerHTML = badge + escHtml(entry.message);
+      container.appendChild(div);
+      added = true;
+    }
+
+    document.getElementById('log-count').textContent = `${_logsSeen.size} entrées`;
+    if (added && autoScroll) container.scrollTop = container.scrollHeight;
+  } catch {}
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function clearLogs() {
+  _logsSeen.clear();
   document.getElementById('log-container').innerHTML = '';
-  logCount = 0;
-  document.getElementById('log-count').textContent = '0 ligne';
+  document.getElementById('log-count').textContent = '0 entrées';
+}
+
+function startLogPolling() {
+  pollLogs();
+  if (_logPollIv) clearInterval(_logPollIv);
+  _logPollIv = setInterval(pollLogs, 8000);
 }
 
 // ─────────────────────────────────────────────
@@ -2086,7 +2141,7 @@ _loadBtWatchlist();
 _loadBtHistWatchlist();
 fetchAgentStatus();
 setInterval(fetchAgentStatus, 5000);
-startSSE();
+startLogPolling();
 setInterval(() => { if (currentTab === 'portfolio') loadPortfolio(); }, 30000);
 _loadLlmConfig();
 

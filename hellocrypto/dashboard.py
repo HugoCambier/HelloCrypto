@@ -86,6 +86,21 @@ def stream_logs():
     )
 
 
+# ── DB Logs ───────────────────────────────────────────────────────────────────
+
+@app.get("/api/logs")
+def api_logs():
+    category = request.args.get("category")  # technical, market, trade, or None=all
+    mode     = request.args.get("mode")       # real, simulation, or None=all
+    limit    = int(request.args.get("limit", 200))
+    try:
+        from db.store import load_logs
+        logs = load_logs(category=category or None, mode=mode or None, limit=limit)
+        return jsonify(logs)
+    except ImportError:
+        return jsonify([])
+
+
 # ── Performance ───────────────────────────────────────────────────────────────
 
 @app.get("/api/watchlist")

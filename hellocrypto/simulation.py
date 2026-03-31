@@ -176,6 +176,13 @@ def run(
     risk_level           = int(cfg.get("risk_level", 3))
     sell_cooldown_cycles = int(cfg.get("sell_cooldown_cycles", 3))
 
+    try:
+        from db.store import DBLogHandler as _DBH
+        _db_handler = _DBH(mode="simulation")
+        logging.getLogger().addHandler(_db_handler)
+    except ImportError:
+        _db_handler = None
+
     # ── State initialisation (fresh or resumed) ────────────────────────────────
     cash: float          = budget
     holdings: dict       = {}
@@ -211,6 +218,8 @@ def run(
             break
 
         cycle += 1
+        if _db_handler is not None:
+            _db_handler.set_cycle(cycle)
 
         # ── Fetch enriched market data ─────────────────────────────────────────
         try:
@@ -415,5 +424,8 @@ def run(
             stop_event.wait(timeout=cycle_sec)
         else:
             time.sleep(cycle_sec)
+
+    if _db_handler is not None:
+        logging.getLogger().removeHandler(_db_handler)
 
     return _snapshot(cycle, cash, budget, holdings, prices, history, total_fees, initial_prices, cycle_sec)

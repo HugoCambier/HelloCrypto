@@ -154,6 +154,16 @@ def run_one_cycle() -> None:
     state          = _load_state()
     cycle          = state.get("cycle", 0) + 1
     last_llm_call  = state.get("last_llm_call", 0.0)
+
+    # Attach DB log handler for this cycle
+    _db_handler: "DBLogHandler | None" = None
+    try:
+        from db.store import DBLogHandler
+        _db_handler = DBLogHandler(mode="real")
+        _db_handler.set_cycle(cycle)
+        logging.getLogger().addHandler(_db_handler)
+    except ImportError:
+        pass
     llm_call_count = state.get("llm_call_count", 0)
     ref_prices     = state.get("ref_prices", {})
     recent_decisions = state.get("recent_decisions", [])
@@ -262,6 +272,8 @@ def run_one_cycle() -> None:
     except Exception as exc:
         log.error(f"Erreur cycle #{cycle}: {exc}", exc_info=True)
     finally:
+        if _db_handler is not None:
+            logging.getLogger().removeHandler(_db_handler)
         _save_state({
             "cycle": cycle,
             "last_llm_call": last_llm_call,
@@ -290,8 +302,17 @@ def run_agent() -> None:
     peak_prices: dict  = {}   # sym → highest price seen since entry
     cooldown_map: dict = {}   # sym → last sell cycle
 
+    try:
+        from db.store import DBLogHandler as _DBH
+        _db_handler = _DBH(mode="real")
+        logging.getLogger().addHandler(_db_handler)
+    except ImportError:
+        _db_handler = None
+
     while not _stop_requested:
         cycle += 1
+        if _db_handler is not None:
+            _db_handler.set_cycle(cycle)
         log.info(f"═══ Cycle #{cycle} ═══")
         try:
             positions       = get_open_positions(WATCHLIST)
