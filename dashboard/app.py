@@ -115,7 +115,8 @@ def login():
 def auth_start():
     flow = _oauth_flow()
     auth_url, state = flow.authorization_url(prompt="select_account")
-    session["oauth_state"] = state
+    session["oauth_state"]         = state
+    session["oauth_code_verifier"] = flow.code_verifier  # needed for PKCE in callback
     return redirect(auth_url)
 
 
@@ -125,6 +126,7 @@ def callback():
     from google.auth.transport import requests as google_requests  # type: ignore
     try:
         flow = _oauth_flow()
+        flow.code_verifier = session.pop("oauth_code_verifier", None)
         flow.fetch_token(authorization_response=request.url)
         credentials = flow.credentials
         id_info = id_token.verify_oauth2_token(
