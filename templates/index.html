@@ -208,7 +208,7 @@
             <div class="flex rounded-lg overflow-hidden border border-slate-600 text-xs">
               <button onclick="setLogFilter('all')"     id="lf-all"       class="log-filter-btn active px-3 py-1">Tous</button>
               <button onclick="setLogFilter('technical')" id="lf-technical" class="log-filter-btn px-3 py-1 border-l border-slate-600">Technique</button>
-              <button onclick="setLogFilter('market')"  id="lf-market"    class="log-filter-btn px-3 py-1 border-l border-slate-600">Marché</button>
+              <button onclick="setLogFilter('market')"  id="lf-market"    class="log-filter-btn px-3 py-1 border-l border-slate-600">Market</button>
               <button onclick="setLogFilter('trade')"   id="lf-trade"     class="log-filter-btn px-3 py-1 border-l border-slate-600">Trades</button>
             </div>
             <label class="flex items-center gap-1.5 text-xs text-slate-400 cursor-pointer select-none">
@@ -1063,11 +1063,13 @@ function classifyLine(text) {
 let _logFilter   = 'all';
 let _logsSeen    = new Set();   // track already-displayed log timestamps+messages
 let _logPollIv   = null;
+let _logGen      = 0;           // incremented on filter change to discard stale in-flight requests
 
 function setLogFilter(cat) {
   _logFilter = cat;
+  _logGen++;  // invalidate any in-flight pollLogs requests
   document.querySelectorAll('.log-filter-btn').forEach(b => {
-    b.classList.toggle('active', b.id === 'lf-' + (cat === 'all' ? 'all' : cat));
+    b.classList.toggle('active', b.id === 'lf-' + cat);
   });
   // Clear and reload with new filter
   _logsSeen.clear();
@@ -1082,10 +1084,13 @@ function _logCategory(entry) {
 }
 
 async function pollLogs() {
+  const gen = _logGen;  // capture generation before any await
   try {
     const cat   = _logFilter === 'all' ? '' : `&category=${_logFilter}`;
     const r     = await fetch(`/api/logs?limit=200${cat}`);
+    if (_logGen !== gen) return;  // filter changed while request was in-flight
     const logs  = await r.json();
+    if (_logGen !== gen) return;
     const container   = document.getElementById('log-container');
     const colorLogs   = document.getElementById('color-logs').checked;
     const autoScroll  = document.getElementById('auto-scroll').checked;
