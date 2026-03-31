@@ -104,12 +104,12 @@ def save_trade(
 
 def load_history(mode: str | None = None, limit: int = 500) -> list[dict]:
     if _USE_FIRESTORE:
-        from google.cloud.firestore_v1 import base_query  # type: ignore
+        from google.cloud import firestore as _firestore  # type: ignore
         q = _fs().collection("trades").order_by(
-            "timestamp", direction=base_query.Query.DESCENDING
+            "timestamp", direction=_firestore.Query.DESCENDING
         ).limit(limit)
         if mode:
-            q = q.where("mode", "==", mode)
+            q = q.where(filter=_firestore.FieldFilter("mode", "==", mode))
         return [doc.to_dict() for doc in q.stream()]
     else:
         with _sqlite() as c:
