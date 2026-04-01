@@ -166,7 +166,14 @@ def run(
     stop_event: threading.Event | None = None,
     resume: bool = False,
     max_cycles: int | None = None,
+    initial_holdings: dict[str, float] | None = None,
 ) -> dict:
+    """Run the paper-trading simulation.
+
+    ``initial_holdings`` is an optional dict ``{symbol: qty}`` used to seed
+    the portfolio on a fresh start (ignored when ``resume=True`` and a saved
+    state is found).  avg_price is set to the first-cycle market price.
+    """
     import time
 
     cfg                  = config or load_config()
@@ -245,6 +252,13 @@ def run(
             initial_prices = dict(prices)
             log.info("[SIM] Prix initiaux (benchmark): %s",
                      ", ".join(f"{s}=${p:,.4f}" for s, p in initial_prices.items()))
+            # Seed holdings from initial_holdings on first cycle (fresh start only)
+            if initial_holdings and not holdings:
+                for sym, qty in initial_holdings.items():
+                    if qty > 0 and sym in prices:
+                        holdings[sym] = {"qty": qty, "avg_price": prices[sym]}
+                        peak_prices[sym] = prices[sym]
+                        log.info("[SIM] Avoir initial: %s qty=%.6f @ $%.4f", sym, qty, prices[sym])
 
         # ── Update peak prices ─────────────────────────────────────────────────
         for sym in holdings:

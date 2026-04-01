@@ -75,30 +75,41 @@
       <span class="text-slate-600 text-sm">|</span>
       <span class="text-slate-400 text-sm">Dashboard</span>
     </div>
-    <div class="flex items-center gap-3">
-      <select id="runner-mode"
-        class="bg-slate-700 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
-        <option value="simulation" selected>Simulation</option>
-        <option value="real">Réel</option>
-      </select>
-      <div class="flex items-center gap-2 text-sm" id="agent-badge">
+    <div class="flex items-center gap-2">
+      <!-- Status indicator -->
+      <div class="flex items-center gap-2 text-sm mr-1">
         <div class="w-2 h-2 rounded-full bg-slate-500" id="status-dot"></div>
-        <span class="text-slate-400" id="status-label">Inactif</span>
+        <span class="text-slate-400 text-xs" id="status-label">Inactif</span>
       </div>
-      <!-- Auto-schedule toggle (Cloud Run only) -->
-      <button id="schedule-btn" onclick="toggleSchedule()"
-        title="Trading automatique — déclenche un cycle toutes les 30 min via Cloud Scheduler"
-        class="hidden px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 border-slate-600 text-slate-400 hover:border-slate-400">
-        🔄 Auto <span id="schedule-label">OFF</span>
+      <!-- Stop button — visible only when running -->
+      <button id="stop-btn" onclick="stopAll()"
+        class="hidden px-3 py-1.5 rounded-lg text-xs font-medium bg-red-700 hover:bg-red-600 transition-colors">
+        ⏹ Stop
       </button>
-      <!-- Stop button — visible only when a cycle is running -->
-      <button id="stop-btn" onclick="stopCycle()"
-        class="hidden px-4 py-1.5 rounded-lg text-sm font-medium bg-red-700 hover:bg-red-600 transition-colors disabled:opacity-50">
-        ⏹ Arrêter
+      <!-- Mode: Simulation / Real -->
+      <div class="flex rounded-lg overflow-hidden border border-slate-600 text-xs">
+        <button id="mode-sim-btn" onclick="setMode('simulation')"
+          class="px-3 py-1.5 bg-blue-700 text-white transition-colors">
+          📊 Simulation
+        </button>
+        <button id="mode-real-btn" onclick="setMode('real')"
+          class="px-3 py-1.5 text-slate-400 hover:text-white border-l border-slate-600 transition-colors">
+          ⚡ Réel
+        </button>
+      </div>
+      <!-- Auto toggle (hidden while running) -->
+      <button id="auto-btn" onclick="toggleAuto()"
+        class="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-600 text-slate-400 hover:border-slate-400 transition-colors">
+        🔄 Auto <span id="auto-label">OFF</span>
       </button>
-      <button id="agent-btn" onclick="triggerRun()"
-        class="px-4 py-1.5 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-500 transition-colors disabled:opacity-50">
-        ▶ Lancer un cycle
+      <!-- Auto status badge (shown while running, only when Auto=ON) -->
+      <span id="auto-badge" class="hidden px-2 py-1 rounded text-xs font-medium border border-green-500 text-green-400">
+        🔄 Auto
+      </span>
+      <!-- Power ON/OFF -->
+      <button id="power-btn" onclick="togglePower()"
+        class="px-4 py-1.5 rounded-lg text-sm font-medium border-2 border-slate-600 text-slate-400 hover:border-slate-400 transition-colors">
+        ⏻ OFF
       </button>
     </div>
   </header>
@@ -897,153 +908,272 @@ function switchTab(tab) {
 }
 
 // ─────────────────────────────────────────────
-// Runner status (Cloud Run Job or local agent)
+// Control state
 // ─────────────────────────────────────────────
-let _isCloudRun = null;  // null=unknown, true/false after first check
+let _runnerMode  = 'simulation';  // 'simulation' | 'real'
+let _autoEnabled = false;
 
-async function fetchAgentStatus() {
-  const dot      = document.getElementById('status-dot');
-  const label    = document.getElementById('status-label');
-  const btn      = document.getElementById('agent-btn');
-  const stopBtn  = document.getElementById('stop-btn');
-  const schedBtn = document.getElementById('schedule-btn');
-  try {
-    const r = await fetch('/api/runner/status');
-    const d = await r.json();
-    if (d.cloud_run) {
-      _isCloudRun = true;
-      if (d.running) {
-        dot.className     = 'w-2 h-2 rounded-full bg-green-400 animate-pulse-dot';
-        label.textContent = 'Cycle en cours…';
-        btn.classList.add('hidden');
-        stopBtn.classList.remove('hidden');
-      } else {
-        dot.className     = 'w-2 h-2 rounded-full bg-slate-500';
-        label.textContent = 'Inactif';
-        btn.classList.remove('hidden');
-        btn.disabled = false;
-        stopBtn.classList.add('hidden');
-      }
-      schedBtn.classList.remove('hidden');
-      _refreshScheduleBtn();
-      return;
-    }
-  } catch {}
-
-  // Fallback : local agent
-  _isCloudRun = false;
-  schedBtn.classList.add('hidden');
-  stopBtn.classList.add('hidden');
-  try {
-    const r = await fetch('/api/agent/status');
-    const d = await r.json();
-    if (d.running) {
-      dot.className     = 'w-2 h-2 rounded-full bg-green-400 animate-pulse-dot';
-      label.textContent = `Local (PID ${d.pid})`;
-    } else {
-      dot.className     = 'w-2 h-2 rounded-full bg-slate-500';
-      label.textContent = 'Inactif';
-    }
-  } catch {}
+function setMode(mode) {
+  _runnerMode = mode;
+  const simCls  = mode === 'simulation' ? 'px-3 py-1.5 bg-blue-700 text-white transition-colors'
+                                        : 'px-3 py-1.5 text-slate-400 hover:text-white transition-colors';
+  const realCls = mode === 'real'       ? 'px-3 py-1.5 bg-blue-700 text-white border-l border-slate-600 transition-colors'
+                                        : 'px-3 py-1.5 text-slate-400 hover:text-white border-l border-slate-600 transition-colors';
+  document.getElementById('mode-sim-btn').className  = simCls;
+  document.getElementById('mode-real-btn').className = realCls;
 }
 
-async function stopCycle() {
-  const stopBtn = document.getElementById('stop-btn');
-  stopBtn.disabled = true;
-  try {
-    const r = await fetch('/api/runner/stop', { method: 'POST' });
-    const d = await r.json();
-    if (d.ok) {
-      toast('Cycle arrêté', 'warn');
-      await fetchAgentStatus();
+function toggleAuto() {
+  _autoEnabled = !_autoEnabled;
+  const btn   = document.getElementById('auto-btn');
+  const label = document.getElementById('auto-label');
+  label.textContent = _autoEnabled ? 'ON' : 'OFF';
+  btn.className = _autoEnabled
+    ? 'px-3 py-1.5 rounded-lg text-xs font-medium border border-green-500 text-green-400 transition-colors'
+    : 'px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-600 text-slate-400 hover:border-slate-400 transition-colors';
+}
+
+function _setPowerUI(on) {
+  const btn = document.getElementById('power-btn');
+  btn.textContent = on ? '⏻ ON' : '⏻ OFF';
+  btn.className = on
+    ? 'px-4 py-1.5 rounded-lg text-sm font-medium border-2 border-green-500 text-green-400 transition-colors'
+    : 'px-4 py-1.5 rounded-lg text-sm font-medium border-2 border-slate-600 text-slate-400 hover:border-slate-400 transition-colors';
+  document.getElementById('stop-btn').classList.toggle('hidden', !on);
+  // Auto toggle: visible when idle, replaced by badge when running
+  document.getElementById('auto-btn').classList.toggle('hidden', on);
+  document.getElementById('auto-badge').classList.toggle('hidden', !on || !_autoEnabled);
+  // Lock mode buttons while running
+  document.getElementById('mode-sim-btn').disabled  = on;
+  document.getElementById('mode-real-btn').disabled = on;
+}
+
+async function togglePower() {
+  const isOn = document.getElementById('power-btn').textContent.trim() === '⏻ ON';
+  if (isOn) {
+    await stopAll();
+  } else {
+    if (_runnerMode === 'simulation') {
+      await _openSimModal();
     } else {
-      toast(d.error || 'Erreur', 'error');
+      await _openRealModal();
     }
-  } finally {
-    stopBtn.disabled = false;
   }
 }
 
-async function _refreshScheduleBtn() {
-  const schedBtn   = document.getElementById('schedule-btn');
-  const schedLabel = document.getElementById('schedule-label');
+async function stopAll() {
   try {
-    const r = await fetch('/api/runner/schedule');
-    const d = await r.json();
-    if (d.enabled) {
-      schedLabel.textContent = 'ON';
-      schedBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 border-green-500 text-green-400 hover:border-green-400';
-      schedBtn.title = `Trading automatique actif (${d.schedule})`;
-    } else {
-      schedLabel.textContent = 'OFF';
-      schedBtn.className = 'px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 border-slate-600 text-slate-400 hover:border-slate-400';
-      schedBtn.title = 'Activer le trading automatique';
-    }
+    // Stop simulation thread if running
+    await fetch('/api/simulation/stop', { method: 'POST' });
   } catch {}
+  try {
+    // Stop Cloud Run job if running
+    await fetch('/api/runner/stop', { method: 'POST' });
+  } catch {}
+  try {
+    // Disable Cloud Scheduler if enabled
+    await fetch('/api/runner/schedule/disable', { method: 'POST' });
+  } catch {}
+  toast('Arrêté', 'warn');
+  await fetchAgentStatus();
 }
 
-async function toggleSchedule() {
-  const schedBtn   = document.getElementById('schedule-btn');
-  const schedLabel = document.getElementById('schedule-label');
-  schedBtn.disabled = true;
-  const enabling = schedLabel.textContent === 'OFF';
+// ── Simulation flow ───────────────────────────
+async function _openSimModal() {
+  const modal        = document.getElementById('sim-init-modal');
+  const budgetHint   = document.getElementById('sim-budget-hint');
+  const holdingsHint = document.getElementById('sim-holdings-hint');
+  const holdingsList = document.getElementById('sim-holdings-list');
+
+  budgetHint.textContent   = '';
+  holdingsHint.textContent = 'Chargement…';
+  holdingsList.innerHTML   = '';
+  modal.classList.remove('hidden');
+
   try {
-    const url = enabling ? '/api/runner/schedule/enable' : '/api/runner/schedule/disable';
-    const r = await fetch(url, { method: 'POST' });
+    const r = await fetch('/api/binance/balance');
     const d = await r.json();
-    if (d.ok) {
-      toast(enabling ? 'Trading automatique activé' : 'Trading automatique désactivé', enabling ? 'ok' : 'warn');
-      await _refreshScheduleBtn();
-    } else {
-      toast(d.error || 'Erreur', 'error');
+
+    if (d.usdc != null) {
+      document.getElementById('sim-budget-input').value = Math.floor(d.usdc);
+      budgetHint.textContent = `Solde Binance : ${d.usdc.toFixed(2)} USDC`;
     }
-  } finally {
-    schedBtn.disabled = false;
+
+    const coins = d.coins || {};
+    holdingsHint.textContent = '';
+    if (Object.keys(coins).length === 0) {
+      holdingsList.innerHTML = '<p class="text-xs text-slate-500">Watchlist vide</p>';
+    } else {
+      for (const [sym, info] of Object.entries(coins)) {
+        const row = document.createElement('div');
+        row.className = 'flex items-center gap-3';
+        row.innerHTML = `
+          <span class="text-xs text-slate-300 w-20 shrink-0 font-mono">${info.coin}</span>
+          <input type="number" min="0" step="any" data-sym="${sym}"
+            value="${info.qty > 0 ? info.qty : ''}"
+            placeholder="0"
+            class="sim-holding-input flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+          <span class="text-xs text-slate-500 w-32 text-right shrink-0">
+            Binance : ${info.qty > 0 ? info.qty.toFixed(6) : '0'} ${info.coin}
+          </span>`;
+        holdingsList.appendChild(row);
+      }
+    }
+  } catch {
+    holdingsHint.textContent = 'Impossible de charger les soldes';
   }
 }
 
-async function triggerRun() {
-  const btn  = document.getElementById('agent-btn');
-  const mode = document.getElementById('runner-mode').value;
-  btn.disabled = true;
+function cancelSimStart() {
+  document.getElementById('sim-init-modal').classList.add('hidden');
+}
+
+async function confirmSimStart() {
+  const budget   = parseFloat(document.getElementById('sim-budget-input').value) || 0;
+  const resume   = document.getElementById('sim-resume').checked;
+  const maxRaw   = document.getElementById('sim-maxcycles-input').value.trim();
+  const maxCyc   = maxRaw === '' ? null : parseInt(maxRaw);
+
+  // Collect per-crypto holdings
+  const initial_holdings = {};
+  document.querySelectorAll('.sim-holding-input').forEach(inp => {
+    const qty = parseFloat(inp.value);
+    if (qty > 0) initial_holdings[inp.dataset.sym] = qty;
+  });
+
+  cancelSimStart();
   try {
-    if (_isCloudRun) {
-      // Cloud Run: trigger one job execution
-      const r = await fetch('/api/runner/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode }),
-      });
-      const d = await r.json();
-      if (d.ok) {
-        toast(`Cycle ${mode} lancé`, 'ok');
-        // Poll status for ~3 min until job finishes
-        let polls = 0;
-        const iv = setInterval(async () => {
-          await fetchAgentStatus();
-          if (++polls > 36 || !document.getElementById('status-dot').className.includes('green')) {
-            clearInterval(iv);
-            btn.disabled = false;
-          }
-        }, 5000);
-      } else {
-        toast(d.error || 'Erreur', 'error');
-        btn.disabled = false;
-      }
-    } else {
-      // Local fallback: toggle agent
-      const r = await fetch('/api/agent/status');
-      const d = await r.json();
-      const url = d.running ? '/api/agent/stop' : '/api/agent/start';
-      await fetch(url, { method: 'POST' });
+    const body = { budget, resume, initial_holdings };
+    if (maxCyc !== null) body.max_cycles = maxCyc;
+    const r = await fetch('/api/simulation/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (d.ok || d.budget != null) {
+      toast(`Simulation démarrée — ${budget} USDC`, 'ok');
+      _setPowerUI(true);
       await fetchAgentStatus();
-      toast(d.running ? 'Agent arrêté' : 'Agent démarré', d.running ? 'warn' : 'ok');
-      btn.disabled = false;
+    } else {
+      toast(d.error || 'Erreur démarrage simulation', 'error');
     }
   } catch (e) {
     toast('Erreur : ' + e.message, 'error');
-    btn.disabled = false;
   }
+}
+
+// ── Real mode flow ────────────────────────────
+async function _openRealModal() {
+  const modal = document.getElementById('real-init-modal');
+  const list  = document.getElementById('real-holdings-list');
+  list.innerHTML = '<p class="text-xs text-slate-400">Chargement…</p>';
+  modal.classList.remove('hidden');
+  try {
+    const r = await fetch('/api/binance/balance');
+    const d = await r.json();
+    list.innerHTML = '';
+    const usdcRow = document.createElement('div');
+    usdcRow.className = 'flex items-center justify-between py-1.5 border-b border-slate-700';
+    usdcRow.innerHTML = `<span class="text-xs font-mono text-slate-300">USDC</span>
+      <span class="text-xs font-medium text-slate-100">${d.usdc != null ? d.usdc.toFixed(2) : '—'} USDC</span>`;
+    list.appendChild(usdcRow);
+    for (const [sym, info] of Object.entries(d.coins || {})) {
+      const row = document.createElement('div');
+      row.className = 'flex items-center justify-between py-1.5 border-b border-slate-700/40';
+      row.innerHTML = `<span class="text-xs font-mono text-slate-300">${info.coin}</span>
+        <span class="text-xs text-slate-200">${info.qty > 0 ? info.qty.toFixed(6) : '0'} ${info.coin}</span>`;
+      list.appendChild(row);
+    }
+  } catch {
+    list.innerHTML = '<p class="text-xs text-red-400">Impossible de charger les soldes Binance</p>';
+  }
+}
+
+function cancelRealStart() {
+  document.getElementById('real-init-modal').classList.add('hidden');
+}
+
+async function confirmRealStart() {
+  cancelRealStart();
+  try {
+    if (_autoEnabled) {
+      const r = await fetch('/api/runner/schedule/enable', { method: 'POST' });
+      const d = await r.json();
+      if (d.ok) {
+        toast('Trading réel automatique activé', 'ok');
+        _setPowerUI(true);
+        await fetchAgentStatus();
+      } else {
+        toast(d.error || 'Erreur activation scheduler', 'error');
+      }
+    } else {
+      const r = await fetch('/api/runner/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'real' }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        toast('Cycle réel lancé', 'ok');
+        _setPowerUI(true);
+        await fetchAgentStatus();
+      } else {
+        toast(d.error || 'Erreur démarrage cycle', 'error');
+      }
+    }
+  } catch (e) {
+    toast('Erreur : ' + e.message, 'error');
+  }
+}
+
+// ── Status polling ────────────────────────────
+async function fetchAgentStatus() {
+  const dot   = document.getElementById('status-dot');
+  const label = document.getElementById('status-label');
+
+  let running = false;
+  let statusText = 'Inactif';
+
+  // Simulation status
+  try {
+    const r = await fetch('/api/simulation/status');
+    const d = await r.json();
+    if (d.running) {
+      running    = true;
+      statusText = `Simulation — cycle ${d.snapshot?.cycle ?? '…'}`;
+    }
+  } catch {}
+
+  // Cloud Run job status (real mode)
+  if (!running) {
+    try {
+      const r = await fetch('/api/runner/status');
+      const d = await r.json();
+      if (d.running) {
+        running    = true;
+        statusText = 'Cycle réel en cours…';
+      } else if (d.cloud_run) {
+        // Check scheduler
+        try {
+          const rs = await fetch('/api/runner/schedule');
+          const ds = await rs.json();
+          if (ds.enabled) {
+            running    = true;
+            statusText = `Auto réel actif (${ds.schedule || '…'})`;
+          }
+        } catch {}
+      }
+    } catch {}
+  }
+
+  dot.className     = running
+    ? 'w-2 h-2 rounded-full bg-green-400 animate-pulse-dot'
+    : 'w-2 h-2 rounded-full bg-slate-500';
+  label.textContent = statusText;
+
+  // Sync power button to actual running state
+  _setPowerUI(running);
 }
 
 // ─────────────────────────────────────────────
@@ -1095,9 +1225,9 @@ async function pollLogs() {
     const colorLogs   = document.getElementById('color-logs').checked;
     const autoScroll  = document.getElementById('auto-scroll').checked;
 
-    // logs come newest-first from API; display newest-first (prepend)
+    // logs come newest-first from API; iterate oldest-first then prepend → newest stays on top
     let added = false;
-    for (const entry of logs) {
+    for (const entry of [...logs].reverse()) {
       const key = entry.timestamp + entry.message;
       if (_logsSeen.has(key)) continue;
       _logsSeen.add(key);
@@ -2487,5 +2617,89 @@ async function _saveLlmConfig() {
   }
 }
 </script>
+<!-- ── Real mode confirm modal ── -->
+<div id="real-init-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+  <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 w-96 max-h-[90vh] overflow-y-auto space-y-4 shadow-2xl">
+    <h3 class="text-base font-semibold text-slate-100">Confirmer le trading réel</h3>
+    <p class="text-xs text-slate-400 leading-relaxed">
+      Les ordres seront exécutés sur Binance avec les fonds ci-dessous.<br>
+      <span class="text-amber-400 font-medium">Aucune simulation — trades réels.</span>
+    </p>
+    <div>
+      <p class="text-xs font-medium text-slate-300 mb-2">Portefeuille Binance actuel</p>
+      <div id="real-holdings-list" class="space-y-0">
+        <!-- filled by JS -->
+      </div>
+    </div>
+    <div class="flex gap-3 pt-1">
+      <button onclick="confirmRealStart()"
+        class="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg text-sm font-medium transition-colors">
+        Confirmer et lancer
+      </button>
+      <button onclick="cancelRealStart()"
+        class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition-colors">
+        Annuler
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Simulation init modal ── -->
+<div id="sim-init-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+  <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 w-[480px] max-h-[90vh] overflow-y-auto space-y-4 shadow-2xl">
+    <h3 class="text-base font-semibold text-slate-100">Initialiser la simulation</h3>
+    <p class="text-xs text-slate-400 leading-relaxed">
+      Données de marché Binance en temps réel — aucun ordre réel exécuté.
+    </p>
+
+    <!-- USDC budget -->
+    <div class="space-y-1">
+      <label class="text-xs font-medium text-slate-300">Budget USDC de départ</label>
+      <input id="sim-budget-input" type="number" min="0" step="1" value="1000"
+        class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      <p class="text-xs text-slate-500" id="sim-budget-hint"></p>
+    </div>
+
+    <!-- Per-crypto holdings -->
+    <div>
+      <div class="flex items-center justify-between mb-2">
+        <label class="text-xs font-medium text-slate-300">Avoirs crypto initiaux</label>
+        <span class="text-xs text-slate-500" id="sim-holdings-hint">Chargement…</span>
+      </div>
+      <div id="sim-holdings-list" class="space-y-1.5">
+        <!-- filled by JS -->
+      </div>
+    </div>
+
+    <!-- Max cycles -->
+    <div class="space-y-1">
+      <label class="text-xs font-medium text-slate-300">Nombre max de cycles</label>
+      <input id="sim-maxcycles-input" type="number" min="1" step="1" value="1"
+        placeholder="vide = infini"
+        class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      <p class="text-xs text-slate-500">Laisser vide pour tourner en continu (Auto ON recommandé)</p>
+    </div>
+
+    <!-- Resume -->
+    <div class="flex items-center gap-2">
+      <input type="checkbox" id="sim-resume" class="accent-blue-500 cursor-pointer" />
+      <label for="sim-resume" class="text-xs text-slate-400 cursor-pointer">
+        Reprendre la simulation précédente (ignore les valeurs ci-dessus)
+      </label>
+    </div>
+
+    <div class="flex gap-3 pt-1">
+      <button onclick="confirmSimStart()"
+        class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium transition-colors">
+        Démarrer
+      </button>
+      <button onclick="cancelSimStart()"
+        class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition-colors">
+        Annuler
+      </button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

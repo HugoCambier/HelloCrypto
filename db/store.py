@@ -250,6 +250,9 @@ class DBLogHandler(logging.Handler):
         return "technical"
 
     def emit(self, record: logging.LogRecord) -> None:
+        # Drop Werkzeug HTTP access logs (e.g. '127.0.0.1 - - "GET /api/..." 200 -')
+        if record.name == "werkzeug":
+            return
         try:
             msg   = self.format(record)
             cat   = self._categorize(msg)

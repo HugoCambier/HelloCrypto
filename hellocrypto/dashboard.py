@@ -204,6 +204,28 @@ def api_portfolio():
         return jsonify({"error": str(exc)}), 500
 
 
+# ── Binance quick info ────────────────────────────────────────────────────────
+
+@app.get("/api/binance/balance")
+def api_binance_balance():
+    try:
+        cfg      = load_config()
+        watchlist = cfg.get("watchlist", [])
+        usdc     = get_balance("USDC")
+        # Derive coin tickers from watchlist symbols (e.g. BTCUSDC → BTC)
+        coins = {}
+        for sym in watchlist:
+            coin = sym.replace("USDC", "").replace("BUSD", "")
+            try:
+                qty = get_balance(coin)
+            except Exception:
+                qty = 0.0
+            coins[sym] = {"coin": coin, "qty": round(qty, 8)}
+        return jsonify({"usdc": round(usdc, 2), "coins": coins})
+    except Exception as exc:
+        return jsonify({"error": str(exc), "usdc": None, "coins": {}}), 200
+
+
 # ── Manual trade actions ──────────────────────────────────────────────────────
 
 @app.post("/api/trade/buy")
@@ -319,6 +341,11 @@ def sim_start():
         trailing_stop_pct   = float(body.get("trailing_stop_pct", cfg.get("trailing_stop_pct", 5)))
         sell_cooldown_cycles = max(0, int(body.get("sell_cooldown_cycles", cfg.get("sell_cooldown_cycles", 3))))
         resume              = bool(body.get("resume", False))
+        max_cycles_raw      = body.get("max_cycles")
+        max_cycles          = int(max_cycles_raw) if max_cycles_raw is not None else None
+        # initial_holdings: {symbol: qty} — used only on fresh start
+        raw_holdings        = body.get("initial_holdings") or {}
+        initial_holdings    = {k: float(v) for k, v in raw_holdings.items() if float(v) > 0}
         run_cfg             = {**cfg, "risk_level": risk_level, "cycle_seconds": cycle_sec,
                                "stop_loss_pct": stop_loss_pct, "trailing_stop_pct": trailing_stop_pct,
                                "sell_cooldown_cycles": sell_cooldown_cycles}
@@ -341,6 +368,8 @@ def sim_start():
                 on_cycle=on_cycle,
                 stop_event=_sim_stop_event,
                 resume=resume,
+                max_cycles=max_cycles,
+                initial_holdings=initial_holdings if not resume else None,
             )
             with _sim_lock:
                 _sim_state = {"running": False, "snapshot": result}
@@ -354,8 +383,13 @@ def sim_start():
 
 @app.post("/api/simulation/stop")
 def sim_stop():
-    global _sim_stop_event
+    global _sim_stop_event, _sim_state
     _sim_stop_event.set()
+    # Immediately mark as stopped so the UI reflects it without waiting for the
+    # current cycle to finish (the background thread will exit cleanly on its own)
+    with _sim_lock:
+        if _sim_state["running"]:
+            _sim_state = {"running": False, "snapshot": _sim_state.get("snapshot", {})}
     return jsonify({"ok": True})
 
 

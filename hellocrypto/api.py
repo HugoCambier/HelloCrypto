@@ -50,7 +50,15 @@ def api_get(endpoint: str, params: dict = {}, signed: bool = False) -> dict:
         p["timestamp"] = int(time.time() * 1000)
         p["signature"] = _sign(p)
     r = requests.get(f"{BASE_URL}{endpoint}", params=p, headers=_headers(), timeout=10)
-    r.raise_for_status()
+    if not r.ok:
+        try:
+            body = r.json()
+            raise requests.exceptions.HTTPError(
+                f"{r.status_code} {body.get('code','')} {body.get('msg', r.text)}",
+                response=r,
+            )
+        except (ValueError, KeyError):
+            r.raise_for_status()
     return r.json()
 
 
@@ -59,7 +67,15 @@ def api_post(endpoint: str, params: dict = {}) -> dict:
     p["timestamp"] = int(time.time() * 1000)
     p["signature"] = _sign(p)
     r = requests.post(f"{BASE_URL}{endpoint}", params=p, headers=_headers(), timeout=10)
-    r.raise_for_status()
+    if not r.ok:
+        try:
+            body = r.json()
+            raise requests.exceptions.HTTPError(
+                f"{r.status_code} {body.get('code','')} {body.get('msg', r.text)}",
+                response=r,
+            )
+        except (ValueError, KeyError):
+            r.raise_for_status()
     return r.json()
 
 
@@ -424,7 +440,7 @@ def market_sell(symbol: str, qty: float) -> tuple[dict, float, str]:
         "symbol":           symbol,
         "side":             "SELL",
         "type":             "MARKET",
-        "quantity":         f"{qty:.6f}",
+        "quantity":         f"{qty:.5f}",
         "newClientOrderId": f"hc_sell_{int(time.time() * 1000)}",
     })
     fee, asset = _extract_fee_usdc(order)

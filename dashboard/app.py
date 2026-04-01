@@ -346,7 +346,12 @@ def users_remove(email: str):
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main() -> None:
+    import logging as _logging
     import db.store as store
+    # Ensure INFO-level logs from the simulation/agent threads reach DBLogHandler
+    _logging.basicConfig(level=_logging.INFO,
+                         format="%(asctime)s [%(levelname)s] %(name)s — %(message)s")
+    _logging.getLogger().setLevel(_logging.INFO)
     store.init_db()
     from pathlib import Path
     Path("logs").mkdir(exist_ok=True)
