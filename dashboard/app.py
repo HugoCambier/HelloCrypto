@@ -23,7 +23,7 @@ load_dotenv()
 
 # ── import existing Flask app ─────────────────────────────────────────────────
 from hellocrypto.dashboard import app, log  # noqa: E402  (must be after sys.path)
-from db.store import add_user, is_user_allowed, list_users, remove_user  # noqa: E402
+from db.store import is_user_allowed, sync_users_from_env  # noqa: E402
 
 # Trust Cloud Run's X-Forwarded-Proto so request.url uses https://
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
@@ -46,8 +46,9 @@ _AUTH_ENABLED  = bool(_CLIENT_ID and _CLIENT_SECRET)
 if not _AUTH_ENABLED:
     log.warning("GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET manquants — auth désactivée (mode local)")
 
-# Allow http:// for local dev (oauthlib requirement)
-os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
+# Allow http:// for local dev only (oauthlib requirement)
+if not _AUTH_ENABLED:
+    os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
@@ -87,6 +88,7 @@ def require_login(f):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return wrapper
+
 
 
 # ── Auth gate (applied to all existing routes) ────────────────────────────────
@@ -160,9 +162,12 @@ def healthz():
 
 
 @app.get("/debug/auth")
+@require_login
 def debug_auth():
-    """Check auth config — remove after troubleshooting."""
+    """Check auth config — for troubleshooting (admin only)."""
     from flask import jsonify
+    if _AUTH_ENABLED and session.get("user", {}).get("role") != "admin":
+        return jsonify({"error": "Accès refusé"}), 403
     return jsonify({
         "auth_enabled": _AUTH_ENABLED,
         "client_id_set": bool(_CLIENT_ID),
@@ -316,33 +321,6 @@ def runner_frequency():
         return jsonify({"error": str(exc)}), 500
 
 
-# ── User management API ───────────────────────────────────────────────────────
-
-@app.get("/api/users")
-def users_list():
-    from flask import jsonify
-    return jsonify(list_users())
-
-
-@app.post("/api/users")
-def users_add():
-    from flask import jsonify
-    body  = request.json or {}
-    email = body.get("email", "").strip().lower()
-    role  = body.get("role", "viewer")
-    if not email or "@" not in email:
-        return jsonify({"error": "email invalide"}), 400
-    add_user(email, role)
-    return jsonify({"ok": True, "email": email})
-
-
-@app.delete("/api/users/<path:email>")
-def users_remove(email: str):
-    from flask import jsonify
-    remove_user(email)
-    return jsonify({"ok": True})
-
-
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -353,6 +331,7 @@ def main() -> None:
                          format="%(asctime)s [%(levelname)s] %(name)s — %(message)s")
     _logging.getLogger().setLevel(_logging.INFO)
     store.init_db()
+    sync_users_from_env()
     from pathlib import Path
     Path("logs").mkdir(exist_ok=True)
     Path("data").mkdir(exist_ok=True)

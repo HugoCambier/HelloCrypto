@@ -167,6 +167,8 @@ def run(
     resume: bool = False,
     max_cycles: int | None = None,
     initial_holdings: dict[str, float] | None = None,
+    session_id: str | None = None,
+    session_name: str | None = None,
 ) -> dict:
     """Run the paper-trading simulation.
 
@@ -175,6 +177,12 @@ def run(
     state is found).  avg_price is set to the first-cycle market price.
     """
     import time
+    import uuid as _uuid
+    if not session_id:
+        session_id = _uuid.uuid4().hex[:8]
+    if not session_name:
+        session_name = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+    log.info("[SIM] Session: %s - %s", session_id, session_name)
 
     cfg                  = config or load_config()
     watchlist            = cfg["watchlist"]
@@ -186,7 +194,7 @@ def run(
 
     try:
         from db.store import DBLogHandler as _DBH
-        _db_handler = _DBH(mode="simulation")
+        _db_handler = _DBH(mode="simulation", session_id=session_id)
         logging.getLogger().addHandler(_db_handler)
     except ImportError:
         _db_handler = None
@@ -259,6 +267,25 @@ def run(
                         holdings[sym] = {"qty": qty, "avg_price": prices[sym]}
                         peak_prices[sym] = prices[sym]
                         log.info("[SIM] Avoir initial: %s qty=%.6f @ $%.4f", sym, qty, prices[sym])
+            # Persist initial state to sessions table
+            try:
+                from db.store import upsert_session as _upsert
+                _upsert(
+                    session_id=session_id,
+                    name=session_name,
+                    mode="simulation",
+                    initial_state={
+                        "budget":           budget,
+                        "initial_prices":   initial_prices,
+                        "initial_holdings": {
+                            sym: {"qty": h["qty"], "avg_price": h["avg_price"]}
+                            for sym, h in holdings.items()
+                        },
+                        "watchlist": watchlist,
+                    },
+                )
+            except Exception:
+                pass
 
         # ── Update peak prices ─────────────────────────────────────────────────
         for sym in holdings:
@@ -306,6 +333,23 @@ def run(
                     "fee":       round(fee, 6),
                     "reason":    reason_str,
                 })
+                try:
+                    from db.store import save_trade as _db_save
+                    _db_save(
+                        action=action_label,
+                        symbol=sym,
+                        amount=None,
+                        price=cur,
+                        reason=reason_str,
+                        fee=fee,
+                        qty=qty,
+                        pnl=round((cur - entry) * qty - fee, 4),
+                        mode="simulation",
+                        session_id=session_id,
+                        session_name=session_name,
+                    )
+                except Exception:
+                    pass
                 log.info("[SIM] %s %s: hard=%.1f%% trail=%.1f%%",
                          action_label, sym, hard_loss * 100, trail_loss * 100)
 
@@ -333,7 +377,8 @@ def run(
             _save_state({"schema_version": 1, "budget": budget, "cycle": cycle, "cash": cash,
                          "holdings": holdings, "history": history, "total_fees": total_fees,
                          "initial_prices": initial_prices, "peak_prices": peak_prices,
-                         "cooldown_map": cooldown_map, "recent_decisions": recent_decisions})
+                         "cooldown_map": cooldown_map, "recent_decisions": recent_decisions,
+                         "session_id": session_id, "session_name": session_name})
             if stop_event:
                 stop_event.wait(timeout=cycle_sec)
             else:
@@ -359,6 +404,20 @@ def run(
             "pnl":       None,
         })
 
+        # Save market analysis to DB
+        try:
+            from db.store import save_market_analysis as _db_analysis
+            _db_analysis(
+                sentiment=sentiment,
+                summary=summary,
+                analyses=decision.get("actions", []),
+                mode="simulation",
+                cycle=cycle,
+                session_id=session_id,
+            )
+        except Exception:
+            pass
+
         # ── Execute paper trades ───────────────────────────────────────────────
         max_pct = (5 + risk_level * 4) / 100
         for action in decision.get("actions", []):
@@ -380,6 +439,9 @@ def run(
                 rsi = market_raw.get(sym, {}).get("rsi14")
                 rsi_factor = max(0.5, min(1.5, 1.5 - (rsi - 20) / 60)) if rsi is not None else 1.0
 
+                horizon     = action.get("horizon", "").upper()
+                full_reason = f"[{horizon}] {reason}" if horizon in ("SHORT", "MEDIUM", "LONG") else reason
+
                 amount = min(action.get("usdc_amount", 0), cash * max_pct * rsi_factor)
                 if amount >= 10:
                     fee         = _paper_buy(sym, amount, prices[sym], holdings)
@@ -394,10 +456,27 @@ def run(
                         "amount":    amount,
                         "price":     prices[sym],
                         "fee":       round(fee, 6),
-                        "reason":    reason,
+                        "reason":    full_reason,
                     })
-                    log.info("[SIM] BUY  $%.2f %s @ $%.4f (RSI=%.0f factor=%.2f)",
-                             amount, sym, prices[sym], rsi or 0, rsi_factor)
+                    try:
+                        from db.store import save_trade as _db_save
+                        _db_save(
+                            action="BUY",
+                            symbol=sym,
+                            amount=amount,
+                            price=prices[sym],
+                            reason=full_reason,
+                            fee=fee,
+                            qty=None,
+                            pnl=None,
+                            mode="simulation",
+                            session_id=session_id,
+                            session_name=session_name,
+                        )
+                    except Exception:
+                        pass
+                    log.info("[SIM] BUY  $%.2f %s @ $%.4f (RSI=%.0f factor=%.2f) [%s]",
+                             amount, sym, prices[sym], rsi or 0, rsi_factor, horizon or "?")
 
             elif atype == "sell" and sym in holdings and sym in prices:
                 qty           = min(action.get("qty", holdings[sym]["qty"]), holdings[sym]["qty"])
@@ -418,6 +497,23 @@ def run(
                     "fee":       round(fee, 6),
                     "reason":    reason,
                 })
+                try:
+                    from db.store import save_trade as _db_save
+                    _db_save(
+                        action="SELL",
+                        symbol=sym,
+                        amount=None,
+                        price=prices[sym],
+                        reason=reason,
+                        fee=fee,
+                        qty=qty,
+                        pnl=round((prices[sym] - entry) * qty - fee, 4),
+                        mode="simulation",
+                        session_id=session_id,
+                        session_name=session_name,
+                    )
+                except Exception:
+                    pass
 
         # ── Emit snapshot & persist state ─────────────────────────────────────
         snap = _snapshot(cycle, cash, budget, holdings, prices, history, total_fees, initial_prices, cycle_sec)
@@ -436,6 +532,8 @@ def run(
             "peak_prices":    peak_prices,
             "cooldown_map":   cooldown_map,
             "recent_decisions": recent_decisions,
+            "session_id":     session_id,
+            "session_name":   session_name,
         })
 
         if stop_event:

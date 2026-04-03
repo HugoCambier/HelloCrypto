@@ -228,12 +228,27 @@ def run_one_cycle() -> None:
 
             log.info(f"LLM #{llm_call_count} | Sentiment: {decision['market_sentiment']} | {decision['summary']}")
 
+            try:
+                from db.store import save_market_analysis as _db_analysis
+                _db_analysis(
+                    sentiment=decision.get("market_sentiment", ""),
+                    summary=decision.get("summary", ""),
+                    analyses=decision.get("actions", []),
+                    mode="real",
+                    cycle=cycle,
+                )
+            except Exception:
+                pass
+
             for action in decision.get("actions", []):
                 atype  = action.get("type", "")
                 sym    = action.get("symbol", "")
                 if not atype or not sym:
                     continue
-                reason = action.get("reason", "")
+                reason  = action.get("reason", "")
+                horizon = action.get("horizon", "").upper() if atype == "buy" else ""
+                if horizon in ("SHORT", "MEDIUM", "LONG"):
+                    reason = f"[{horizon}] {reason}"
 
                 if atype == "buy" and cash > 10:
                     last_sell = cooldown_map.get(sym, 0)
@@ -251,7 +266,7 @@ def run_one_cycle() -> None:
                         save_trade("BUY", sym, amount, price, reason, fee, fee_asset)
                         peak_prices[sym] = price
                         cash -= amount
-                        log.info(f"BUY  ${amount:.2f} {sym} @ ${price:.4f} (RSI={rsi or 0:.0f} ×{rsi_factor:.2f})")
+                        log.info(f"BUY  ${amount:.2f} {sym} @ ${price:.4f} (RSI={rsi or 0:.0f} ×{rsi_factor:.2f}) [{horizon or '?'}]")
 
                 elif atype == "sell" and sym in positions:
                     qty   = action.get("qty", positions[sym]["qty"])
@@ -369,12 +384,27 @@ def run_agent() -> None:
 
                 log.info(f"LLM #{llm_call_count} | Sentiment: {decision['market_sentiment']} | {decision['summary']}")
 
+                try:
+                    from db.store import save_market_analysis as _db_analysis
+                    _db_analysis(
+                        sentiment=decision.get("market_sentiment", ""),
+                        summary=decision.get("summary", ""),
+                        analyses=decision.get("actions", []),
+                        mode="real",
+                        cycle=cycle,
+                    )
+                except Exception:
+                    pass
+
                 for action in decision.get("actions", []):
                     atype  = action.get("type", "")
                     sym    = action.get("symbol", "")
                     if not atype or not sym:
                         continue
-                    reason = action.get("reason", "")
+                    reason  = action.get("reason", "")
+                    horizon = action.get("horizon", "").upper() if atype == "buy" else ""
+                    if horizon in ("SHORT", "MEDIUM", "LONG"):
+                        reason = f"[{horizon}] {reason}"
 
                     if atype == "buy" and cash > 10:
                         # Cooldown check
@@ -393,7 +423,7 @@ def run_agent() -> None:
                             save_trade("BUY", sym, amount, price, reason, fee, fee_asset)
                             peak_prices[sym] = price
                             cash -= amount
-                            log.info(f"BUY  ${amount:.2f} {sym} @ ${price:.4f} (RSI={rsi or 0:.0f} ×{rsi_factor:.2f})")
+                            log.info(f"BUY  ${amount:.2f} {sym} @ ${price:.4f} (RSI={rsi or 0:.0f} ×{rsi_factor:.2f}) [{horizon or '?'}]")
 
                     elif atype == "sell" and sym in positions:
                         qty   = action.get("qty", positions[sym]["qty"])

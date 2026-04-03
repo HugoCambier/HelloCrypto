@@ -6,6 +6,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -90,12 +91,14 @@ def stream_logs():
 
 @app.get("/api/logs")
 def api_logs():
-    category = request.args.get("category")  # technical, market, trade, or None=all
-    mode     = request.args.get("mode")       # real, simulation, or None=all
-    limit    = int(request.args.get("limit", 200))
+    category   = request.args.get("category")   # technical, market, trade, or None=all
+    mode       = request.args.get("mode")        # real, simulation, or None=all
+    session_id = request.args.get("session_id")  # filter by simulation session
+    limit      = int(request.args.get("limit", 200))
     try:
         from db.store import load_logs
-        logs = load_logs(category=category or None, mode=mode or None, limit=limit)
+        logs = load_logs(category=category or None, mode=mode or None,
+                         session_id=session_id or None, limit=limit)
         return jsonify(logs)
     except ImportError:
         return jsonify([])
@@ -118,22 +121,64 @@ def api_watchlist():
 
 @app.get("/api/performance")
 def api_performance():
-    period  = request.args.get("period", "24h")
-    history = load_history()
-    config  = load_config()
-    cutoff  = datetime.utcnow() - PERIODS.get(period, timedelta(hours=24))
+    period     = request.args.get("period", "all")
+    mode       = request.args.get("mode", "real")   # 'real' | 'simulation'
+    session_id = request.args.get("session_id")     # filter by session (simulation only)
+    config = load_config()
 
-    filtered    = [t for t in history if datetime.fromisoformat(t["timestamp"]) >= cutoff]
+    try:
+        from db.store import load_history as _db_load
+        history = _db_load(mode=mode, limit=2000)
+    except ImportError:
+        history = load_history()
+
+    cutoff   = datetime.utcnow() - PERIODS.get(period, timedelta(days=9999))
+    filtered = [t for t in history if datetime.fromisoformat(t["timestamp"]) >= cutoff]
+    if session_id:
+        filtered = [t for t in filtered if t.get("session_id") == session_id]
+
     buys        = [t for t in filtered if t["action"] == "BUY"]
-    sells       = [t for t in filtered if "SELL" in t["action"] and "stop" not in t["action"]]
-    stop_losses = [t for t in filtered if "stop-loss" in t["action"]]
+    sells       = [t for t in filtered if "SELL" in t["action"] and "stop" not in t["action"].lower()]
+    stop_losses = [t for t in filtered if "stop" in t["action"].lower()]
+    all_sells   = sells + stop_losses
 
-    invested  = sum(t["amount"] for t in buys)
-    recovered = sum(t["amount"] * t["price"] for t in sells + stop_losses)
-    fees      = sum(t.get("fee", 0) for t in filtered)
+    invested  = sum(t.get("amount", 0) or 0 for t in buys)
+    recovered = sum((t.get("qty", 0) or 0) * (t.get("price", 0) or 0) for t in all_sells)
+    fees      = sum(t.get("fee", 0) or 0 for t in filtered)
+    net       = round(recovered - invested - fees, 2)
+
+    sells_pnl     = [t for t in all_sells if t.get("pnl") is not None]
+    profitable    = [t for t in sells_pnl if t["pnl"] > 0]
+    win_rate      = round(len(profitable) / len(all_sells) * 100, 1) if all_sells else None
+    best_trade    = round(max(t["pnl"] for t in sells_pnl), 2) if sells_pnl else None
+    worst_trade   = round(min(t["pnl"] for t in sells_pnl), 2) if sells_pnl else None
+
+    # Cumulative PnL time series for chart (sorted oldest→newest)
+    sorted_trades = sorted(filtered, key=lambda t: t["timestamp"])
+    timeseries, cum = [], 0.0
+    for t in sorted_trades:
+        if t["action"] == "BUY":
+            cum -= (t.get("amount", 0) or 0) + (t.get("fee", 0) or 0)
+        elif "SELL" in t["action"].upper():
+            cum += (t.get("qty", 0) or 0) * (t.get("price", 0) or 0) - (t.get("fee", 0) or 0)
+        timeseries.append({"ts": t["timestamp"], "v": round(cum, 2)})
+
+    # Simulation sessions: detect runs separated by > 2h gaps
+    sessions = []
+    if mode == "simulation" and sorted_trades:
+        session_start = sorted_trades[0]["timestamp"]
+        prev_ts = session_start
+        for t in sorted_trades[1:]:
+            gap = datetime.fromisoformat(t["timestamp"]) - datetime.fromisoformat(prev_ts)
+            if gap.total_seconds() > 7200:
+                sessions.append({"start": session_start, "end": prev_ts})
+                session_start = t["timestamp"]
+            prev_ts = t["timestamp"]
+        sessions.append({"start": session_start, "end": prev_ts})
 
     return jsonify({
         "period":      period,
+        "mode":        mode,
         "trades":      len(filtered),
         "buys":        len(buys),
         "sells":       len(sells),
@@ -141,8 +186,13 @@ def api_performance():
         "invested":    round(invested, 2),
         "recovered":   round(recovered, 2),
         "fees":        round(fees, 4),
-        "net":         round(recovered - invested - fees, 2),
-        "history":     list(reversed(filtered[-100:])),
+        "net":         net,
+        "win_rate":    win_rate,
+        "best_trade":  best_trade,
+        "worst_trade": worst_trade,
+        "history":     list(reversed(sorted_trades[-200:])),
+        "timeseries":  timeseries,
+        "sessions":    sessions,
         "budget":      config.get("budget", 100),
     })
 
@@ -349,11 +399,25 @@ def sim_start():
         run_cfg             = {**cfg, "risk_level": risk_level, "cycle_seconds": cycle_sec,
                                "stop_loss_pct": stop_loss_pct, "trailing_stop_pct": trailing_stop_pct,
                                "sell_cooldown_cycles": sell_cooldown_cycles}
+        session_id   = uuid.uuid4().hex[:8]
+        session_name = body.get("session_name") or datetime.utcnow().strftime("%Y-%m-%d %H:%M")
         _sim_stop_event = threading.Event()
         _sim_state = {
-            "running":  True,
+            "running":        True,
+            "session_id":     session_id,
+            "session_name":   session_name,
+            "cycle_seconds":  cycle_sec,
+            "cycle_started_at": None,
             "snapshot": {"cycle": 0, "pnl": 0, "trades": 0, "history": [], "positions": []},
         }
+
+        # Persist session to DB
+        try:
+            from db.store import upsert_session
+            upsert_session(session_id, session_name, mode="simulation",
+                           initial_state={"budget": budget, "initial_holdings": initial_holdings})
+        except Exception:
+            pass
 
     def _run():
         global _sim_state
@@ -361,6 +425,7 @@ def sim_start():
             def on_cycle(cycle, snapshot):
                 with _sim_lock:
                     _sim_state["snapshot"] = snapshot
+                    _sim_state["cycle_started_at"] = datetime.utcnow().isoformat()
 
             result = sim_engine.run(
                 budget,
@@ -370,6 +435,8 @@ def sim_start():
                 resume=resume,
                 max_cycles=max_cycles,
                 initial_holdings=initial_holdings if not resume else None,
+                session_id=session_id,
+                session_name=session_name,
             )
             with _sim_lock:
                 _sim_state = {"running": False, "snapshot": result}
@@ -379,6 +446,96 @@ def sim_start():
 
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({"ok": True, "budget": budget, "risk_level": risk_level, "cycle_seconds": cycle_sec})
+
+
+@app.get("/api/simulation/sessions")
+def sim_sessions():
+    try:
+        from db.store import list_simulation_sessions_v2, list_simulation_sessions
+        try:
+            return jsonify(list_simulation_sessions_v2())
+        except Exception:
+            return jsonify(list_simulation_sessions())
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.patch("/api/simulation/sessions/<session_id>")
+def sim_session_rename(session_id: str):
+    body = request.json or {}
+    name = body.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "name requis"}), 400
+    try:
+        from db.store import rename_session
+        rename_session(session_id, name)
+        return jsonify({"ok": True})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.delete("/api/simulation/sessions/<session_id>")
+def sim_session_delete(session_id: str):
+    try:
+        from db.store import delete_session
+        delete_session(session_id)
+        return jsonify({"ok": True})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.get("/api/analyses")
+def api_analyses():
+    mode       = request.args.get("mode")
+    session_id = request.args.get("session_id")
+    limit      = int(request.args.get("limit", 100))
+    try:
+        from db.store import load_market_analyses
+        return jsonify(load_market_analyses(mode=mode or None, session_id=session_id or None, limit=limit))
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+@app.get("/api/simulation/sessions/<session_id>/detail")
+def sim_session_detail(session_id: str):
+    from flask import jsonify
+    try:
+        import json as _json
+        from db.store import _sqlite
+        with _sqlite() as c:
+            row = c.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "Session non trouvée"}), 404
+        d = dict(row)
+        if d.get("initial_state"):
+            try:
+                d["initial_state"] = _json.loads(d["initial_state"])
+            except Exception:
+                pass
+        return jsonify(d)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.post("/api/admin/clean-logs")
+def admin_clean_logs():
+    from flask import jsonify
+    body             = request.json or {}
+    older_than_days  = int(body.get("older_than_days", 30))
+    keep_last        = body.get("keep_last")
+    mode             = body.get("mode")
+    session_id       = body.get("session_id")
+    try:
+        from db.store import clean_logs
+        deleted = clean_logs(
+            older_than_days=older_than_days,
+            mode=mode or None,
+            session_id=session_id or None,
+            keep_last=int(keep_last) if keep_last is not None else None,
+        )
+        return jsonify({"ok": True, "deleted": deleted})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
 
 
 @app.post("/api/simulation/stop")

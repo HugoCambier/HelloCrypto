@@ -69,17 +69,17 @@
 <body class="text-slate-100 h-full flex flex-col">
 
   <!-- ── Header ── -->
-  <header class="bg-slate-800 border-b border-slate-700 px-6 py-3 flex items-center justify-between shrink-0">
+  <header class="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-y-2 shrink-0">
     <div class="flex items-center gap-3">
-      <span class="text-xl font-bold text-blue-400 tracking-tight">HelloCrypto</span>
-      <span class="text-slate-600 text-sm">|</span>
-      <span class="text-slate-400 text-sm">Dashboard</span>
+      <span class="text-lg md:text-xl font-bold text-blue-400 tracking-tight">HelloCrypto</span>
+      <span class="text-slate-600 text-sm hidden sm:inline">|</span>
+      <span class="text-slate-400 text-sm hidden sm:inline">Dashboard</span>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 flex-wrap">
       <!-- Status indicator -->
       <div class="flex items-center gap-2 text-sm mr-1">
         <div class="w-2 h-2 rounded-full bg-slate-500" id="status-dot"></div>
-        <span class="text-slate-400 text-xs" id="status-label">Inactif</span>
+        <span class="text-slate-400 text-xs hidden sm:inline" id="status-label">Inactif</span>
       </div>
       <!-- Stop button — visible only when running -->
       <button id="stop-btn" onclick="stopAll()"
@@ -90,49 +90,45 @@
       <div class="flex rounded-lg overflow-hidden border border-slate-600 text-xs">
         <button id="mode-sim-btn" onclick="setMode('simulation')"
           class="px-3 py-1.5 bg-blue-700 text-white transition-colors">
-          📊 Simulation
+          📊 <span class="hidden sm:inline">Simulation</span>
         </button>
         <button id="mode-real-btn" onclick="setMode('real')"
           class="px-3 py-1.5 text-slate-400 hover:text-white border-l border-slate-600 transition-colors">
-          ⚡ Réel
+          ⚡ <span class="hidden sm:inline">Réel</span>
         </button>
       </div>
-      <!-- Auto toggle (hidden while running) -->
-      <button id="auto-btn" onclick="toggleAuto()"
-        class="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-600 text-slate-400 hover:border-slate-400 transition-colors">
-        🔄 Auto <span id="auto-label">OFF</span>
-      </button>
-      <!-- Auto status badge (shown while running, only when Auto=ON) -->
-      <span id="auto-badge" class="hidden px-2 py-1 rounded text-xs font-medium border border-green-500 text-green-400">
-        🔄 Auto
-      </span>
+      <!-- Cycle counter badge + countdown (shown while running) -->
+      <div id="cycle-badge" class="hidden flex flex-col items-end">
+        <span id="cycle-badge-text" class="px-2 py-0.5 rounded text-xs border border-slate-600 text-slate-400">Cycle —</span>
+        <span id="countdown-text" class="text-xs text-slate-500 mt-0.5"></span>
+      </div>
       <!-- Power ON/OFF -->
       <button id="power-btn" onclick="togglePower()"
-        class="px-4 py-1.5 rounded-lg text-sm font-medium border-2 border-slate-600 text-slate-400 hover:border-slate-400 transition-colors">
-        ⏻ OFF
+        class="px-3 md:px-4 py-1.5 rounded-lg text-sm font-medium border-2 border-slate-600 text-slate-400 hover:border-slate-400 transition-colors">
+        ⏻ <span class="hidden sm:inline">OFF</span>
       </button>
     </div>
   </header>
 
   <!-- ── Tab bar ── -->
-  <nav class="bg-slate-800 border-b border-slate-700 px-6 flex gap-1 shrink-0 items-center">
-    <button class="tab-btn tab-active   px-5 py-3 text-sm font-medium transition-colors" data-tab="logs"        onclick="switchTab('logs')">
-      ⬛ Logs en direct
+  <nav class="bg-slate-800 border-b border-slate-700 px-2 md:px-6 flex gap-0.5 md:gap-1 shrink-0 items-center overflow-x-auto scrollbar-thin">
+    <button class="tab-btn tab-active   px-3 md:px-5 py-3 text-xs md:text-sm font-medium transition-colors whitespace-nowrap" data-tab="logs"        onclick="switchTab('logs')">
+      ⬛ <span class="hidden sm:inline">Logs</span>
     </button>
-    <button class="tab-btn tab-inactive px-5 py-3 text-sm font-medium transition-colors" data-tab="performance" onclick="switchTab('performance')">
-      📊 Performance
+    <button class="tab-btn tab-inactive px-3 md:px-5 py-3 text-xs md:text-sm font-medium transition-colors whitespace-nowrap" data-tab="performance" onclick="switchTab('performance')">
+      📊 <span class="hidden sm:inline">Perf</span>
     </button>
-    <button class="tab-btn tab-inactive px-5 py-3 text-sm font-medium transition-colors" data-tab="portfolio"   onclick="switchTab('portfolio')">
-      💼 Portefeuille
+    <button class="tab-btn tab-inactive px-3 md:px-5 py-3 text-xs md:text-sm font-medium transition-colors whitespace-nowrap" data-tab="portfolio"   onclick="switchTab('portfolio')">
+      💼 <span class="hidden sm:inline">Portfolio</span>
     </button>
-    <button class="tab-btn tab-inactive px-5 py-3 text-sm font-medium transition-colors" data-tab="simulation" onclick="switchTab('simulation')">
-      🧪 Simulation Live
+    <button class="tab-btn tab-inactive px-3 md:px-5 py-3 text-xs md:text-sm font-medium transition-colors whitespace-nowrap" data-tab="simulation" onclick="switchTab('simulation')">
+      🧪 <span class="hidden sm:inline">Simulation</span>
     </button>
-    <button class="tab-btn tab-inactive px-5 py-3 text-sm font-medium transition-colors" data-tab="backtest" onclick="switchTab('backtest')">
-      ⏪ Backtest
+    <button class="tab-btn tab-inactive px-3 md:px-5 py-3 text-xs md:text-sm font-medium transition-colors whitespace-nowrap" data-tab="backtest" onclick="switchTab('backtest')">
+      ⏪ <span class="hidden sm:inline">Backtest</span>
     </button>
-    <button class="tab-btn tab-inactive px-5 py-3 text-sm font-medium transition-colors" data-tab="analyse" onclick="switchTab('analyse')">
-      🔭 Analyse IA
+    <button class="tab-btn tab-inactive px-3 md:px-5 py-3 text-xs md:text-sm font-medium transition-colors whitespace-nowrap" data-tab="analyse" onclick="switchTab('analyse')">
+      🔭 <span class="hidden sm:inline">Analyse IA</span>
     </button>
 
     <!-- ── LLM Selector ── -->
@@ -245,24 +241,69 @@
     <!-- ═══ TAB: PERFORMANCE ═══ -->
     <div id="pane-performance" class="hidden h-full overflow-y-auto p-4 space-y-4">
 
-      <!-- Period selector -->
+      <!-- Mode + period selectors -->
       <div class="flex items-center gap-3 flex-wrap">
-        <span class="text-sm text-slate-400">Période :</span>
-        <div class="flex gap-1 bg-slate-800 border border-slate-700 rounded-xl p-1">
-          <button class="period-btn active-period px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white transition-colors" data-period="1h"  onclick="setPeriod(this,'1h')">1h</button>
-          <button class="period-btn         px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors" data-period="6h"  onclick="setPeriod(this,'6h')">6h</button>
-          <button class="period-btn         px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors" data-period="24h" onclick="setPeriod(this,'24h')">24h</button>
-          <button class="period-btn         px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors" data-period="3j"  onclick="setPeriod(this,'3j')">3 jours</button>
-          <button class="period-btn         px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors" data-period="7j"  onclick="setPeriod(this,'7j')">7 jours</button>
-          <button class="period-btn         px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors" data-period="30j" onclick="setPeriod(this,'30j')">30 jours</button>
-          <button class="period-btn         px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors" data-period="all" onclick="setPeriod(this,'all')">Tout</button>
+        <!-- Mode filter -->
+        <div class="flex rounded-lg overflow-hidden border border-slate-600 text-xs">
+          <button id="pm-real" onclick="setPerfMode('real')"
+            class="px-3 py-1.5 bg-blue-700 text-white transition-colors">⚡ Réel</button>
+          <button id="pm-sim" onclick="setPerfMode('simulation')"
+            class="px-3 py-1.5 text-slate-400 hover:text-white border-l border-slate-600 transition-colors">📊 Simulation</button>
         </div>
-        <button onclick="loadPerformance()" class="ml-auto text-xs px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">↻ Rafraîchir</button>
+        <!-- Session selector (sim only) -->
+        <div id="perf-session-wrap" class="hidden flex items-center gap-1">
+          <select id="perf-session-sel" onchange="_perfSessionId=this.value; loadPerformance()"
+            class="bg-slate-700 border border-slate-600 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none max-w-[180px]">
+          </select>
+          <button onclick="_renameSession()" title="Renommer"
+            class="px-1.5 py-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700 transition-colors text-sm">✏️</button>
+          <button onclick="_deleteSession()" title="Supprimer"
+            class="px-1.5 py-1 rounded text-red-400 hover:text-red-300 hover:bg-slate-700 transition-colors text-sm">🗑️</button>
+        </div>
+        <!-- Period filter -->
+        <div class="flex gap-1 bg-slate-800 border border-slate-700 rounded-xl p-1">
+          <button class="period-btn px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors" data-period="1h"  onclick="setPeriod(this,'1h')">1h</button>
+          <button class="period-btn px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors" data-period="6h"  onclick="setPeriod(this,'6h')">6h</button>
+          <button class="period-btn px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors" data-period="24h" onclick="setPeriod(this,'24h')">24h</button>
+          <button class="period-btn px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors" data-period="7j"  onclick="setPeriod(this,'7j')">7j</button>
+          <button class="period-btn px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white transition-colors" data-period="30j" onclick="setPeriod(this,'30j')">30j</button>
+          <button class="period-btn active-period px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white transition-colors" data-period="all" onclick="setPeriod(this,'all')">Tout</button>
+        </div>
+        <button onclick="_initPerformanceTab()" class="ml-auto text-xs px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors" title="Recharge les données et détecte la simulation en cours">↻ Rafraîchir</button>
       </div>
 
       <!-- KPI cards -->
-      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3" id="perf-cards">
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3" id="perf-cards">
         <!-- filled by JS -->
+      </div>
+
+      <!-- Session start state (sim only) -->
+      <div id="perf-start-card" class="hidden bg-slate-800 border border-slate-700 rounded-xl p-4">
+        <div class="text-xs font-semibold text-slate-400 mb-3">🚀 Point de départ du run</div>
+        <div id="perf-start-content" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs"></div>
+      </div>
+
+      <!-- Run logs (sim only) -->
+      <div id="perf-logs-card" class="hidden bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-400">📋 Logs du run</span>
+          <div class="flex items-center gap-2">
+            <select id="perf-log-cat" onchange="_loadRunLogs()" class="bg-slate-700 border border-slate-600 text-slate-300 text-xs rounded px-2 py-0.5 focus:outline-none">
+              <option value="">Tous</option>
+              <option value="trade">Trade</option>
+              <option value="market">Market</option>
+              <option value="technical">Technical</option>
+            </select>
+            <span class="text-xs text-slate-500" id="perf-log-count"></span>
+          </div>
+        </div>
+        <div id="perf-log-container" class="px-4 py-3 overflow-y-auto space-y-px" style="max-height:300px;font-family:ui-monospace,monospace;font-size:0.7rem"></div>
+      </div>
+
+      <!-- PnL chart -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+        <div class="text-xs font-medium text-slate-400 mb-3">PnL cumulé (USDC)</div>
+        <canvas id="perf-chart" height="80"></canvas>
       </div>
 
       <!-- Trade history table -->
@@ -281,6 +322,7 @@
                 <th class="px-4 py-2 text-right font-medium">Montant</th>
                 <th class="px-4 py-2 text-right font-medium">Prix</th>
                 <th class="px-4 py-2 text-right font-medium text-amber-500">Frais</th>
+                <th class="px-4 py-2 text-right font-medium">PnL</th>
                 <th class="px-4 py-2 text-left font-medium">Raison</th>
               </tr>
             </thead>
@@ -348,8 +390,10 @@
           <div class="space-y-3">
             <div>
               <label class="text-xs text-slate-400 block mb-1">Symbole</label>
-              <input id="buy-symbol" type="text" placeholder="BTC_USDT"
-                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500" />
+              <select id="buy-symbol"
+                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500">
+                <option value="">— chargement… —</option>
+              </select>
             </div>
             <div>
               <label class="text-xs text-slate-400 block mb-1">Montant USDT</label>
@@ -370,8 +414,10 @@
           <div class="space-y-3">
             <div>
               <label class="text-xs text-slate-400 block mb-1">Symbole</label>
-              <input id="sell-symbol" type="text" placeholder="ETH_USDT"
-                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500" />
+              <select id="sell-symbol" onchange="_onSellSymbolChange()"
+                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500">
+                <option value="">— aucune position —</option>
+              </select>
             </div>
             <div>
               <label class="text-xs text-slate-400 block mb-1">Quantité</label>
@@ -902,7 +948,7 @@ function switchTab(tab) {
     btn.classList.toggle('tab-inactive', !active);
   });
   currentTab = tab;
-  if (tab === 'performance') loadPerformance();
+  if (tab === 'performance') _initPerformanceTab();
   if (tab === 'portfolio')   loadPortfolio();
   if (tab === 'backtest' && !document.querySelector('#bt-symbols-list input')) _loadBtWatchlist();
 }
@@ -910,8 +956,12 @@ function switchTab(tab) {
 // ─────────────────────────────────────────────
 // Control state
 // ─────────────────────────────────────────────
-let _runnerMode  = 'simulation';  // 'simulation' | 'real'
-let _autoEnabled = false;
+let _runnerMode       = 'simulation';  // 'simulation' | 'real'
+let _autoEnabled      = false;         // set by popup checkboxes
+let _maxCycles        = null;          // null = unlimited
+let _cycleStartedAt   = null;          // ISO timestamp of last cycle start
+let _cycleSeconds     = null;          // cycle interval in seconds
+let _countdownIv      = null;          // setInterval for countdown
 
 function setMode(mode) {
   _runnerMode = mode;
@@ -923,15 +973,6 @@ function setMode(mode) {
   document.getElementById('mode-real-btn').className = realCls;
 }
 
-function toggleAuto() {
-  _autoEnabled = !_autoEnabled;
-  const btn   = document.getElementById('auto-btn');
-  const label = document.getElementById('auto-label');
-  label.textContent = _autoEnabled ? 'ON' : 'OFF';
-  btn.className = _autoEnabled
-    ? 'px-3 py-1.5 rounded-lg text-xs font-medium border border-green-500 text-green-400 transition-colors'
-    : 'px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-600 text-slate-400 hover:border-slate-400 transition-colors';
-}
 
 function _setPowerUI(on) {
   const btn = document.getElementById('power-btn');
@@ -940,9 +981,7 @@ function _setPowerUI(on) {
     ? 'px-4 py-1.5 rounded-lg text-sm font-medium border-2 border-green-500 text-green-400 transition-colors'
     : 'px-4 py-1.5 rounded-lg text-sm font-medium border-2 border-slate-600 text-slate-400 hover:border-slate-400 transition-colors';
   document.getElementById('stop-btn').classList.toggle('hidden', !on);
-  // Auto toggle: visible when idle, replaced by badge when running
-  document.getElementById('auto-btn').classList.toggle('hidden', on);
-  document.getElementById('auto-badge').classList.toggle('hidden', !on || !_autoEnabled);
+  document.getElementById('cycle-badge').classList.toggle('hidden', !on);
   // Lock mode buttons while running
   document.getElementById('mode-sim-btn').disabled  = on;
   document.getElementById('mode-real-btn').disabled = on;
@@ -988,6 +1027,7 @@ async function _openSimModal() {
   budgetHint.textContent   = '';
   holdingsHint.textContent = 'Chargement…';
   holdingsList.innerHTML   = '';
+  document.getElementById('sim-name-input').value = new Date().toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).replace(',','');
   modal.classList.remove('hidden');
 
   try {
@@ -995,8 +1035,8 @@ async function _openSimModal() {
     const d = await r.json();
 
     if (d.usdc != null) {
-      document.getElementById('sim-budget-input').value = Math.floor(d.usdc);
-      budgetHint.textContent = `Solde Binance : ${d.usdc.toFixed(2)} USDC`;
+      document.getElementById('sim-budget-input').value = d.usdc.toFixed(6);
+      budgetHint.textContent = `Solde Binance : ${d.usdc.toFixed(6)} USDC`;
     }
 
     const coins = d.coins || {};
@@ -1031,8 +1071,10 @@ function cancelSimStart() {
 async function confirmSimStart() {
   const budget   = parseFloat(document.getElementById('sim-budget-input').value) || 0;
   const resume   = document.getElementById('sim-resume').checked;
+  _autoEnabled   = document.getElementById('sim-auto').checked;
   const maxRaw   = document.getElementById('sim-maxcycles-input').value.trim();
-  const maxCyc   = maxRaw === '' ? null : parseInt(maxRaw);
+  const maxCyc   = (_autoEnabled || maxRaw === '') ? null : parseInt(maxRaw);
+  _maxCycles     = maxCyc;
 
   // Collect per-crypto holdings
   const initial_holdings = {};
@@ -1041,9 +1083,10 @@ async function confirmSimStart() {
     if (qty > 0) initial_holdings[inp.dataset.sym] = qty;
   });
 
+  const sessionName = document.getElementById('sim-name-input').value.trim() || new Date().toLocaleString('fr-FR');
   cancelSimStart();
   try {
-    const body = { budget, resume, initial_holdings };
+    const body = { budget, resume, initial_holdings, session_name: sessionName };
     if (maxCyc !== null) body.max_cycles = maxCyc;
     const r = await fetch('/api/simulation/start', {
       method: 'POST',
@@ -1076,7 +1119,7 @@ async function _openRealModal() {
     const usdcRow = document.createElement('div');
     usdcRow.className = 'flex items-center justify-between py-1.5 border-b border-slate-700';
     usdcRow.innerHTML = `<span class="text-xs font-mono text-slate-300">USDC</span>
-      <span class="text-xs font-medium text-slate-100">${d.usdc != null ? d.usdc.toFixed(2) : '—'} USDC</span>`;
+      <span class="text-xs font-medium text-slate-100">${d.usdc != null ? d.usdc.toFixed(6) : '—'} USDC</span>`;
     list.appendChild(usdcRow);
     for (const [sym, info] of Object.entries(d.coins || {})) {
       const row = document.createElement('div');
@@ -1095,6 +1138,7 @@ function cancelRealStart() {
 }
 
 async function confirmRealStart() {
+  _autoEnabled = document.getElementById('real-auto').checked;
   cancelRealStart();
   try {
     if (_autoEnabled) {
@@ -1134,14 +1178,20 @@ async function fetchAgentStatus() {
 
   let running = false;
   let statusText = 'Inactif';
+  let cycleBadgeText = '';
 
   // Simulation status
   try {
     const r = await fetch('/api/simulation/status');
     const d = await r.json();
     if (d.running) {
-      running    = true;
-      statusText = `Simulation — cycle ${d.snapshot?.cycle ?? '…'}`;
+      running = true;
+      const cyc = d.snapshot?.cycle ?? '…';
+      cycleBadgeText = _maxCycles ? `Cycle ${cyc}/${_maxCycles}` : `Cycle ${cyc}`;
+      statusText = `Simulation — ${cycleBadgeText}`;
+      // Update countdown data
+      _cycleStartedAt = d.cycle_started_at || null;
+      _cycleSeconds   = d.cycle_seconds || null;
     }
   } catch {}
 
@@ -1151,16 +1201,17 @@ async function fetchAgentStatus() {
       const r = await fetch('/api/runner/status');
       const d = await r.json();
       if (d.running) {
-        running    = true;
+        running = true;
+        cycleBadgeText = 'Cycle réel…';
         statusText = 'Cycle réel en cours…';
       } else if (d.cloud_run) {
-        // Check scheduler
         try {
           const rs = await fetch('/api/runner/schedule');
           const ds = await rs.json();
           if (ds.enabled) {
-            running    = true;
-            statusText = `Auto réel actif (${ds.schedule || '…'})`;
+            running = true;
+            cycleBadgeText = `Auto (${ds.schedule || '…'})`;
+            statusText = `Auto réel actif`;
           }
         } catch {}
       }
@@ -1172,8 +1223,38 @@ async function fetchAgentStatus() {
     : 'w-2 h-2 rounded-full bg-slate-500';
   label.textContent = statusText;
 
-  // Sync power button to actual running state
+  const cb     = document.getElementById('cycle-badge');
+  const cbText = document.getElementById('cycle-badge-text');
+  if (running && cycleBadgeText) {
+    if (cbText) cbText.textContent = cycleBadgeText;
+  }
+
+  if (!running) {
+    _cycleStartedAt = null;
+    _cycleSeconds   = null;
+    const ct = document.getElementById('countdown-text');
+    if (ct) ct.textContent = '';
+    if (_countdownIv) { clearInterval(_countdownIv); _countdownIv = null; }
+  } else if (!_countdownIv) {
+    _countdownIv = setInterval(_tickCountdown, 1000);
+  }
+
   _setPowerUI(running);
+}
+
+function _tickCountdown() {
+  const ct = document.getElementById('countdown-text');
+  if (!ct) return;
+  if (!_cycleStartedAt || !_cycleSeconds) { ct.textContent = ''; return; }
+  const elapsed = (Date.now() - new Date(_cycleStartedAt + 'Z').getTime()) / 1000;
+  const remaining = Math.max(0, Math.round(_cycleSeconds - elapsed));
+  if (remaining <= 0) {
+    ct.textContent = 'exécution en cours…';
+  } else {
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    ct.textContent = m > 0 ? `prochain dans ${m}m${s.toString().padStart(2,'0')}s` : `prochain dans ${s}s`;
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -1275,6 +1356,111 @@ function startLogPolling() {
 // ─────────────────────────────────────────────
 // Performance
 // ─────────────────────────────────────────────
+let _perfMode      = 'real';
+let _perfSessionId = '';
+let _perfChart  = null;
+
+// Auto-detect if a simulation is running/available and switch to sim mode
+async function _initPerformanceTab() {
+  try {
+    const simStatus = await fetch('/api/simulation/status').then(r => r.json());
+    const hasRunning = simStatus?.running;
+    const hasSession = simStatus?.session_id;
+
+    if (hasRunning || hasSession) {
+      // There's an active or recent simulation — auto-switch to simulation mode
+      await setPerfMode('simulation', /*skipLoad=*/true);
+
+      // If the running session isn't already in the list, inject it
+      if (hasSession) {
+        const sel  = document.getElementById('perf-session-sel');
+        const wrap = document.getElementById('perf-session-wrap');
+        const exists = [...(sel?.options || [])].some(o => o.value === simStatus.session_id);
+        if (!exists && sel) {
+          const name = simStatus.session_name || simStatus.session_id;
+          const opt  = document.createElement('option');
+          opt.value = simStatus.session_id;
+          opt.text  = hasRunning ? `▶ ${name} (en cours)` : name;
+          sel.insertBefore(opt, sel.firstChild);
+          wrap?.classList.remove('hidden');
+        }
+        if (!_perfSessionId || _perfSessionId !== simStatus.session_id) {
+          _perfSessionId = simStatus.session_id;
+          if (sel) sel.value = _perfSessionId;
+        }
+      }
+      loadPerformance();
+      return;
+    }
+  } catch {}
+  // Default: check sessions list
+  await _loadPerfSessions();
+  loadPerformance();
+}
+
+async function setPerfMode(mode, skipLoad = false) {
+  _perfMode = mode;
+  document.getElementById('pm-real').className = mode === 'real'
+    ? 'px-3 py-1.5 bg-blue-700 text-white transition-colors'
+    : 'px-3 py-1.5 text-slate-400 hover:text-white transition-colors';
+  document.getElementById('pm-sim').className = mode === 'simulation'
+    ? 'px-3 py-1.5 bg-blue-700 text-white border-l border-slate-600 transition-colors'
+    : 'px-3 py-1.5 text-slate-400 hover:text-white border-l border-slate-600 transition-colors';
+  if (mode === 'simulation') {
+    await _loadPerfSessions();
+  } else {
+    document.getElementById('perf-session-wrap')?.classList.add('hidden');
+  }
+  if (!skipLoad) loadPerformance();
+}
+
+async function _loadPerfSessions() {
+  const r = await fetch('/api/simulation/sessions');
+  const sessions = await r.json();
+  const wrap = document.getElementById('perf-session-wrap');
+  const sel  = document.getElementById('perf-session-sel');
+  if (!Array.isArray(sessions) || sessions.length === 0) {
+    wrap?.classList.add('hidden');
+    return;
+  }
+  sel.innerHTML = sessions.map((s) => {
+    const sid  = s.id || s.session_id;
+    const name = s.name || s.session_name || sid;
+    const dateTs = s.created_at || s.start_ts;
+    const date = dateTs ? new Date(dateTs + (dateTs.includes('Z') ? '' : 'Z')).toLocaleDateString('fr-FR') : '';
+    return `<option value="${sid}">${name}${date ? ' (' + date + ')' : ''}</option>`;
+  }).join('');
+  wrap?.classList.remove('hidden');
+  _perfSessionId = sessions[0].id || sessions[0].session_id;
+  sel.value = _perfSessionId;
+}
+
+async function _renameSession() {
+  if (!_perfSessionId) return;
+  const sel = document.getElementById('perf-session-sel');
+  const currentName = sel.options[sel.selectedIndex]?.text.replace(/ \(\d{2}\/\d{2}\/\d{4}\)$/, '').trim() || '';
+  const newName = prompt('Nouveau nom pour la simulation :', currentName);
+  if (!newName || newName.trim() === currentName) return;
+  await fetch(`/api/simulation/sessions/${_perfSessionId}`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name: newName.trim()}),
+  });
+  await _loadPerfSessions();
+  sel.value = _perfSessionId;
+}
+
+async function _deleteSession() {
+  if (!_perfSessionId) return;
+  const sel = document.getElementById('perf-session-sel');
+  const name = sel.options[sel.selectedIndex]?.text || _perfSessionId;
+  if (!confirm(`Supprimer la simulation "${name}" et toutes ses transactions ?`)) return;
+  await fetch(`/api/simulation/sessions/${_perfSessionId}`, { method: 'DELETE' });
+  _perfSessionId = '';
+  await _loadPerfSessions();
+  loadPerformance();
+}
+
 function setPeriod(btn, period) {
   document.querySelectorAll('.period-btn').forEach(b => {
     b.classList.remove('bg-blue-600', 'text-white', 'active-period');
@@ -1294,45 +1480,179 @@ function kpiCard(label, value, sub = '', color = 'text-slate-100') {
   </div>`;
 }
 
+async function _loadSessionDetail(sessionId) {
+  const startCard    = document.getElementById('perf-start-card');
+  const startContent = document.getElementById('perf-start-content');
+  const logsCard     = document.getElementById('perf-logs-card');
+
+  if (!sessionId || _perfMode !== 'simulation') {
+    startCard?.classList.add('hidden');
+    logsCard?.classList.add('hidden');
+    return;
+  }
+  startCard?.classList.remove('hidden');
+  logsCard?.classList.remove('hidden');
+
+  try {
+    const r = await fetch(`/api/simulation/sessions/${sessionId}/detail`);
+    const s = await r.json();
+    const st = s.initial_state || {};
+    const budget   = st.budget ?? '—';
+    const prices   = st.initial_prices || {};
+    const holdings = st.initial_holdings || {};
+    const watchlist = st.watchlist || Object.keys(prices);
+
+    const priceRows = watchlist.map(sym => {
+      const p = prices[sym];
+      const h = holdings[sym];
+      const hLabel = h ? ` — ${h.qty.toFixed(6)} qty @ $${fmt(h.avg_price)}` : '';
+      return `<div class="flex justify-between py-0.5 border-b border-slate-700/40">
+        <span class="text-slate-400">${sym}</span>
+        <span class="text-slate-200">${p ? '$' + fmt(p) : '—'}${hLabel}</span>
+      </div>`;
+    }).join('');
+
+    startContent.innerHTML = `
+      <div>
+        <div class="text-slate-500 mb-2 font-medium">Capital</div>
+        <div class="flex justify-between py-0.5 border-b border-slate-700/40">
+          <span class="text-slate-400">Budget initial</span>
+          <span class="font-bold text-blue-300">$${fmt(budget)} USDC</span>
+        </div>
+        <div class="flex justify-between py-0.5 border-b border-slate-700/40">
+          <span class="text-slate-400">Session</span>
+          <span class="text-slate-300 font-mono text-xs">${sessionId}</span>
+        </div>
+        <div class="flex justify-between py-0.5">
+          <span class="text-slate-400">Démarrage</span>
+          <span class="text-slate-300">${s.created_at ? new Date(s.created_at+'Z').toLocaleString('fr-FR') : '—'}</span>
+        </div>
+      </div>
+      <div>
+        <div class="text-slate-500 mb-2 font-medium">Prix de départ &amp; holdings</div>
+        ${priceRows || '<div class="text-slate-500">—</div>'}
+      </div>`;
+  } catch {}
+
+  _loadRunLogs(sessionId);
+}
+
+async function _loadRunLogs(sessionIdArg) {
+  const sid = sessionIdArg || _perfSessionId;
+  const cat = document.getElementById('perf-log-cat')?.value || '';
+  const container = document.getElementById('perf-log-container');
+  const countEl   = document.getElementById('perf-log-count');
+  if (!sid || !container) return;
+  try {
+    const url = `/api/logs?session_id=${sid}&limit=300${cat ? '&category=' + cat : ''}`;
+    const logs = await fetch(url).then(r => r.json());
+    if (countEl) countEl.textContent = logs.length + ' logs';
+    if (!logs.length) {
+      container.innerHTML = '<div class="text-slate-500 py-4 text-center">Aucun log pour ce run</div>';
+      return;
+    }
+    container.innerHTML = [...logs].reverse().map(l => {
+      const ts  = l.timestamp ? new Date(l.timestamp+'Z').toLocaleTimeString('fr-FR') : '';
+      const lvl = (l.level || 'info').toLowerCase();
+      let cls = 'log-info';
+      if (lvl === 'error')                               cls = 'log-error';
+      else if (lvl === 'warning')                        cls = 'log-warn';
+      else if (/BUY|Acheté/.test(l.message))             cls = 'log-buy';
+      else if (/SELL|stop-loss|trailing/.test(l.message)) cls = 'log-sell';
+      else if (/HOLD/.test(l.message))                   cls = 'log-hold';
+      else if (/Cycle/.test(l.message))                  cls = 'log-cycle';
+      const cycleLabel = l.cycle ? `<span class="text-slate-600 mr-1">#${l.cycle}</span>` : '';
+      const tsSpan = ts ? `<span class="text-slate-600 mr-1">${ts}</span>` : '';
+      return `<div class="log-line ${cls}">${tsSpan}${cycleLabel}${escHtml(l.message)}</div>`;
+    }).join('');
+  } catch {}
+}
+
+
 async function loadPerformance() {
-  const r = await fetch('/api/performance?period=' + currentPeriod);
+  const sessionParam = _perfMode === 'simulation' && _perfSessionId ? `&session_id=${_perfSessionId}` : '';
+  const url = `/api/performance?period=${currentPeriod}&mode=${_perfMode}${sessionParam}`;
+  const r = await fetch(url);
   const d = await r.json();
 
+  // Load session detail panel (start state + logs) for simulation mode
+  _loadSessionDetail(_perfMode === 'simulation' ? _perfSessionId : null);
+
   const netColor = d.net >= 0 ? 'pnl-pos' : 'pnl-neg';
+  const netSign  = d.net >= 0 ? '+' : '';
   document.getElementById('perf-cards').innerHTML =
     kpiCard('Transactions', d.trades) +
     kpiCard('Achats', d.buys, '', 'text-green-400') +
-    kpiCard('Ventes', d.sells, '', 'text-orange-400') +
-    kpiCard('Stop-loss', d.stop_losses, '', d.stop_losses > 0 ? 'text-red-400' : 'text-slate-100') +
-    kpiCard('Frais (période)', '$' + fmt(d.fees), 'USDC équiv.', 'text-amber-400') +
-    kpiCard('Investi', '$' + fmt(d.invested), 'USDC dépensés') +
-    kpiCard('Récupéré', '$' + fmt(d.recovered), 'ventes') +
-    kpiCard('Net réel', (d.net >= 0 ? '+' : '') + '$' + fmt(d.net), 'ventes − achats − frais', netColor);
+    kpiCard('Ventes', d.sells + (d.stop_losses ? ` (+${d.stop_losses} SL)` : ''), '', 'text-orange-400') +
+    kpiCard('Win rate', d.win_rate != null ? d.win_rate + '%' : '—', 'ventes profitables', d.win_rate >= 50 ? 'text-green-400' : 'text-red-400') +
+    kpiCard('Meilleur trade', d.best_trade != null ? (d.best_trade >= 0 ? '+' : '') + '$' + fmt(d.best_trade) : '—', '', 'text-green-400') +
+    kpiCard('Pire trade', d.worst_trade != null ? (d.worst_trade >= 0 ? '+' : '') + '$' + fmt(d.worst_trade) : '—', '', 'text-red-400') +
+    kpiCard('Frais', '$' + fmt(d.fees), 'USDC', 'text-amber-400') +
+    kpiCard('Net', netSign + '$' + fmt(d.net), 'ventes − achats − frais', netColor) +
+    kpiCard('Investi', '$' + fmt(d.invested), 'achats') +
+    kpiCard('Récupéré', '$' + fmt(d.recovered), 'ventes');
 
-  document.getElementById('trade-count-label').textContent =
-    d.history.length + ' transactions affichées';
+  // PnL chart
+  const ctx = document.getElementById('perf-chart').getContext('2d');
+  if (_perfChart) { _perfChart.destroy(); _perfChart = null; }
+  if (d.timeseries?.length > 1) {
+    _perfChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: d.timeseries.map(p => {
+          const dt = new Date(p.ts + 'Z');
+          return dt.toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+        }),
+        datasets: [{
+          label: 'PnL cumulé',
+          data: d.timeseries.map(p => p.v),
+          borderColor: '#3b82f6',
+          backgroundColor: 'rgba(59,130,246,0.08)',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: true,
+          tension: 0.3,
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#64748b', maxTicksLimit: 8, font: { size: 10 } }, grid: { color: '#1e293b' } },
+          y: { ticks: { color: '#64748b', font: { size: 10 }, callback: v => (v >= 0 ? '+' : '') + '$' + v.toFixed(2) },
+               grid: { color: '#1e293b' }, border: { dash: [4,4] } },
+        },
+      },
+    });
+  }
+
+  document.getElementById('trade-count-label').textContent = d.history.length + ' transactions';
 
   const tbody = document.getElementById('trade-table-body');
   if (!d.history.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">Aucune transaction sur cette période</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Aucune transaction sur cette période</td></tr>';
     return;
   }
   tbody.innerHTML = d.history.map(t => {
-    const action = t.action;
+    const action = t.action || '';
     let badgeClass = 'badge-hold';
-    if (action === 'BUY')            badgeClass = 'badge-buy';
-    else if (action.includes('stop')) badgeClass = 'badge-sl';
-    else if (action.includes('SELL')) badgeClass = 'badge-sell';
+    if (action === 'BUY')               badgeClass = 'badge-buy';
+    else if (action.includes('stop'))   badgeClass = 'badge-sl';
+    else if (action.includes('SELL'))   badgeClass = 'badge-sell';
     const dt = new Date(t.timestamp + 'Z').toLocaleString('fr-FR', {
       day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
     });
+    const pnlCell = t.pnl != null
+      ? `<span class="${t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg'}">${t.pnl >= 0 ? '+' : ''}$${fmt(t.pnl)}</span>`
+      : '—';
     return `<tr class="hover:bg-slate-700/30 transition-colors">
       <td class="px-4 py-2.5 text-slate-400 whitespace-nowrap">${dt}</td>
       <td class="px-4 py-2.5"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${badgeClass}">${action}</span></td>
-      <td class="px-4 py-2.5 font-medium">${t.symbol}</td>
+      <td class="px-4 py-2.5 font-medium">${t.symbol || '—'}</td>
       <td class="px-4 py-2.5 text-right text-slate-300">${fmt4(t.amount)}</td>
       <td class="px-4 py-2.5 text-right text-slate-300">$${fmt(t.price)}</td>
       <td class="px-4 py-2.5 text-right text-amber-400/80">${t.fee ? '$' + fmt(t.fee) : '—'}</td>
+      <td class="px-4 py-2.5 text-right">${pnlCell}</td>
       <td class="px-4 py-2.5 text-slate-400 max-w-xs truncate">${t.reason || '—'}</td>
     </tr>`;
   }).join('');
@@ -1412,6 +1732,29 @@ async function loadPortfolio() {
 
   document.getElementById('market-updated').textContent =
     'Mis à jour ' + new Date().toLocaleTimeString('fr-FR');
+
+  // Populate buy dropdown with watchlist cryptos
+  const buySelect = document.getElementById('buy-symbol');
+  const prevBuy = buySelect.value;
+  buySelect.innerHTML = '<option value="">— choisir —</option>' +
+    d.market.map(m => `<option value="${m.symbol}">${m.symbol.replace('_USDT', '')} — $${fmt(m.price)}</option>`).join('');
+  if (prevBuy) buySelect.value = prevBuy;
+
+  // Populate sell dropdown with open positions only
+  const sellSelect = document.getElementById('sell-symbol');
+  const prevSell = sellSelect.value;
+  sellSelect.innerHTML = '<option value="">— choisir —</option>' +
+    d.positions.map(p => `<option value="${p.symbol}" data-qty="${p.qty}">${p.symbol.replace('_USDT', '')} — ${fmt4(p.qty)}</option>`).join('');
+  if (prevSell) sellSelect.value = prevSell;
+  _onSellSymbolChange();
+}
+
+function _onSellSymbolChange() {
+  const sel = document.getElementById('sell-symbol');
+  const opt = sel.options[sel.selectedIndex];
+  if (opt && opt.dataset.qty) {
+    document.getElementById('sell-qty').value = opt.dataset.qty;
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -2631,6 +2974,10 @@ async function _saveLlmConfig() {
         <!-- filled by JS -->
       </div>
     </div>
+    <div class="flex items-center gap-2">
+      <input type="checkbox" id="real-auto" class="accent-blue-500 cursor-pointer" />
+      <label for="real-auto" class="text-xs text-slate-400 cursor-pointer">Auto — répéter via Cloud Scheduler</label>
+    </div>
     <div class="flex gap-3 pt-1">
       <button onclick="confirmRealStart()"
         class="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg text-sm font-medium transition-colors">
@@ -2652,6 +2999,13 @@ async function _saveLlmConfig() {
       Données de marché Binance en temps réel — aucun ordre réel exécuté.
     </p>
 
+    <!-- Session name -->
+    <div class="space-y-1">
+      <label class="text-xs font-medium text-slate-300">Nom de la simulation</label>
+      <input id="sim-name-input" type="text" placeholder="Ma simulation"
+        class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+    </div>
+
     <!-- USDC budget -->
     <div class="space-y-1">
       <label class="text-xs font-medium text-slate-300">Budget USDC de départ</label>
@@ -2671,13 +3025,19 @@ async function _saveLlmConfig() {
       </div>
     </div>
 
-    <!-- Max cycles -->
-    <div class="space-y-1">
+    <!-- Auto + Max cycles -->
+    <div class="flex items-center gap-2">
+      <input type="checkbox" id="sim-auto" class="accent-blue-500 cursor-pointer"
+        onchange="document.getElementById('sim-maxcycles-wrap').classList.toggle('hidden', this.checked)" />
+      <label for="sim-auto" class="text-xs text-slate-400 cursor-pointer flex-1">
+        Auto — répéter indéfiniment
+      </label>
+    </div>
+    <div class="space-y-1" id="sim-maxcycles-wrap">
       <label class="text-xs font-medium text-slate-300">Nombre max de cycles</label>
       <input id="sim-maxcycles-input" type="number" min="1" step="1" value="1"
         placeholder="vide = infini"
         class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-      <p class="text-xs text-slate-500">Laisser vide pour tourner en continu (Auto ON recommandé)</p>
     </div>
 
     <!-- Resume -->

@@ -123,13 +123,18 @@ RÈGLES :
 Réponds UNIQUEMENT en JSON valide (structure exacte ci-dessous) :
 {{
   "actions": [
-    {{"type": "buy",  "symbol": "BTCUSDC", "usdc_amount": 20, "score": 8, "reason": "..."}},
+    {{"type": "buy",  "symbol": "BTCUSDC", "usdc_amount": 20, "score": 8, "horizon": "short|medium|long", "reason": "..."}},
     {{"type": "sell", "symbol": "SOLUSDC", "qty": 0.5,        "score": 2, "reason": "..."}},
     {{"type": "hold", "symbol": "ETHUSDC",                    "score": 5, "reason": "..."}}
   ],
   "market_sentiment": "bullish|neutral|bearish",
   "summary": "Résumé de la situation en une phrase"
-}}"""
+}}
+
+Pour les actions "buy", le champ "horizon" est obligatoire :
+- "short"  : trade de quelques heures (scalping, signal RSI micro-tendance)
+- "medium" : trade de 1-3 jours (tendance daily + momentum)
+- "long"   : position de plusieurs jours/semaines (tendance forte, fondamentaux)"""
 
 
 SYSTEM_ANALYSIS = (
