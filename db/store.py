@@ -412,11 +412,29 @@ def rename_session(session_id: str, new_name: str) -> None:
             c.execute("UPDATE sessions SET name=? WHERE id=?", (new_name, session_id))
 
 
+def find_session_by_name(name: str) -> list[dict]:
+    """Return sessions whose name matches (case-insensitive, mode=simulation)."""
+    if _USE_FIRESTORE:
+        docs = _fs().collection("sessions").where("mode", "==", "simulation").stream()
+        return [{"id": d.id, **d.to_dict()} for d in docs
+                if d.to_dict().get("name", "").lower() == name.lower()]
+    else:
+        with _sqlite() as c:
+            rows = c.execute(
+                "SELECT id, name, mode, created_at FROM sessions"
+                " WHERE mode='simulation' AND LOWER(name)=LOWER(?)",
+                (name,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
 def delete_session(session_id: str) -> None:
-    """Delete a session and all its associated trades and analyses."""
+    """Delete a session and all its associated trades, logs and analyses."""
     if _USE_FIRESTORE:
         _fs().collection("sessions").document(session_id).delete()
         for doc in _fs().collection("trades").where("session_id", "==", session_id).stream():
+            doc.reference.delete()
+        for doc in _fs().collection("logs").where("session_id", "==", session_id).stream():
             doc.reference.delete()
         for doc in _fs().collection("market_analyses").where("session_id", "==", session_id).stream():
             doc.reference.delete()
@@ -424,6 +442,7 @@ def delete_session(session_id: str) -> None:
         with _sqlite() as c:
             c.execute("DELETE FROM sessions WHERE id=?", (session_id,))
             c.execute("DELETE FROM trades WHERE session_id=?", (session_id,))
+            c.execute("DELETE FROM logs WHERE session_id=?", (session_id,))
             c.execute("DELETE FROM market_analyses WHERE session_id=?", (session_id,))
 
 

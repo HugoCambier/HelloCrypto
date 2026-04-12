@@ -17,8 +17,11 @@ Examples:
     # Delete ALL simulation logs
     python -m db.clean --mode simulation --days 0
 
-    # Delete a specific simulation session (trades + logs + analyses)
+    # Delete a specific simulation session by ID (trades + logs + analyses)
     python -m db.clean --delete-session <session_id>
+
+    # Delete a simulation session by name
+    python -m db.clean --delete-session-name "Mon run 1"
 
     # Show DB stats without deleting anything
     python -m db.clean --stats
@@ -30,7 +33,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from db.store import _db_path, clean_logs, delete_session
+from db.store import _db_path, clean_logs, delete_session, find_session_by_name
 
 
 def _db_stats() -> None:
@@ -67,7 +70,8 @@ def main() -> None:
     parser.add_argument("--keep-last",      type=int, metavar="N", help="Garder seulement les N derniers logs")
     parser.add_argument("--mode",           choices=["real", "simulation"], help="Filtrer par mode")
     parser.add_argument("--session-id",     metavar="ID", help="Filtrer par session (logs) ou supprimer une session complète")
-    parser.add_argument("--delete-session", metavar="ID", help="Supprimer une session complète (trades + logs + analyses)")
+    parser.add_argument("--delete-session",      metavar="ID",   help="Supprimer une session complète par ID (trades + logs + analyses)")
+    parser.add_argument("--delete-session-name", metavar="NAME", help="Supprimer une session complète par nom (trades + logs + analyses)")
     args = parser.parse_args()
 
     if args.stats:
@@ -80,6 +84,27 @@ def main() -> None:
         if confirm in ("o", "oui", "y", "yes"):
             delete_session(sid)
             print(f"✓ Session {sid} supprimée.")
+        else:
+            print("Annulé.")
+        return
+
+    if args.delete_session_name:
+        name = args.delete_session_name
+        sessions = find_session_by_name(name)
+        if not sessions:
+            print(f"Aucune simulation trouvée avec le nom : {name!r}")
+            return
+        if len(sessions) > 1:
+            print(f"{len(sessions)} sessions trouvées avec ce nom :")
+            for s in sessions:
+                print(f"  - {s['id']}  ({s['created_at']})")
+            print("Utilise --delete-session <ID> pour en supprimer une précisément.")
+            return
+        s = sessions[0]
+        confirm = input(f"Supprimer la simulation {s['name']!r} (id={s['id']}) ? [o/N] ").strip().lower()
+        if confirm in ("o", "oui", "y", "yes"):
+            delete_session(s["id"])
+            print(f"✓ Simulation {s['name']!r} supprimée.")
         else:
             print("Annulé.")
         return

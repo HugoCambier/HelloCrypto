@@ -44,11 +44,52 @@ def build_analysis(
     max_pct      = 5 + risk_level * 4
     max_assets   = max(2, min(risk_level // 2 + 2, 5))
     if risk_level <= 3:
-        stance = "très conservateur : n'achète que sur signal fort et clair, préfère le cash"
+        profile_name = "PRUDENT"
+        profile_desc = (
+            "Tu opères en mode PRUDENT.\n"
+            "- Univers : concentre-toi sur les grandes capitalisations stables (BTC, ETH, BNB). "
+            "Ignore les altcoins à faible capitalisation ou à forte volatilité.\n"
+            "- Horizon : privilégie exclusivement les positions LONG (plusieurs jours/semaines). "
+            "N'ouvre pas de trade si tu ne peux pas imaginer le tenir au moins 3-5 jours.\n"
+            "- Entrée : n'achète QUE sur signal technique très solide (score ≥ 8/10, "
+            "tendance daily haussière confirmée, RSI entre 35 et 55).\n"
+            "- Taille : petites positions (max {max_pct}% du cash). Préfère rester en cash plutôt "
+            "que de forcer un trade incertain.\n"
+            "- Vente : ne vends que si stop-loss atteint ou si le signal se retourne clairement. "
+            "Évite les ventes sur simple nervosité à court terme."
+        )
     elif risk_level <= 6:
-        stance = "modéré : cherche un bon rapport risque/rendement, évite le sur-trading"
+        profile_name = "MODÉRÉ"
+        profile_desc = (
+            "Tu opères en mode MODÉRÉ.\n"
+            "- Univers : mix de grandes caps (BTC, ETH) et d'altcoins de mid-cap avec un historique "
+            "de liquidité correct. Évite les micro-caps.\n"
+            "- Horizon : priorité aux positions MEDIUM (1-3 jours), quelques SHORT acceptés si le "
+            "signal est clairement à court terme (RSI micro-tendance fort).\n"
+            "- Entrée : achat sur signal convaincant (score ≥ 7/10). Un bon rapport risque/rendement "
+            "est requis — ne force pas une entrée si le signal est ambigu.\n"
+            "- Taille : positions raisonnables (max {max_pct}% du cash). Diversifie sur 2-{max_assets} actifs.\n"
+            "- Sur-trading : évite d'enchaîner les trades. Chaque transaction coûte des frais et "
+            "les aller-retours rapides détruisent la performance."
+        )
     else:
-        stance = "agressif : maximise les opportunités, accepte plus de volatilité"
+        profile_name = "AGRESSIF"
+        profile_desc = (
+            "Tu opères en mode AGRESSIF.\n"
+            "- Univers : toutes les cryptos du portefeuille sont éligibles, y compris les altcoins "
+            "volatils à fort momentum. Privilégie les actifs avec un volume élevé et une volatilité "
+            "supérieure à 5% sur 24h (plus de mouvement = plus d'opportunité).\n"
+            "- Horizon : priorité aux positions SHORT (scalping intraday, quelques heures) et MEDIUM. "
+            "Réagis vite aux signaux RSI micro-tendance et aux retournements de tendance court terme.\n"
+            "- Entrée : achat dès que le score ≥ 6/10 avec un momentum clair. Accepte plus de risque "
+            "si le signal est fort. Tu peux entrer sur des situations légèrement surachetées si la "
+            "tendance court terme est très haussière.\n"
+            "- Taille : positions plus larges (jusqu'à {max_pct}% du cash). "
+            "Maximise l'exposition sur les meilleures opportunités.\n"
+            "- Vente : prends tes profits rapidement dès que la tendance court terme se retourne "
+            "ou que le RSI micro-tendance dépasse 75. N'attends pas un renversement complet."
+        )
+    profile_desc = profile_desc.format(max_pct=max_pct, max_assets=max_assets)
 
     # Recent decisions history
     if recent_decisions:
@@ -111,9 +152,10 @@ POSITIONS OUVERTES :
 CASH DISPONIBLE : ${cash:.2f} USDC
 BUDGET TOTAL : ${budget:.0f} USDC
 
-NIVEAU DE RISQUE : {risk_level}/10 — profil {stance}
+PROFIL DE TRADING ({profile_name} — {risk_level}/10) :
+{profile_desc}
 
-RÈGLES :
+RÈGLES COMMUNES :
 - N'investis jamais plus de {max_pct} % du cash disponible par trade (ajusté par RSI dynamiquement)
 - Diversifie sur {max_assets} actifs maximum
 - Ne fait pas de sur-trading : chaque transaction coûte des frais et les pertes s'accumulent

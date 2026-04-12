@@ -457,10 +457,10 @@
               <div>
                 <label class="text-xs text-slate-400 block mb-1">
                   Niveau de risque —
-                  <span id="sim-risk-label" class="font-semibold text-slate-200">3 / 10</span>
-                  <span id="sim-risk-stance" class="ml-1 text-slate-500">conservateur</span>
+                  <span id="sim-risk-label" class="font-semibold text-slate-200">5 / 10</span>
+                  <span id="sim-risk-stance" class="ml-1 text-slate-500">— modéré</span>
                 </label>
-                <input id="sim-risk" type="range" min="1" max="10" value="3"
+                <input id="sim-risk" type="range" min="1" max="10" value="5"
                   oninput="_updateRiskLabel()"
                   class="w-full accent-blue-500" />
                 <div class="flex justify-between text-xs text-slate-600 mt-0.5">
@@ -572,6 +572,17 @@
         <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Trades</div><div class="text-xl font-bold text-slate-600">—</div></div>
         <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Stop-loss</div><div class="text-xl font-bold text-slate-600">—</div></div>
         <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Win rate</div><div class="text-xl font-bold text-slate-600">—</div></div>
+      </div>
+
+      <!-- Saved simulations management -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+          <span class="text-sm font-medium text-slate-300">Simulations enregistrées</span>
+          <button onclick="_loadSimList()" class="text-xs text-slate-500 hover:text-slate-300 transition-colors">↻</button>
+        </div>
+        <div id="sim-list-body" class="divide-y divide-slate-700/50 text-xs">
+          <div class="px-4 py-6 text-center text-slate-600">Chargement…</div>
+        </div>
       </div>
 
       <!-- Positions (always visible) -->
@@ -950,6 +961,7 @@ function switchTab(tab) {
   currentTab = tab;
   if (tab === 'performance') _initPerformanceTab();
   if (tab === 'portfolio')   loadPortfolio();
+  if (tab === 'simulation')  _loadSimList();
   if (tab === 'backtest' && !document.querySelector('#bt-symbols-list input')) _loadBtWatchlist();
 }
 
@@ -1459,6 +1471,60 @@ async function _deleteSession() {
   _perfSessionId = '';
   await _loadPerfSessions();
   loadPerformance();
+}
+
+async function _loadSimList() {
+  const body = document.getElementById('sim-list-body');
+  if (!body) return;
+  const r = await fetch('/api/simulation/sessions');
+  const sessions = await r.json();
+  if (!Array.isArray(sessions) || sessions.length === 0) {
+    body.innerHTML = '<div class="px-4 py-6 text-center text-slate-600">Aucune simulation enregistrée</div>';
+    return;
+  }
+  body.innerHTML = sessions.map(s => {
+    const sid  = s.id || s.session_id;
+    const name = escHtml(s.name || s.session_name || sid);
+    const dateTs = s.created_at || s.start_ts;
+    const date = dateTs ? new Date(dateTs + (dateTs.includes('Z') ? '' : 'Z')).toLocaleString('fr-FR', {dateStyle:'short', timeStyle:'short'}) : '—';
+    const trades = s.trade_count != null ? s.trade_count : '?';
+    return `<div class="flex items-center justify-between px-4 py-2.5 hover:bg-slate-700/30">
+      <div class="flex items-center gap-3 min-w-0">
+        <span class="font-medium text-slate-200 truncate">${name}</span>
+        <span class="text-slate-500 shrink-0">${date}</span>
+        <span class="text-slate-600 shrink-0">${trades} trade(s)</span>
+      </div>
+      <div class="flex items-center gap-1 shrink-0 ml-2">
+        <button onclick="_simListRename('${sid}','${name}')"
+          class="px-2 py-1 text-slate-500 hover:text-blue-400 transition-colors" title="Renommer">✏️</button>
+        <button onclick="_simListDelete('${sid}','${name}')"
+          class="px-2 py-1 text-slate-500 hover:text-red-400 transition-colors" title="Supprimer">🗑️</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function _simListRename(sid, currentName) {
+  const newName = prompt('Nouveau nom :', currentName);
+  if (!newName || newName.trim() === currentName) return;
+  await fetch(`/api/simulation/sessions/${sid}`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name: newName.trim()}),
+  });
+  _loadSimList();
+  _loadPerfSessions();
+}
+
+async function _simListDelete(sid, name) {
+  if (!confirm(`Supprimer la simulation "${name}" ?\n\nTous les trades, logs et analyses associés seront supprimés.`)) return;
+  await fetch(`/api/simulation/sessions/${sid}`, { method: 'DELETE' });
+  _loadSimList();
+  if (_perfSessionId === sid) {
+    _perfSessionId = '';
+    loadPerformance();
+  }
+  _loadPerfSessions();
 }
 
 function setPeriod(btn, period) {
