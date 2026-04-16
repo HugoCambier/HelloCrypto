@@ -37,6 +37,11 @@ app.jinja_loader = ChoiceLoader([
 
 # ── Session secret ────────────────────────────────────────────────────────────
 app.secret_key = os.getenv("SESSION_SECRET_KEY", "dev-secret-change-me-in-prod")
+app.config.update(
+    SESSION_COOKIE_SAMESITE="None",
+    SESSION_COOKIE_SECURE=True,   # requis avec SameSite=None (HTTPS uniquement)
+    SESSION_COOKIE_HTTPONLY=True,
+)
 
 # ── OAuth2 credentials ────────────────────────────────────────────────────────
 _CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
