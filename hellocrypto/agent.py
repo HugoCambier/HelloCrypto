@@ -32,6 +32,7 @@ from .api import (
 )
 from .llm import call as llm_call
 from .prompts import SYSTEM, build_analysis
+from .trading import check_stops as _trading_check_stops, compute_position_size
 load_dotenv()
 
 Path("logs").mkdir(exist_ok=True)
@@ -101,24 +102,14 @@ def _max_price_change(current: dict, reference: dict) -> float:
     return max(changes) if changes else 0.0
 
 
-def _check_stops(positions: dict, prices: dict, peak_prices: dict) -> list[tuple]:
-    """Return list of (sym, qty, price, reason) for positions that triggered a stop."""
-    triggered = []
-    for sym, pos in positions.items():
-        cur   = prices.get(sym) or get_ticker(sym)
-        entry = pos["avg_price"]
-        peak  = peak_prices.get(sym, entry)
-
-        hard_loss  = (cur - entry) / entry
-        trail_loss = (cur - peak)  / peak
-
-        if hard_loss < -STOP_LOSS:
-            log.warning(f"STOP-LOSS {sym}: {hard_loss*100:.1f}%")
-            triggered.append((sym, pos["qty"], cur, "stop-loss", hard_loss))
-        elif trail_loss < -TRAIL_STOP and peak > entry and cur >= entry:
-            log.warning(f"TRAILING STOP {sym}: chute {trail_loss*100:.1f}% depuis pic ${peak:,.4f}")
-            triggered.append((sym, pos["qty"], cur, "trailing-stop", trail_loss))
-    return triggered
+def _check_stops(positions: dict, prices: dict, peak_prices: dict):
+    """Return stop signals for positions that triggered hard or trailing stop."""
+    # Resolve missing prices via live ticker before delegating to trading module
+    enriched_prices = {
+        sym: prices.get(sym) or get_ticker(sym)
+        for sym in positions
+    }
+    return _trading_check_stops(positions, enriched_prices, peak_prices, STOP_LOSS, TRAIL_STOP)
 
 
 def _performance_report(prices: dict, positions: dict, cash: float) -> str:
@@ -256,17 +247,15 @@ def run_one_cycle() -> None:
                         log.info(f"COOLDOWN {sym} — {SELL_COOLDOWN_CYC - (cycle - last_sell)} cycles restants")
                         continue
 
-                    max_pct    = (5 + RISK_LEVEL * 4) / 100
-                    rsi        = market_data_raw.get(sym, {}).get("rsi14")
-                    rsi_factor = max(0.5, min(1.5, 1.5 - (rsi - 20) / 60)) if rsi is not None else 1.0
-                    amount     = min(action.get("usdc_amount", 0), cash * max_pct * rsi_factor)
+                    rsi    = market_data_raw.get(sym, {}).get("rsi14")
+                    amount = compute_position_size(action.get("usdc_amount", 0), cash, RISK_LEVEL, rsi)
                     if amount >= 10:
                         _, fee, fee_asset = market_buy(sym, amount)
                         price = prices.get(sym) or get_ticker(sym)
                         save_trade("BUY", sym, amount, price, reason, fee, fee_asset)
                         peak_prices[sym] = price
                         cash -= amount
-                        log.info(f"BUY  ${amount:.2f} {sym} @ ${price:.4f} (RSI={rsi or 0:.0f} ×{rsi_factor:.2f}) [{horizon or '?'}]")
+                        log.info(f"BUY  ${amount:.2f} {sym} @ ${price:.4f} (RSI={rsi or 0:.0f}) [{horizon or '?'}]")
 
                 elif atype == "sell" and sym in positions:
                     qty   = action.get("qty", positions[sym]["qty"])
@@ -413,17 +402,15 @@ def run_agent() -> None:
                             log.info(f"COOLDOWN {sym} — {SELL_COOLDOWN_CYC - (cycle - last_sell)} cycles restants")
                             continue
 
-                        max_pct = (5 + RISK_LEVEL * 4) / 100
-                        rsi     = market_data_raw.get(sym, {}).get("rsi14")
-                        rsi_factor = max(0.5, min(1.5, 1.5 - (rsi - 20) / 60)) if rsi is not None else 1.0
-                        amount  = min(action.get("usdc_amount", 0), cash * max_pct * rsi_factor)
+                        rsi    = market_data_raw.get(sym, {}).get("rsi14")
+                        amount = compute_position_size(action.get("usdc_amount", 0), cash, RISK_LEVEL, rsi)
                         if amount >= 10:
                             _, fee, fee_asset = market_buy(sym, amount)
                             price = prices.get(sym) or get_ticker(sym)
                             save_trade("BUY", sym, amount, price, reason, fee, fee_asset)
                             peak_prices[sym] = price
                             cash -= amount
-                            log.info(f"BUY  ${amount:.2f} {sym} @ ${price:.4f} (RSI={rsi or 0:.0f} ×{rsi_factor:.2f}) [{horizon or '?'}]")
+                            log.info(f"BUY  ${amount:.2f} {sym} @ ${price:.4f} (RSI={rsi or 0:.0f}) [{horizon or '?'}]")
 
                     elif atype == "sell" and sym in positions:
                         qty   = action.get("qty", positions[sym]["qty"])

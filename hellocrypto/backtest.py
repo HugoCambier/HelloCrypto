@@ -525,6 +525,38 @@ def run_live(
             else:
                 time.sleep(sleep_sec)
 
+    # ── Final liquidation: sell all remaining positions at last price ─────────
+    if holdings and prices:
+        final_ts = int(all_klines[symbols[0]][min_len - 1][0])
+        dt_str   = datetime.fromtimestamp(final_ts / 1000, tz=timezone.utc).replace(tzinfo=None).isoformat()
+        for sym in list(holdings):
+            if sym not in prices:
+                continue
+            qty   = holdings[sym]["qty"]
+            entry = holdings[sym]["avg_price"]
+            cur   = prices[sym]
+            received, fee = _paper_sell(sym, qty, cur, holdings)
+            cash       += received
+            total_fees += fee
+            history.append({
+                "cycle":     total_steps,
+                "timestamp": dt_str,
+                "action":    "SELL (liquidation)",
+                "symbol":    sym,
+                "qty":       round(qty, 6),
+                "amount":    round(received, 2),
+                "price":     round(cur, 4),
+                "pnl":       round((cur - entry) * qty - fee, 4),
+                "fee":       round(fee, 6),
+                "reason":    "Liquidation finale du backtest",
+            })
+        last_snap = _make_snapshot(
+            total_steps, total_steps, final_ts,
+            cash, budget, holdings, prices, history, total_fees, initial_prices,
+        )
+        if on_step:
+            on_step(last_snap)
+
     return last_snap or {"error": "Aucune étape traitée"}
 
 

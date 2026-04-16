@@ -140,6 +140,78 @@ def _compute_sma(closes: list[float], period: int) -> float | None:
     return sum(closes[-period:]) / period
 
 
+def _compute_ema(closes: list[float], period: int) -> float | None:
+    """Exponential Moving Average."""
+    if len(closes) < period:
+        return None
+    k = 2 / (period + 1)
+    ema = sum(closes[:period]) / period
+    for c in closes[period:]:
+        ema = c * k + ema * (1 - k)
+    return ema
+
+
+def _compute_macd(closes: list[float]) -> dict | None:
+    """MACD (12,26,9). Returns {macd, signal, histogram}."""
+    if len(closes) < 35:
+        return None
+    ema12 = _compute_ema(closes, 12)
+    ema26 = _compute_ema(closes, 26)
+    if ema12 is None or ema26 is None:
+        return None
+    # Full series for signal line
+    k12 = 2 / 13
+    k26 = 2 / 27
+    e12 = sum(closes[:12]) / 12
+    e26 = sum(closes[:26]) / 26
+    macd_series = []
+    for i, c in enumerate(closes):
+        if i < 12:
+            continue
+        e12 = c * k12 + e12 * (1 - k12)
+        if i < 26:
+            continue
+        e26 = c * k26 + e26 * (1 - k26)
+        macd_series.append(e12 - e26)
+    if len(macd_series) < 9:
+        return None
+    k9 = 2 / 10
+    signal = sum(macd_series[:9]) / 9
+    for m in macd_series[9:]:
+        signal = m * k9 + signal * (1 - k9)
+    macd_val = macd_series[-1]
+    return {"macd": round(macd_val, 6), "signal": round(signal, 6),
+            "histogram": round(macd_val - signal, 6)}
+
+
+def _compute_bollinger(closes: list[float], period: int = 20, num_std: float = 2.0) -> dict | None:
+    """Bollinger Bands. Returns {upper, middle, lower, width_pct}."""
+    if len(closes) < period:
+        return None
+    window = closes[-period:]
+    mid = sum(window) / period
+    variance = sum((x - mid) ** 2 for x in window) / period
+    std = variance ** 0.5
+    upper = mid + num_std * std
+    lower = mid - num_std * std
+    width_pct = (upper - lower) / mid * 100 if mid else 0
+    return {"upper": round(upper, 4), "middle": round(mid, 4),
+            "lower": round(lower, 4), "width_pct": round(width_pct, 2)}
+
+
+def _compute_atr(highs: list[float], lows: list[float], closes: list[float], period: int = 14) -> float | None:
+    """Average True Range."""
+    if len(closes) < period + 1 or len(highs) < period + 1:
+        return None
+    trs = []
+    for i in range(1, len(closes)):
+        h, l, pc = highs[i], lows[i], closes[i - 1]
+        trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+    if len(trs) < period:
+        return None
+    return sum(trs[-period:]) / period
+
+
 def compute_score(d: dict) -> int:
     """Compute a 0-10 buy-signal score for a single symbol's enriched data dict."""
     score = 5  # neutral base
@@ -206,6 +278,15 @@ def format_market_data(data: dict[str, dict], watchlist: list[str]) -> str:
             parts.append(f"TendanceJ: {d['trend_1d']}")
         if d.get("spread_pct") is not None:
             parts.append(f"Spread: {d['spread_pct']:.3f}%")
+        # New indicators
+        macd = d.get("macd")
+        if macd:
+            parts.append(f"MACD: {macd['macd']:+.6f} Signal: {macd['signal']:+.6f} Hist: {macd['histogram']:+.6f}")
+        boll = d.get("bollinger")
+        if boll:
+            parts.append(f"Bollinger: [{boll['lower']:.2f} - {boll['upper']:.2f}] (largeur: {boll['width_pct']:.1f}%)")
+        if d.get("atr") is not None:
+            parts.append(f"ATR(14): {d['atr']:.4f}")
         lines.append(" | ".join(parts))
     return "\n".join(lines)
 
@@ -314,6 +395,21 @@ def get_enriched_market_data(watchlist: list[str], cycle_seconds: int = 60) -> d
             except Exception:
                 pass
 
+            # MACD, Bollinger, ATR — need more candles
+            macd_data = None
+            bollinger = None
+            atr_val   = None
+            try:
+                klines_ext = get_klines(sym, interval="1h", limit=50)
+                closes_ext = [float(k[4]) for k in klines_ext]
+                highs_ext  = [float(k[2]) for k in klines_ext]
+                lows_ext   = [float(k[3]) for k in klines_ext]
+                macd_data  = _compute_macd(closes_ext)
+                bollinger  = _compute_bollinger(closes_ext)
+                atr_val    = _compute_atr(highs_ext, lows_ext, closes_ext)
+            except Exception:
+                pass
+
             result[sym] = {
                 **stats,
                 "rsi14":          rsi14,
@@ -327,6 +423,9 @@ def get_enriched_market_data(watchlist: list[str], cycle_seconds: int = 60) -> d
                 "interval_short": interval_short,
                 "trend_1d":       trend_1d,
                 "spread_pct":     spread_pct,
+                "macd":           macd_data,
+                "bollinger":      bollinger,
+                "atr":            round(atr_val, 4) if atr_val else None,
             }
         except Exception as exc:
             import logging

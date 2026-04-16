@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
-"""HelloCrypto — Cloud Run Job entry point.
+"""HelloCrypto — Cloud Run Job / local runner entry point.
 
-Usage:
-    python runner/main.py --mode real         # live Binance trading
-    python runner/main.py --mode simulation   # paper trading
+Deux modes d'exécution :
 
-Cloud Scheduler triggers this job at each configured interval.
-SIGTERM is handled for graceful shutdown (Cloud Run sends it on job cancellation).
+  MODE CLOUD RUN JOB (défaut, RUNNER_LOOP non défini) :
+    - Un seul cycle puis exit.
+    - Cloud Scheduler déclenche le job à chaque intervalle configuré.
+    - Usage : python runner/main.py --mode real
+
+  MODE BOUCLE CONTINUE (VM locale ou prod avec RUNNER_LOOP=true) :
+    - Boucle infinie avec sleep entre cycles.
+    - RUNNER_LOOP=true  OU  --loop  pour l'activer.
+    - Usage : RUNNER_LOOP=true python runner/main.py --mode simulation
+    - Note : en mode simulation, --loop est TOUJOURS activé car la simulation
+      gère elle-même sa boucle interne (stop_event).
+
+SIGTERM/SIGINT → arrêt propre en fin de cycle courant.
 """
 import argparse
 import logging
@@ -77,13 +86,17 @@ def main() -> None:
     )
 
     if args.mode == "simulation":
+        # La simulation gère sa propre boucle interne via stop_event.
+        # On passe toujours max_cycles=None pour qu'elle tourne indéfiniment
+        # jusqu'à réception de SIGTERM/SIGINT (qui déclenche _stop).
         from hellocrypto import simulation as sim
+        log.info("Mode simulation — boucle continue jusqu'à SIGTERM")
         sim.run(
             budget=float(cfg.get("budget", 100)),
             config=cfg,
             stop_event=_stop,
             resume=True,
-            max_cycles=None if args.loop else 1,
+            max_cycles=None,
         )
     elif args.loop:
         # VM / local mode : boucle infinie avec sleep entre cycles

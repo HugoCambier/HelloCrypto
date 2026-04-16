@@ -17,39 +17,10 @@ from .api import (
 )
 from .llm import call as llm_call
 from .prompts import SYSTEM, build_analysis
+from .trading import FEE_RATE as SIM_FEE_RATE, check_stops, compute_position_size, paper_buy, paper_sell
 log = logging.getLogger(__name__)
 
-SIM_FEE_RATE   = 0.001  # 0.1 %
 SIM_STATE_FILE = Path("data/simulation_state.json")
-
-
-# ── Paper order helpers ────────────────────────────────────────────────────────
-
-def _paper_buy(symbol: str, usdc_amount: float, price: float, holdings: dict) -> float:
-    fee     = usdc_amount * SIM_FEE_RATE
-    qty_net = (usdc_amount - fee) / price
-    if symbol in holdings:
-        prev    = holdings[symbol]
-        new_qty = prev["qty"] + qty_net
-        holdings[symbol] = {
-            "qty":       new_qty,
-            "avg_price": (prev["avg_price"] * prev["qty"] + price * qty_net) / new_qty,
-        }
-    else:
-        holdings[symbol] = {"qty": qty_net, "avg_price": price}
-    return fee
-
-
-def _paper_sell(symbol: str, qty: float, price: float, holdings: dict) -> tuple[float, float]:
-    qty   = min(qty, holdings.get(symbol, {}).get("qty", 0))
-    if qty <= 0:
-        return 0.0, 0.0
-    gross = qty * price
-    fee   = gross * SIM_FEE_RATE
-    holdings[symbol]["qty"] -= qty
-    if holdings[symbol]["qty"] <= 0.0001:
-        del holdings[symbol]
-    return gross - fee, fee
 
 
 # ── Persistence helpers ────────────────────────────────────────────────────────
@@ -293,65 +264,42 @@ def run(
                 peak_prices[sym] = max(peak_prices.get(sym, prices[sym]), prices[sym])
 
         # ── Stop-loss (hard + trailing) ────────────────────────────────────────
-        for sym in list(holdings):
-            if sym not in prices:
-                continue
-            entry      = holdings[sym]["avg_price"]
-            cur        = prices[sym]
-            peak       = peak_prices.get(sym, entry)
-            hard_loss  = (cur - entry) / entry
-            trail_loss = (cur - peak)  / peak
-
-            triggered = False
-            action_label = ""
-            reason_str   = ""
-
-            if hard_loss < -stop_loss:
-                triggered    = True
-                action_label = "SELL (stop-loss)"
-                reason_str   = f"Stop-loss fixe {stop_loss*100:.0f}% déclenché"
-            elif trail_loss < -trail_stop and peak > entry and cur >= entry:
-                triggered    = True
-                action_label = "SELL (trailing-stop)"
-                reason_str   = f"Trailing stop {trail_stop*100:.0f}% depuis pic ${peak:,.4f}"
-
-            if triggered:
-                qty           = holdings[sym]["qty"]
-                received, fee = _paper_sell(sym, qty, cur, holdings)
-                cash         += received
-                total_fees   += fee
-                peak_prices.pop(sym, None)
-                cooldown_map[sym] = cycle
-                history.append({
-                    "cycle":     cycle,
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "action":    action_label,
-                    "symbol":    sym,
-                    "qty":       qty,
-                    "price":     cur,
-                    "pnl":       round((cur - entry) * qty - fee, 4),
-                    "fee":       round(fee, 6),
-                    "reason":    reason_str,
-                })
-                try:
-                    from db.store import save_trade as _db_save
-                    _db_save(
-                        action=action_label,
-                        symbol=sym,
-                        amount=None,
-                        price=cur,
-                        reason=reason_str,
-                        fee=fee,
-                        qty=qty,
-                        pnl=round((cur - entry) * qty - fee, 4),
-                        mode="simulation",
-                        session_id=session_id,
-                        session_name=session_name,
-                    )
-                except Exception:
-                    pass
-                log.info("[SIM] %s %s: hard=%.1f%% trail=%.1f%%",
-                         action_label, sym, hard_loss * 100, trail_loss * 100)
+        for sig in check_stops(holdings, prices, peak_prices, stop_loss, trail_stop):
+            sym          = sig.symbol
+            entry        = holdings[sym]["avg_price"] if sym in holdings else sig.price
+            action_label = f"SELL ({sig.kind})"
+            reason_str   = (
+                f"Stop-loss fixe {stop_loss*100:.0f}% déclenché"
+                if sig.kind == "stop-loss"
+                else f"Trailing stop {trail_stop*100:.0f}% depuis pic ${peak_prices.get(sym, sig.price):,.4f}"
+            )
+            result = paper_sell(sym, sig.qty, sig.price, holdings)
+            cash         += result.received
+            total_fees   += result.fee
+            peak_prices.pop(sym, None)
+            cooldown_map[sym] = cycle
+            history.append({
+                "cycle":     cycle,
+                "timestamp": datetime.utcnow().isoformat(),
+                "action":    action_label,
+                "symbol":    sym,
+                "qty":       result.qty,
+                "price":     sig.price,
+                "pnl":       round((sig.price - entry) * result.qty - result.fee, 4),
+                "fee":       round(result.fee, 6),
+                "reason":    reason_str,
+            })
+            try:
+                from db.store import save_trade as _db_save
+                _db_save(
+                    action=action_label, symbol=sym, amount=None, price=sig.price,
+                    reason=reason_str, fee=result.fee, qty=result.qty,
+                    pnl=round((sig.price - entry) * result.qty - result.fee, 4),
+                    mode="simulation", session_id=session_id, session_name=session_name,
+                )
+            except Exception:
+                pass
+            log.info("[SIM] %s %s: %.1f%%", action_label, sym, sig.loss_pct * 100)
 
         # ── Fetch global market context ────────────────────────────────────────
         fear_greed    = get_fear_and_greed()
@@ -419,7 +367,6 @@ def run(
             pass
 
         # ── Execute paper trades ───────────────────────────────────────────────
-        max_pct = (5 + risk_level * 4) / 100
         for action in decision.get("actions", []):
             atype  = action.get("type", "")
             sym    = action.get("symbol", "")
@@ -435,17 +382,14 @@ def run(
                              sell_cooldown_cycles - (cycle - last_sell))
                     continue
 
-                # Dynamic sizing based on RSI
-                rsi = market_raw.get(sym, {}).get("rsi14")
-                rsi_factor = max(0.5, min(1.5, 1.5 - (rsi - 20) / 60)) if rsi is not None else 1.0
-
+                rsi         = market_raw.get(sym, {}).get("rsi14")
                 horizon     = action.get("horizon", "").upper()
                 full_reason = f"[{horizon}] {reason}" if horizon in ("SHORT", "MEDIUM", "LONG") else reason
+                amount      = compute_position_size(action.get("usdc_amount", 0), cash, risk_level, rsi)
 
-                amount = min(action.get("usdc_amount", 0), cash * max_pct * rsi_factor)
                 if amount >= 10:
-                    fee         = _paper_buy(sym, amount, prices[sym], holdings)
-                    total_fees += fee
+                    result = paper_buy(sym, amount, prices[sym], holdings)
+                    total_fees += result.fee
                     cash       -= amount
                     peak_prices[sym] = prices[sym]
                     history.append({
@@ -455,35 +399,28 @@ def run(
                         "symbol":    sym,
                         "amount":    amount,
                         "price":     prices[sym],
-                        "fee":       round(fee, 6),
+                        "fee":       round(result.fee, 6),
                         "reason":    full_reason,
                     })
                     try:
                         from db.store import save_trade as _db_save
                         _db_save(
-                            action="BUY",
-                            symbol=sym,
-                            amount=amount,
-                            price=prices[sym],
-                            reason=full_reason,
-                            fee=fee,
-                            qty=None,
-                            pnl=None,
-                            mode="simulation",
-                            session_id=session_id,
-                            session_name=session_name,
+                            action="BUY", symbol=sym, amount=amount, price=prices[sym],
+                            reason=full_reason, fee=result.fee, qty=None, pnl=None,
+                            mode="simulation", session_id=session_id, session_name=session_name,
                         )
                     except Exception:
                         pass
-                    log.info("[SIM] BUY  $%.2f %s @ $%.4f (RSI=%.0f factor=%.2f) [%s]",
+                    rsi_factor = max(0.5, min(1.5, 1.5 - (rsi - 20) / 60)) if rsi is not None else 1.0
+                    log.info("[SIM] BUY  $%.2f %s @ $%.4f (RSI=%.0f ×%.2f) [%s]",
                              amount, sym, prices[sym], rsi or 0, rsi_factor, horizon or "?")
 
             elif atype == "sell" and sym in holdings and sym in prices:
-                qty           = min(action.get("qty", holdings[sym]["qty"]), holdings[sym]["qty"])
-                entry         = holdings[sym]["avg_price"]
-                received, fee = _paper_sell(sym, qty, prices[sym], holdings)
-                total_fees   += fee
-                cash         += received
+                qty    = min(action.get("qty", holdings[sym]["qty"]), holdings[sym]["qty"])
+                entry  = holdings[sym]["avg_price"]
+                result = paper_sell(sym, qty, prices[sym], holdings)
+                total_fees += result.fee
+                cash       += result.received
                 peak_prices.pop(sym, None)
                 cooldown_map[sym] = cycle
                 history.append({
@@ -491,26 +428,19 @@ def run(
                     "timestamp": datetime.utcnow().isoformat(),
                     "action":    "SELL",
                     "symbol":    sym,
-                    "qty":       qty,
+                    "qty":       result.qty,
                     "price":     prices[sym],
-                    "pnl":       round((prices[sym] - entry) * qty - fee, 4),
-                    "fee":       round(fee, 6),
+                    "pnl":       round((prices[sym] - entry) * result.qty - result.fee, 4),
+                    "fee":       round(result.fee, 6),
                     "reason":    reason,
                 })
                 try:
                     from db.store import save_trade as _db_save
                     _db_save(
-                        action="SELL",
-                        symbol=sym,
-                        amount=None,
-                        price=prices[sym],
-                        reason=reason,
-                        fee=fee,
-                        qty=qty,
-                        pnl=round((prices[sym] - entry) * qty - fee, 4),
-                        mode="simulation",
-                        session_id=session_id,
-                        session_name=session_name,
+                        action="SELL", symbol=sym, amount=None, price=prices[sym],
+                        reason=reason, fee=result.fee, qty=result.qty,
+                        pnl=round((prices[sym] - entry) * result.qty - result.fee, 4),
+                        mode="simulation", session_id=session_id, session_name=session_name,
                     )
                 except Exception:
                     pass
