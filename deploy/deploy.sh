@@ -111,6 +111,10 @@ _ENV_CONFIG="$_ENV_CONFIG,SCHEDULER_REGION=$SCHEDULER_REGION"
 _ENV_CONFIG="$_ENV_CONFIG,RUNNER_JOB=$RUNNER_JOB"
 _ENV_CONFIG="$_ENV_CONFIG,SCHEDULER_JOB=$SCHEDULER_JOB"
 
+# Clear any existing Secret Manager bindings first (one-time migration; no-op if service is new)
+gcloud run services update "$DASHBOARD_SVC" \
+    --region="$REGION" --clear-secrets --project="$PROJECT" --quiet 2>/dev/null || true
+
 gcloud run deploy "$DASHBOARD_SVC" \
     --image="$DASHBOARD_IMAGE" \
     --region="$REGION" \
@@ -121,7 +125,6 @@ gcloud run deploy "$DASHBOARD_SVC" \
     --min-instances=0 \
     --max-instances=2 \
     --service-account="$SA@$PROJECT.iam.gserviceaccount.com" \
-    --clear-secrets \
     --set-env-vars="$_ENV_CONFIG,$_ENV_SECRETS" \
     --project="$PROJECT" --quiet
 
@@ -135,19 +138,21 @@ _JOB_SECRETS="BINANCE_API_KEY=${BINANCE_API_KEY:-}"
 _JOB_SECRETS="$_JOB_SECRETS,BINANCE_API_SECRET=${BINANCE_API_SECRET:-}"
 _JOB_SECRETS="$_JOB_SECRETS,GEMINI_API_KEY=${GEMINI_API_KEY:-}"
 
+# Clear any existing Secret Manager bindings first (one-time migration; no-op if job is new)
+gcloud run jobs update "$RUNNER_JOB" \
+    --region="$REGION" --clear-secrets --project="$PROJECT" --quiet 2>/dev/null || true
+
 gcloud run jobs create "$RUNNER_JOB" \
     --image="$RUNNER_IMAGE" \
     --region="$REGION" \
     --task-timeout=3600 \
     --memory=512Mi \
     --service-account="$SA@$PROJECT.iam.gserviceaccount.com" \
-    --clear-secrets \
     --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT,$_JOB_SECRETS" \
     --project="$PROJECT" --quiet 2>/dev/null \
 || gcloud run jobs update "$RUNNER_JOB" \
     --image="$RUNNER_IMAGE" \
     --region="$REGION" \
-    --clear-secrets \
     --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT,$_JOB_SECRETS" \
     --project="$PROJECT" --quiet
 ok "Runner Job : $RUNNER_JOB"
