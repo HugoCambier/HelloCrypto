@@ -39,11 +39,11 @@ echo "Projet : $PROJECT  |  Région : $REGION"
 # ── 1. Load .env ──────────────────────────────────────────────────────────────
 [ -f .env ] && { set -a; source .env; set +a; }
 
-# Generate SESSION_SECRET_KEY if not set in .env
+# Generate SESSION_SECRET_KEY if not set in .env, and persist it
 if [ -z "${SESSION_SECRET_KEY:-}" ]; then
     SESSION_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-    warn "SESSION_SECRET_KEY non défini dans .env — clé générée pour ce déploiement"
-    warn "Ajoute SESSION_SECRET_KEY=$(echo $SESSION_SECRET_KEY | head -c 8)... dans ton .env pour le conserver"
+    echo "SESSION_SECRET_KEY=$SESSION_SECRET_KEY" >> .env
+    ok "SESSION_SECRET_KEY généré et ajouté dans .env"
 fi
 
 # ── 2. APIs ───────────────────────────────────────────────────────────────────
@@ -121,6 +121,7 @@ gcloud run deploy "$DASHBOARD_SVC" \
     --min-instances=0 \
     --max-instances=2 \
     --service-account="$SA@$PROJECT.iam.gserviceaccount.com" \
+    --clear-secrets \
     --set-env-vars="$_ENV_CONFIG,$_ENV_SECRETS" \
     --project="$PROJECT" --quiet
 
@@ -140,11 +141,13 @@ gcloud run jobs create "$RUNNER_JOB" \
     --task-timeout=3600 \
     --memory=512Mi \
     --service-account="$SA@$PROJECT.iam.gserviceaccount.com" \
+    --clear-secrets \
     --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT,$_JOB_SECRETS" \
     --project="$PROJECT" --quiet 2>/dev/null \
 || gcloud run jobs update "$RUNNER_JOB" \
     --image="$RUNNER_IMAGE" \
     --region="$REGION" \
+    --clear-secrets \
     --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT,$_JOB_SECRETS" \
     --project="$PROJECT" --quiet
 ok "Runner Job : $RUNNER_JOB"
