@@ -208,6 +208,8 @@ def run_one_cycle() -> None:
                 prompt=build_analysis(
                     market_data, positions, cash, BUDGET, RISK_LEVEL,
                     recent_decisions, fear_greed, btc_dominance, scores,
+                    prices=prices, peak_prices=peak_prices,
+                    cooldown_map=cooldown_map, cycle=cycle,
                 ),
                 system=SYSTEM, config=_cfg,
             )
@@ -362,6 +364,8 @@ def run_agent() -> None:
                     prompt=build_analysis(
                         market_data, positions, cash, BUDGET, RISK_LEVEL,
                         recent_decisions, fear_greed, btc_dominance, scores,
+                        prices=prices, peak_prices=peak_prices,
+                        cooldown_map=cooldown_map, cycle=cycle,
                     ),
                     system=SYSTEM, config=_cfg,
                 )

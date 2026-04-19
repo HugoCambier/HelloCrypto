@@ -29,11 +29,11 @@ from .api import (
 )
 from .llm import call as llm_call
 from .prompts import SYSTEM, build_analysis
+from .trading import FEE_RATE, paper_buy, paper_sell
 
 log = logging.getLogger(__name__)
 
 BASE_URL    = "https://api.binance.com"
-FEE_RATE    = 0.001
 RESULT_FILE = Path("data/backtest_result.json")
 
 
@@ -135,35 +135,6 @@ def _enrich_from_klines(symbols: list[str], all_klines: dict, i: int) -> dict:
             "spread_pct":     None,
         }
     return result
-
-
-# ── Paper trade helpers ───────────────────────────────────────────────────────
-
-def _paper_buy(sym, amount, price, holdings):
-    fee     = amount * FEE_RATE
-    qty_net = (amount - fee) / price
-    if sym in holdings:
-        prev = holdings[sym]
-        new_qty = prev["qty"] + qty_net
-        holdings[sym] = {
-            "qty":       new_qty,
-            "avg_price": (prev["avg_price"] * prev["qty"] + price * qty_net) / new_qty,
-        }
-    else:
-        holdings[sym] = {"qty": qty_net, "avg_price": price}
-    return fee
-
-
-def _paper_sell(sym, qty, price, holdings):
-    qty   = min(qty, holdings.get(sym, {}).get("qty", 0))
-    if qty <= 0:
-        return 0.0, 0.0
-    gross = qty * price
-    fee   = gross * FEE_RATE
-    holdings[sym]["qty"] -= qty
-    if holdings[sym]["qty"] <= 0.0001:
-        del holdings[sym]
-    return gross - fee, fee
 
 
 # ── Shared snapshot builder ───────────────────────────────────────────────────
@@ -344,7 +315,8 @@ def run_live(
             if triggered:
                 qty   = holdings[sym]["qty"]
                 entry = holdings[sym]["avg_price"]
-                received, fee = _paper_sell(sym, qty, sell_price, holdings)
+                sr            = paper_sell(sym, qty, sell_price, holdings)
+                received, fee = sr.received, sr.fee
                 cash        += received
                 total_fees  += fee
                 peak_prices.pop(sym, None)
@@ -378,6 +350,9 @@ def run_live(
                         prompt=build_analysis(
                             market_data, holdings, cash, budget, risk_level,
                             recent_decisions, fear_greed, btc_dominance, scores,
+                            prices=prices, peak_prices=peak_prices,
+                            cooldown_map=cooldown_map, total_fees=total_fees,
+                            cycle=current_step,
                         ),
                         system=SYSTEM,
                         config=cfg,
@@ -410,8 +385,9 @@ def run_live(
                             rsi_factor = max(0.5, min(1.5, 1.5 - (rsi - 20) / 60)) if rsi else 1.0
                             amount = min(action.get("usdc_amount", 0), cash * max_pct * rsi_factor)
                             if amount >= 10:
-                                fee     = _paper_buy(sym, amount, prices[sym], holdings)
-                                qty_got = (amount - fee) / prices[sym]
+                                br      = paper_buy(sym, amount, prices[sym], holdings)
+                                fee     = br.fee
+                                qty_got = br.qty
                                 total_fees += fee
                                 cash       -= amount
                                 peak_prices[sym] = prices[sym]
@@ -430,7 +406,8 @@ def run_live(
                         elif atype == "sell" and sym in holdings:
                             qty      = min(action.get("qty", holdings[sym]["qty"]), holdings[sym]["qty"])
                             entry    = holdings[sym]["avg_price"]
-                            received, fee = _paper_sell(sym, qty, prices[sym], holdings)
+                            sr = paper_sell(sym, qty, prices[sym], holdings)
+                            received, fee = sr.received, sr.fee
                             total_fees += fee
                             cash       += received
                             peak_prices.pop(sym, None)
@@ -464,8 +441,9 @@ def run_live(
                     if i - cooldown_map.get(sym, 0) < sell_cooldown_cycles:
                         continue
                     amount  = min(cash * max_pct, cash)
-                    fee     = _paper_buy(sym, amount, cur, holdings)
-                    qty_got = (amount - fee) / cur
+                    br      = paper_buy(sym, amount, cur, holdings)
+                    fee     = br.fee
+                    qty_got = br.qty
                     total_fees += fee
                     cash       -= amount
                     peak_prices[sym] = cur
@@ -485,7 +463,8 @@ def run_live(
                 elif score <= sell_threshold and sym in holdings:
                     qty      = holdings[sym]["qty"]
                     entry    = holdings[sym]["avg_price"]
-                    received, fee = _paper_sell(sym, qty, cur, holdings)
+                    sr       = paper_sell(sym, qty, cur, holdings)
+                    received, fee = sr.received, sr.fee
                     total_fees += fee
                     cash       += received
                     peak_prices.pop(sym, None)
@@ -535,7 +514,8 @@ def run_live(
             qty   = holdings[sym]["qty"]
             entry = holdings[sym]["avg_price"]
             cur   = prices[sym]
-            received, fee = _paper_sell(sym, qty, cur, holdings)
+            sr = paper_sell(sym, qty, cur, holdings)
+            received, fee = sr.received, sr.fee
             cash       += received
             total_fees += fee
             history.append({

@@ -36,7 +36,17 @@ app.jinja_loader = ChoiceLoader([
 ])
 
 # ── Session secret ────────────────────────────────────────────────────────────
-app.secret_key = os.getenv("SESSION_SECRET_KEY", "dev-secret-change-me-in-prod")
+_session_secret = os.getenv("SESSION_SECRET_KEY")
+_is_production  = bool(os.getenv("K_SERVICE") or os.getenv("GOOGLE_CLOUD_PROJECT"))
+if not _session_secret:
+    if _is_production:
+        raise RuntimeError(
+            "SESSION_SECRET_KEY is required in production. "
+            "Set it as an environment variable before starting the app."
+        )
+    log.warning("SESSION_SECRET_KEY non défini — utilisation d'une clé de dev (NON SÉCURISÉ)")
+    _session_secret = "dev-secret-change-me-in-prod"
+app.secret_key = _session_secret
 app.config.update(
     SESSION_COOKIE_SAMESITE="None",
     SESSION_COOKIE_SECURE=True,   # requis avec SameSite=None (HTTPS uniquement)
@@ -206,7 +216,8 @@ def runner_status():
         running = bool(latest and latest.get("completionTime") is None)
         return jsonify({"cloud_run": True, "running": running, "latest": latest})
     except Exception as exc:
-        return jsonify({"cloud_run": True, "error": str(exc)}), 500
+        log.exception("Erreur runner_status")
+        return jsonify({"cloud_run": True, "error": "Erreur interne du serveur"}), 500
 
 
 @app.post("/api/runner/start")
@@ -229,7 +240,8 @@ def runner_start():
         r.raise_for_status()
         return jsonify({"ok": True, "execution": r.json().get("name")})
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        log.exception("Erreur runner_start")
+        return jsonify({"error": "Erreur interne du serveur"}), 500
 
 
 @app.post("/api/runner/stop")
@@ -251,7 +263,8 @@ def runner_stop():
         _req.post(cancel_url, headers={"Authorization": f"Bearer {token}"}, timeout=10).raise_for_status()
         return jsonify({"ok": True})
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        log.exception("Erreur runner_stop")
+        return jsonify({"error": "Erreur interne du serveur"}), 500
 
 
 def _scheduler_action(action: str):
@@ -267,7 +280,8 @@ def _scheduler_action(action: str):
         r.raise_for_status()
         return jsonify({"ok": True, "action": action})
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        log.exception("Erreur scheduler_action %s", action)
+        return jsonify({"error": "Erreur interne du serveur"}), 500
 
 
 @app.get("/api/runner/schedule")
@@ -287,7 +301,8 @@ def runner_schedule_status():
         schedule = r.json().get("schedule", "")
         return jsonify({"cloud_run": True, "enabled": enabled, "schedule": schedule})
     except Exception as exc:
-        return jsonify({"cloud_run": True, "enabled": False, "error": str(exc)})
+        log.exception("Erreur runner_schedule_status")
+        return jsonify({"cloud_run": True, "enabled": False, "error": "Erreur interne"})
 
 
 @app.post("/api/runner/schedule/enable")
@@ -323,7 +338,8 @@ def runner_frequency():
         r.raise_for_status()
         return jsonify({"ok": True, "cron": cron, "minutes": minutes})
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        log.exception("Erreur runner_frequency")
+        return jsonify({"error": "Erreur interne du serveur"}), 500
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

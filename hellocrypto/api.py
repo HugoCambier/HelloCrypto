@@ -43,8 +43,8 @@ def _headers() -> dict:
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
 
-def api_get(endpoint: str, params: dict = {}, signed: bool = False) -> dict:
-    p = dict(params)
+def api_get(endpoint: str, params: dict | None = None, signed: bool = False) -> dict:
+    p = dict(params) if params else {}
     if signed:
         p["timestamp"] = int(time.time() * 1000)
         p["signature"] = _sign(p)
@@ -61,8 +61,8 @@ def api_get(endpoint: str, params: dict = {}, signed: bool = False) -> dict:
     return r.json()
 
 
-def api_post(endpoint: str, params: dict = {}) -> dict:
-    p = dict(params)
+def api_post(endpoint: str, params: dict | None = None) -> dict:
+    p = dict(params) if params else {}
     p["timestamp"] = int(time.time() * 1000)
     p["signature"] = _sign(p)
     r = requests.post(f"{BASE_URL}{endpoint}", params=p, headers=_headers(), timeout=10)
@@ -276,15 +276,17 @@ def format_market_data(data: dict[str, dict], watchlist: list[str]) -> str:
             parts.append(f"Tendance{ivl}: {d['trend_short']}")
         if d.get("trend_1d"):
             parts.append(f"TendanceJ: {d['trend_1d']}")
+        if d.get("sma7") is not None and d.get("sma25") is not None:
+            parts.append(f"SMA7: ${d['sma7']:.4f} SMA25: ${d['sma25']:.4f}")
         if d.get("spread_pct") is not None:
             parts.append(f"Spread: {d['spread_pct']:.3f}%")
-        # New indicators
+        # Advanced indicators
         macd = d.get("macd")
         if macd:
             parts.append(f"MACD: {macd['macd']:+.6f} Signal: {macd['signal']:+.6f} Hist: {macd['histogram']:+.6f}")
         boll = d.get("bollinger")
         if boll:
-            parts.append(f"Bollinger: [{boll['lower']:.2f} - {boll['upper']:.2f}] (largeur: {boll['width_pct']:.1f}%)")
+            parts.append(f"Bollinger: [{boll['lower']:.2f} | {boll['middle']:.2f} | {boll['upper']:.2f}] (largeur: {boll['width_pct']:.1f}%)")
         if d.get("atr") is not None:
             parts.append(f"ATR(14): {d['atr']:.4f}")
         lines.append(" | ".join(parts))

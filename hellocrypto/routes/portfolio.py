@@ -1,5 +1,9 @@
 """Portfolio, Binance balance & manual trade API."""
+import logging
+
 from flask import Blueprint, jsonify, request
+
+log = logging.getLogger(__name__)
 
 from ..api import (
     get_balance,
@@ -28,6 +32,7 @@ def api_portfolio():
             try:
                 prices[sym] = get_ticker(sym)
             except Exception:
+                log.warning("Prix indisponible pour %s", sym, exc_info=True)
                 prices[sym] = None
 
         portfolio_val = sum(
@@ -67,7 +72,8 @@ def api_portfolio():
             ],
         })
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        log.exception("Erreur api_portfolio")
+        return jsonify({"error": "Erreur lors de la récupération du portefeuille"}), 500
 
 
 @bp.get("/api/binance/balance")
@@ -82,11 +88,13 @@ def api_binance_balance():
             try:
                 qty = get_balance(coin)
             except Exception:
+                log.warning("Solde indisponible pour %s", coin, exc_info=True)
                 qty = 0.0
             coins[sym] = {"coin": coin, "qty": round(qty, 8)}
         return jsonify({"usdc": round(usdc, 2), "coins": coins})
     except Exception as exc:
-        return jsonify({"error": str(exc), "usdc": None, "coins": {}}), 200
+        log.exception("Erreur api_binance_balance")
+        return jsonify({"error": "Erreur Binance", "usdc": None, "coins": {}}), 200
 
 
 @bp.post("/api/trade/buy")
@@ -102,7 +110,8 @@ def api_buy():
         save_trade("BUY", symbol, amount, price, "Ordre manuel — dashboard", fee, fee_asset)
         return jsonify({"ok": True, "price": price, "fee": fee, "fee_asset": fee_asset})
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        log.exception("Erreur api_buy")
+        return jsonify({"error": "Erreur lors de l'exécution de l'ordre d'achat"}), 500
 
 
 @bp.post("/api/trade/sell")
@@ -118,4 +127,5 @@ def api_sell():
         save_trade("SELL", symbol, qty, price, "Ordre manuel — dashboard", fee, fee_asset)
         return jsonify({"ok": True, "price": price, "fee": fee, "fee_asset": fee_asset})
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        log.exception("Erreur api_sell")
+        return jsonify({"error": "Erreur lors de l'exécution de l'ordre de vente"}), 500

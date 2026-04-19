@@ -15,7 +15,7 @@ let _countdownIv    = null;
 // ─── Formatters ──────────────────────────────────────────────────────────────
 function fmt(n)  { return n == null ? '—' : Number(n).toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 function fmt4(n) { return n == null ? '—' : Number(n).toLocaleString('fr-FR', {minimumFractionDigits:4, maximumFractionDigits:4}); }
-function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function kpiCard(label, value, sub = '', color = 'text-slate-100') {
   return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
     <div class="text-xs text-slate-500 mb-1">${label}</div>
@@ -138,6 +138,16 @@ function setMode(mode) {
   document.getElementById('mode-real-btn').className = mode === 'real'
     ? 'px-3 py-1.5 bg-blue-700 text-white border-l border-slate-600 transition-colors'
     : 'px-3 py-1.5 text-slate-400 hover:text-white border-l border-slate-600 transition-colors';
+  // Sync performance session selector visibility
+  const sel = document.getElementById('perf-session-sel');
+  const actions = document.getElementById('perf-session-actions');
+  if (sel && actions) {
+    if (mode === 'simulation') { sel.classList.remove('hidden'); actions.classList.remove('hidden'); _loadPerfSessions(); }
+    else { sel.classList.add('hidden'); actions.classList.add('hidden'); }
+  }
+  // Refresh current tab to reflect mode change
+  if (currentTab === 'dashboard') loadDashboard();
+  else if (currentTab === 'performance') loadPerformance();
 }
 
 function _setPowerUI(on) {
@@ -275,6 +285,7 @@ async function confirmSimStart() {
   const stop_loss_pct = parseFloat(document.getElementById('sim-modal-sl').value) || 10;
   const trailing_stop_pct = parseFloat(document.getElementById('sim-modal-tr').value) || 5;
   const sell_cooldown_cycles = parseInt(document.getElementById('sim-modal-cool').value) || 3;
+  const liquidate_at_end = document.getElementById('sim-liquidate').checked;
   const initial_holdings = {};
   document.querySelectorAll('.sim-holding-input').forEach(inp => {
     const qty = parseFloat(inp.value);
@@ -287,6 +298,7 @@ async function confirmSimStart() {
     const body = { budget, resume, initial_holdings, session_name: sessionName,
                    risk_level, cycle_seconds, stop_loss_pct, trailing_stop_pct, sell_cooldown_cycles };
     if (maxCyc !== null) body.max_cycles = maxCyc;
+    if (liquidate_at_end && maxCyc !== null) body.liquidate_at_end = true;
     const d = await fetch('/api/simulation/start', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) }).then(r => r.json());
     if (d.ok || d.budget != null) {
       if (d.resume_failed) toast('Aucun état sauvegardé — démarrage frais', 'warn');
@@ -373,22 +385,46 @@ async function confirmRealStart() {
 let _dashPortfolioData = null;
 
 async function loadDashboard() {
-  // Load portfolio data (real positions + market prices)
-  try {
-    const d = await fetch('/api/portfolio').then(r => r.json());
-    if (!d.error) {
-      _dashPortfolioData = d;
-      _renderDashKPIs(d);
-      _renderDashPositions(d);
-      // Populate buy/sell dropdowns on markets tab too
-      _populateTradeDropdowns(d);
-    }
-  } catch {}
-  // Load recent trades
-  try {
-    const d = await fetch(`/api/performance?period=7j&mode=${_runnerMode}`).then(r => r.json());
-    _renderDashTrades(d.history || []);
-  } catch {}
+  if (_runnerMode === 'real') {
+    // Real mode — fetch Binance portfolio
+    document.getElementById('dash-sim-live').classList.add('hidden');
+    try {
+      const d = await fetch('/api/portfolio').then(r => r.json());
+      if (!d.error) {
+        _dashPortfolioData = d;
+        _renderDashKPIs(d);
+        _renderDashPositions(d);
+        _populateTradeDropdowns(d);
+      }
+    } catch {}
+    try {
+      const d = await fetch('/api/performance?period=7j&mode=real').then(r => r.json());
+      _renderDashTrades(d.history || []);
+    } catch {}
+  } else {
+    // Simulation mode — show sim snapshot
+    try {
+      const d = await fetch('/api/simulation/status').then(r => r.json());
+      if (d.snapshot && (d.snapshot.cycle || 0) > 0) {
+        _updateDashFromSim(d.snapshot);
+      } else {
+        // Empty state
+        document.getElementById('dash-total').textContent = '—';
+        document.getElementById('dash-cash').textContent = '—';
+        document.getElementById('dash-pnl').textContent = '—';
+        document.getElementById('dash-pnl-sub').textContent = '';
+        document.getElementById('dash-trades').textContent = '—';
+        document.getElementById('dash-fees').textContent = '—';
+        document.getElementById('dash-positions-body').innerHTML = '';
+        document.getElementById('dash-sim-live').classList.add('hidden');
+      }
+    } catch {}
+    try {
+      const d = await fetch('/api/performance?period=7j&mode=simulation').then(r => r.json());
+      _renderDashTrades(d.history || []);
+    } catch {}
+  }
+  _loadSimList();
 }
 
 function _renderDashKPIs(d) {
@@ -503,10 +539,18 @@ async function _loadSimList() {
       return `<div class="flex items-center justify-between px-4 py-2.5 hover:bg-slate-700/30">
         <div class="flex items-center gap-3 min-w-0"><span class="font-medium text-slate-200 truncate">${name}</span><span class="text-slate-500 shrink-0">${date}</span><span class="text-slate-600 shrink-0">${trades} trades</span></div>
         <div class="flex items-center gap-1 shrink-0 ml-2">
-          <button onclick="_simListRename('${sid}','${name}')" class="px-2 py-1 text-slate-500 hover:text-blue-400" title="Renommer">✏</button>
-          <button onclick="_simListDelete('${sid}','${name}')" class="px-2 py-1 text-slate-500 hover:text-red-400" title="Supprimer">✕</button>
+          <button data-action="rename" data-sid="${sid}" data-name="${name}" class="px-2 py-1 text-slate-500 hover:text-blue-400" title="Renommer">✏</button>
+          <button data-action="delete" data-sid="${sid}" data-name="${name}" class="px-2 py-1 text-slate-500 hover:text-red-400" title="Supprimer">✕</button>
         </div></div>`;
     }).join('');
+    // Event delegation for rename/delete buttons
+    body.onclick = e => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const {action, sid, name} = btn.dataset;
+      if (action === 'rename') _simListRename(sid, name);
+      else if (action === 'delete') _simListDelete(sid, name);
+    };
   } catch { body.innerHTML = '<div class="px-4 py-4 text-center text-red-400">Erreur</div>'; }
 }
 
@@ -680,11 +724,26 @@ function _renderAnalysis(r) {
         <span class="text-slate-500 text-xs">${prob}</span>
       </div>`;
     }).join('');
+    const actionScore = a.action==='buy'?+1:a.action==='sell'?-1:0;
+    const actionLabel = a.action==='buy'?'ACHAT':a.action==='sell'?'VENTE':'NEUTRE';
+    const actionColor = a.action==='buy'?'text-green-400 bg-green-900/30 border-green-700/50'
+      :a.action==='sell'?'text-red-400 bg-red-900/30 border-red-700/50'
+      :'text-slate-400 bg-slate-700/50 border-slate-600/50';
+    const scoreSign = actionScore>0?'+':'';
+    const actionHtml = a.action ? `
+      <div class="flex items-center gap-2 mb-2 p-2 rounded-lg border ${actionColor}">
+        <span class="text-lg font-bold shrink-0">${scoreSign}${actionScore}</span>
+        <div class="min-w-0">
+          <span class="text-xs font-medium">${actionLabel}</span>
+          ${a.action_reason?`<p class="text-xs opacity-80 mt-0.5">${escHtml(a.action_reason)}</p>`:''}
+        </div>
+      </div>` : '';
     return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
       <div class="flex items-center justify-between mb-2">
         <span class="font-medium text-slate-200">${(a.symbol||'').replace('USDC','')}</span>
         <span class="px-2 py-0.5 rounded-full text-xs font-medium ${sColor}">${(a.sentiment||'').toUpperCase()}</span>
       </div>
+      ${actionHtml}
       ${a.current_price?`<div class="text-xs text-slate-400 mb-2">Prix: $${fmt(a.current_price)}</div>`:''}
       <p class="text-xs text-slate-300 mb-3">${a.summary||''}</p>
       ${scenarios?`<div class="text-xs">${scenarios}</div>`:''}
@@ -695,36 +754,20 @@ function _renderAnalysis(r) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // PERFORMANCE TAB
 // ═══════════════════════════════════════════════════════════════════════════════
-let _perfMode      = 'real';
 let _perfSessionId = '';
 let _perfChart     = null;
 let _perfPnlChart  = null;
 
 async function _initPerformanceTab() {
-  try {
-    const d = await fetch('/api/simulation/status').then(r => r.json());
-    if (d.running || d.session_id) {
-      await setPerfMode('simulation', true);
-      if (d.session_id) _perfSessionId = d.session_id;
-    }
-  } catch {}
-  await _loadPerfSessions();
-  loadPerformance();
-}
-
-async function setPerfMode(mode, skipLoad = false) {
-  _perfMode = mode;
-  document.getElementById('perf-mode-real').className = mode==='real'
-    ? 'px-3 py-1.5 bg-blue-700 text-white transition-colors'
-    : 'px-3 py-1.5 text-slate-400 hover:text-white transition-colors';
-  document.getElementById('perf-mode-sim').className = mode==='simulation'
-    ? 'px-3 py-1.5 bg-blue-700 text-white border-l border-slate-600 transition-colors'
-    : 'px-3 py-1.5 text-slate-400 hover:text-white border-l border-slate-600 transition-colors';
   const sel = document.getElementById('perf-session-sel');
   const actions = document.getElementById('perf-session-actions');
-  if (mode==='simulation') { sel.classList.remove('hidden'); actions.classList.remove('hidden'); await _loadPerfSessions(); }
-  else { sel.classList.add('hidden'); actions.classList.add('hidden'); }
-  if (!skipLoad) loadPerformance();
+  if (_runnerMode === 'simulation') {
+    sel.classList.remove('hidden'); actions.classList.remove('hidden');
+    await _loadPerfSessions();
+  } else {
+    sel.classList.add('hidden'); actions.classList.add('hidden');
+  }
+  loadPerformance();
 }
 
 async function _loadPerfSessions() {
@@ -772,15 +815,15 @@ function setPeriod(btn, period) {
 }
 
 async function loadPerformance() {
-  const sessionParam = _perfMode==='simulation'&&_perfSessionId ? `&session_id=${_perfSessionId}` : '';
+  const sessionParam = _runnerMode==='simulation'&&_perfSessionId ? `&session_id=${_perfSessionId}` : '';
   try {
-    const d = await fetch(`/api/performance?period=${currentPeriod}&mode=${_perfMode}${sessionParam}`).then(r => r.json());
+    const d = await fetch(`/api/performance?period=${currentPeriod}&mode=${_runnerMode}${sessionParam}`).then(r => r.json());
     _renderPerfKPIs(d);
     _renderPerfChart(d);
     _renderPerfPnlBySymbol(d);
     _renderPerfHistory(d);
     // Load session details if applicable
-    if (_perfMode==='simulation' && _perfSessionId) { _loadSessionDetail(_perfSessionId); _loadRunLogs(_perfSessionId); }
+    if (_runnerMode==='simulation' && _perfSessionId) { _loadSessionDetail(_perfSessionId); _loadRunLogs(_perfSessionId); }
     else { document.getElementById('perf-session-detail').classList.add('hidden'); document.getElementById('perf-run-logs').classList.add('hidden'); }
   } catch {}
 }

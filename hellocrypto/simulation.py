@@ -140,6 +140,7 @@ def run(
     initial_holdings: dict[str, float] | None = None,
     session_id: str | None = None,
     session_name: str | None = None,
+    liquidate_at_end: bool = False,
 ) -> dict:
     """Run the paper-trading simulation.
 
@@ -199,15 +200,20 @@ def run(
         else:
             log.info("[SIM] Aucun état sauvegardé — démarrage propre")
 
+    effective_max = max_cycles
+    if liquidate_at_end and max_cycles is not None:
+        effective_max = max_cycles + 1
+
     while True:
         if stop_event and stop_event.is_set():
             log.info("[SIM] Arrêtée par l'utilisateur au cycle %d", cycle)
             break
-        if max_cycles is not None and cycle >= max_cycles:
+        if effective_max is not None and cycle >= effective_max:
             log.info("[SIM] max_cycles=%d atteint — arrêt", max_cycles)
             break
 
         cycle += 1
+        is_liquidation_cycle = (liquidate_at_end and max_cycles is not None and cycle > max_cycles)
         if _db_handler is not None:
             _db_handler.set_cycle(cycle)
 
@@ -301,6 +307,46 @@ def run(
                 pass
             log.info("[SIM] %s %s: %.1f%%", action_label, sym, sig.loss_pct * 100)
 
+        # ── Liquidation cycle: force-sell everything ─────────────────────────
+        if is_liquidation_cycle:
+            log.info("[SIM] Cycle de liquidation — vente de toutes les positions")
+            for sym in list(holdings.keys()):
+                if sym not in prices:
+                    continue
+                entry  = holdings[sym]["avg_price"]
+                qty    = holdings[sym]["qty"]
+                result = paper_sell(sym, qty, prices[sym], holdings)
+                cash       += result.received
+                total_fees += result.fee
+                peak_prices.pop(sym, None)
+                pnl = round((prices[sym] - entry) * result.qty - result.fee, 4)
+                history.append({
+                    "cycle":     cycle,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "action":    "SELL (liquidation)",
+                    "symbol":    sym,
+                    "qty":       result.qty,
+                    "price":     prices[sym],
+                    "pnl":       pnl,
+                    "fee":       round(result.fee, 6),
+                    "reason":    "Liquidation finale — conversion en USDC",
+                })
+                try:
+                    from db.store import save_trade as _db_save
+                    _db_save(
+                        action="SELL (liquidation)", symbol=sym, amount=None,
+                        price=prices[sym], reason="Liquidation finale — conversion en USDC",
+                        fee=result.fee, qty=result.qty, pnl=pnl,
+                        mode="simulation", session_id=session_id, session_name=session_name,
+                    )
+                except Exception:
+                    pass
+                log.info("[SIM] LIQUIDATION %s: %.6f @ $%.4f → PnL %+.2f", sym, result.qty, prices[sym], pnl)
+            snap = _snapshot(cycle, cash, budget, holdings, prices, history, total_fees, initial_prices, cycle_sec)
+            if on_cycle:
+                on_cycle(cycle, snap)
+            break
+
         # ── Fetch global market context ────────────────────────────────────────
         fear_greed    = get_fear_and_greed()
         btc_dominance = get_btc_dominance()
@@ -313,6 +359,9 @@ def run(
                 prompt=build_analysis(
                     market_data, holdings, cash, budget, risk_level,
                     recent_decisions, fear_greed, btc_dominance, scores,
+                    prices=prices, peak_prices=peak_prices,
+                    cooldown_map=cooldown_map, total_fees=total_fees,
+                    cycle=cycle,
                 ),
                 system=SYSTEM,
                 config=cfg,

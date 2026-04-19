@@ -328,14 +328,7 @@
 
       <!-- Filters bar -->
       <div class="flex flex-wrap items-center gap-3">
-        <!-- Mode -->
-        <div class="flex rounded-lg overflow-hidden border border-slate-600 text-xs">
-          <button onclick="setPerfMode('real')" id="perf-mode-real"
-            class="px-3 py-1.5 bg-blue-700 text-white transition-colors">Réel</button>
-          <button onclick="setPerfMode('simulation')" id="perf-mode-sim"
-            class="px-3 py-1.5 text-slate-400 hover:text-white border-l border-slate-600 transition-colors">Simulation</button>
-        </div>
-        <!-- Session selector (sim only) -->
+        <!-- Session selector (sim only, visibility managed by setMode) -->
         <select id="perf-session-sel" class="hidden bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none max-w-[200px]">
           <option value="">Toutes les sessions</option>
         </select>
@@ -813,13 +806,18 @@
       <!-- Auto / Max cycles -->
       <div class="flex items-center gap-2">
         <input type="checkbox" id="sim-auto" class="accent-blue-500"
-          onchange="document.getElementById('sim-maxcycles-wrap').classList.toggle('hidden',this.checked)" />
+          onchange="document.getElementById('sim-maxcycles-wrap').classList.toggle('hidden',this.checked);document.getElementById('sim-liquidate-wrap').classList.toggle('hidden',this.checked)" />
         <label for="sim-auto" class="text-xs text-slate-400">Auto — indéfiniment</label>
       </div>
       <div class="space-y-1" id="sim-maxcycles-wrap">
         <label class="text-xs font-medium text-slate-300">Max cycles</label>
         <input id="sim-maxcycles-input" type="number" min="1" step="1" value="1"
           class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none" />
+      </div>
+      <!-- Liquidate at end -->
+      <div class="flex items-center gap-2" id="sim-liquidate-wrap">
+        <input type="checkbox" id="sim-liquidate" class="accent-blue-500" />
+        <label for="sim-liquidate" class="text-xs text-slate-400">Tout convertir en USDC au dernier cycle</label>
       </div>
       <!-- Resume -->
       <div class="flex items-center gap-2">

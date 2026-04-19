@@ -104,6 +104,7 @@ def sim_saved():
             ) - data.get("budget", 0), 2),
         })
     except Exception:
+        log.warning("Erreur de lecture de l'état de simulation sauvegardé", exc_info=True)
         return jsonify({"exists": False})
 
 
@@ -124,6 +125,7 @@ def sim_start():
     resume               = bool(body.get("resume", False))
     max_cycles_raw       = body.get("max_cycles")
     max_cycles           = int(max_cycles_raw) if max_cycles_raw and int(max_cycles_raw) > 0 else None
+    liquidate_at_end     = bool(body.get("liquidate_at_end", False))
     raw_holdings         = body.get("initial_holdings") or {}
     initial_holdings     = {k: float(v) for k, v in raw_holdings.items() if float(v) > 0}
 
@@ -148,7 +150,7 @@ def sim_start():
         upsert_session(session_id, session_name, mode="simulation",
                        initial_state={"budget": budget, "initial_holdings": initial_holdings})
     except Exception:
-        pass
+        log.warning("Impossible de sauvegarder la session dans la base", exc_info=True)
 
     def _run():
         try:
@@ -162,6 +164,7 @@ def sim_start():
                 initial_holdings=initial_holdings if not resume else None,
                 session_id=session_id,
                 session_name=session_name,
+                liquidate_at_end=liquidate_at_end,
             )
             _sim_state.finish(result)
         except Exception as exc:
@@ -193,9 +196,11 @@ def sim_sessions():
         try:
             return jsonify(list_simulation_sessions_v2())
         except Exception:
+            log.warning("list_simulation_sessions_v2 a échoué, repli sur v1", exc_info=True)
             return jsonify(list_simulation_sessions())
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        log.exception("Erreur sim_sessions")
+        return jsonify({"error": "Erreur lors du chargement des sessions"}), 500
 
 
 @bp.patch("/api/simulation/sessions/<session_id>")
@@ -209,7 +214,8 @@ def sim_session_rename(session_id: str):
         rename_session(session_id, name)
         return jsonify({"ok": True})
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        log.exception("Erreur sim_session_rename")
+        return jsonify({"error": "Erreur lors du renommage de la session"}), 500
 
 
 @bp.delete("/api/simulation/sessions/<session_id>")
@@ -219,7 +225,8 @@ def sim_session_delete(session_id: str):
         delete_session(session_id)
         return jsonify({"ok": True})
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        log.exception("Erreur sim_session_delete")
+        return jsonify({"error": "Erreur lors de la suppression de la session"}), 500
 
 
 @bp.get("/api/simulation/sessions/<session_id>/detail")
@@ -235,7 +242,8 @@ def sim_session_detail(session_id: str):
             try:
                 d["initial_state"] = json.loads(d["initial_state"])
             except Exception:
-                pass
+                log.warning("Impossible de parser initial_state pour session %s", session_id, exc_info=True)
         return jsonify(d)
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        log.exception("Erreur sim_session_detail")
+        return jsonify({"error": "Erreur lors du chargement du détail de session"}), 500

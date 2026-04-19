@@ -107,8 +107,9 @@ def analysis_start():
             with _analysis_lock:
                 _analysis_state = {"running": False, "result": result, "error": None}
         except Exception as exc:
+            log.exception("Erreur lors de l'analyse de marché")
             with _analysis_lock:
-                _analysis_state = {"running": False, "result": None, "error": str(exc)}
+                _analysis_state = {"running": False, "result": None, "error": "Erreur lors de l'analyse"}
 
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({"ok": True})
@@ -125,7 +126,8 @@ def api_analyses():
             mode=mode or None, session_id=session_id or None, limit=limit,
         ))
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        log.exception("Erreur api_analyses")
+        return jsonify({"error": "Erreur lors du chargement des analyses"}), 500
 
 
 @bp.post("/api/admin/clean-logs")
@@ -145,4 +147,5 @@ def admin_clean_logs():
         )
         return jsonify({"ok": True, "deleted": deleted})
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 500
+        log.exception("Erreur admin_clean_logs")
+        return jsonify({"error": "Erreur lors du nettoyage des logs"}), 500

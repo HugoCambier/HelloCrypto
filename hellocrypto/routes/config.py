@@ -1,5 +1,6 @@
 """LLM config & Ollama routes."""
 import json
+import logging
 import subprocess
 import sys
 
@@ -7,7 +8,8 @@ from flask import Blueprint, jsonify, request
 
 from ..api import load_config, save_config
 
-bp = Blueprint("config", __name__)
+bp  = Blueprint("config", __name__)
+log = logging.getLogger(__name__)
 
 _DEFAULT_LLM_MODELS = {
     "claude": ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001",
@@ -75,6 +77,7 @@ def ollama_status():
         models = [m["name"] for m in tags.get("models", [])]
         return jsonify({"running": True, "models": models})
     except Exception:
+        log.warning("Ollama ne répond pas", exc_info=True)
         return jsonify({"running": False, "models": []})
 
 
@@ -87,14 +90,23 @@ def ollama_start():
         with _ur.urlopen(f"{base_url}/api/tags", timeout=2):
             return jsonify({"ok": True, "already_running": True})
     except Exception:
-        pass
+        log.debug("Ollama pas encore accessible, tentative de lancement")
     try:
         if sys.platform == "darwin":
-            subprocess.Popen(["open", "-a", "Ollama"],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            cmd = ["open", "-a", "Ollama"]
         else:
-            subprocess.Popen(["ollama", "serve"],
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            cmd = ["ollama", "serve"]
+        log.info("Lancement Ollama: %s", " ".join(cmd))
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            proc.wait(timeout=1.0)
+            stderr_out = proc.stderr.read().decode(errors="replace").strip()
+            if proc.returncode != 0:
+                log.error("Ollama a quitté immédiatement (code %d): %s", proc.returncode, stderr_out)
+                return jsonify({"ok": False, "error": "Ollama a quitté immédiatement"}), 500
+        except subprocess.TimeoutExpired:
+            pass  # Process still running — normal for a server
         return jsonify({"ok": True, "already_running": False})
     except Exception as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        log.exception("Erreur lancement Ollama")
+        return jsonify({"ok": False, "error": "Impossible de lancer Ollama"}), 500
