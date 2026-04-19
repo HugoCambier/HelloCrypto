@@ -36,60 +36,37 @@ die()  { echo -e "\033[0;31m✗\033[0m  $1"; exit 1; }
 echo -e "\033[1m═══ HelloCrypto — déploiement GCP ═══\033[0m"
 echo "Projet : $PROJECT  |  Région : $REGION"
 
-# ── 1. APIs ───────────────────────────────────────────────────────────────────
+# ── 1. Load .env ──────────────────────────────────────────────────────────────
+[ -f .env ] && { set -a; source .env; set +a; }
+
+# Generate SESSION_SECRET_KEY if not set in .env
+if [ -z "${SESSION_SECRET_KEY:-}" ]; then
+    SESSION_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+    warn "SESSION_SECRET_KEY non défini dans .env — clé générée pour ce déploiement"
+    warn "Ajoute SESSION_SECRET_KEY=$(echo $SESSION_SECRET_KEY | head -c 8)... dans ton .env pour le conserver"
+fi
+
+# ── 2. APIs ───────────────────────────────────────────────────────────────────
 step "Activation des APIs GCP"
 gcloud services enable \
     run.googleapis.com \
     cloudbuild.googleapis.com \
     cloudscheduler.googleapis.com \
     firestore.googleapis.com \
-    secretmanager.googleapis.com \
     artifactregistry.googleapis.com \
     --project="$PROJECT" --quiet
 ok "APIs activées"
 
-# ── 2. Service Account ────────────────────────────────────────────────────────
+# ── 3. Service Account ────────────────────────────────────────────────────────
 step "Service Account"
 gcloud iam service-accounts create "$SA" \
     --display-name="HelloCrypto SA" --project="$PROJECT" --quiet 2>/dev/null || true
-for role in roles/datastore.user roles/secretmanager.secretAccessor roles/run.invoker roles/run.developer roles/cloudscheduler.admin; do
+for role in roles/datastore.user roles/run.invoker roles/run.developer roles/cloudscheduler.admin; do
     gcloud projects add-iam-policy-binding "$PROJECT" \
         --member="serviceAccount:$SA@$PROJECT.iam.gserviceaccount.com" \
         --role="$role" --condition=None --quiet 2>&1 | grep -v "^Updated\|^bindings\|^etag\|^version\|^  -\|^  role\|^  members" || true
 done
 ok "Service account prêt ($SA)"
-
-# ── 3. Secrets ────────────────────────────────────────────────────────────────
-step "Secret Manager"
-[ -f .env ] && { set -a; source .env; set +a; }
-
-_upsert_secret() {
-    local name="$1" var="$2"
-    local val="${!var:-}"
-    if [ -z "$val" ]; then
-        warn "Variable $var vide — secret '$name' ignoré. Crée-le manuellement si nécessaire."
-        return
-    fi
-    if gcloud secrets describe "$name" --project="$PROJECT" &>/dev/null; then
-        echo -n "$val" | gcloud secrets versions add "$name" --data-file=- --project="$PROJECT" --quiet
-    else
-        echo -n "$val" | gcloud secrets create "$name" --data-file=- --project="$PROJECT" --quiet
-    fi
-    ok "Secret '$name' mis à jour"
-}
-
-_upsert_secret binance-api-key       BINANCE_API_KEY
-_upsert_secret binance-api-secret    BINANCE_API_SECRET
-_upsert_secret gemini-api-key        GEMINI_API_KEY
-_upsert_secret google-client-id      GOOGLE_CLIENT_ID
-_upsert_secret google-client-secret  GOOGLE_CLIENT_SECRET
-
-# Generate a session secret if not set
-if ! gcloud secrets describe session-secret-key --project="$PROJECT" &>/dev/null; then
-    python3 -c "import secrets; print(secrets.token_hex(32))" \
-        | gcloud secrets create session-secret-key --data-file=- --project="$PROJECT" --quiet
-    ok "Secret 'session-secret-key' généré automatiquement"
-fi
 
 # ── 4. Artifact Registry ──────────────────────────────────────────────────────
 step "Artifact Registry"
@@ -117,12 +94,22 @@ gcloud firestore databases create \
 
 # ── 7. Deploy Dashboard ───────────────────────────────────────────────────────
 step "Dashboard (Cloud Run Service)"
-_SECRETS="BINANCE_API_KEY=binance-api-key:latest"
-_SECRETS="$_SECRETS,BINANCE_API_SECRET=binance-api-secret:latest"
-_SECRETS="$_SECRETS,GEMINI_API_KEY=gemini-api-key:latest"
-_SECRETS="$_SECRETS,GOOGLE_CLIENT_ID=google-client-id:latest"
-_SECRETS="$_SECRETS,GOOGLE_CLIENT_SECRET=google-client-secret:latest"
-_SECRETS="$_SECRETS,SESSION_SECRET_KEY=session-secret-key:latest"
+
+# Secrets passed as plain env vars (Cloud Run stores them encrypted at rest — free, no Secret Manager needed)
+# Values come from .env sourced above. Use ^:^ delimiter to safely handle = signs in values.
+_ENV_SECRETS="BINANCE_API_KEY=${BINANCE_API_KEY:-}"
+_ENV_SECRETS="$_ENV_SECRETS,BINANCE_API_SECRET=${BINANCE_API_SECRET:-}"
+_ENV_SECRETS="$_ENV_SECRETS,GEMINI_API_KEY=${GEMINI_API_KEY:-}"
+_ENV_SECRETS="$_ENV_SECRETS,GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}"
+_ENV_SECRETS="$_ENV_SECRETS,GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}"
+_ENV_SECRETS="$_ENV_SECRETS,SESSION_SECRET_KEY=${SESSION_SECRET_KEY}"
+_ENV_SECRETS="$_ENV_SECRETS,ALLOWED_EMAILS=${ALLOWED_EMAILS:-}"
+
+_ENV_CONFIG="GOOGLE_CLOUD_PROJECT=$PROJECT"
+_ENV_CONFIG="$_ENV_CONFIG,GCP_REGION=$REGION"
+_ENV_CONFIG="$_ENV_CONFIG,SCHEDULER_REGION=$SCHEDULER_REGION"
+_ENV_CONFIG="$_ENV_CONFIG,RUNNER_JOB=$RUNNER_JOB"
+_ENV_CONFIG="$_ENV_CONFIG,SCHEDULER_JOB=$SCHEDULER_JOB"
 
 gcloud run deploy "$DASHBOARD_SVC" \
     --image="$DASHBOARD_IMAGE" \
@@ -134,8 +121,7 @@ gcloud run deploy "$DASHBOARD_SVC" \
     --min-instances=0 \
     --max-instances=2 \
     --service-account="$SA@$PROJECT.iam.gserviceaccount.com" \
-    --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT,GCP_REGION=$REGION,SCHEDULER_REGION=$SCHEDULER_REGION,RUNNER_JOB=$RUNNER_JOB,SCHEDULER_JOB=$SCHEDULER_JOB" \
-    --set-secrets="$_SECRETS" \
+    --set-env-vars="$_ENV_CONFIG,$_ENV_SECRETS" \
     --project="$PROJECT" --quiet
 
 DASHBOARD_URL=$(gcloud run services describe "$DASHBOARD_SVC" \
@@ -144,9 +130,9 @@ ok "Dashboard → $DASHBOARD_URL"
 
 # ── 8. Runner Job ─────────────────────────────────────────────────────────────
 step "Runner (Cloud Run Job)"
-_JOB_SECRETS="BINANCE_API_KEY=binance-api-key:latest"
-_JOB_SECRETS="$_JOB_SECRETS,BINANCE_API_SECRET=binance-api-secret:latest"
-_JOB_SECRETS="$_JOB_SECRETS,GEMINI_API_KEY=gemini-api-key:latest"
+_JOB_SECRETS="BINANCE_API_KEY=${BINANCE_API_KEY:-}"
+_JOB_SECRETS="$_JOB_SECRETS,BINANCE_API_SECRET=${BINANCE_API_SECRET:-}"
+_JOB_SECRETS="$_JOB_SECRETS,GEMINI_API_KEY=${GEMINI_API_KEY:-}"
 
 gcloud run jobs create "$RUNNER_JOB" \
     --image="$RUNNER_IMAGE" \
@@ -154,14 +140,12 @@ gcloud run jobs create "$RUNNER_JOB" \
     --task-timeout=3600 \
     --memory=512Mi \
     --service-account="$SA@$PROJECT.iam.gserviceaccount.com" \
-    --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT" \
-    --set-secrets="$_JOB_SECRETS" \
+    --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT,$_JOB_SECRETS" \
     --project="$PROJECT" --quiet 2>/dev/null \
 || gcloud run jobs update "$RUNNER_JOB" \
     --image="$RUNNER_IMAGE" \
     --region="$REGION" \
-    --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT" \
-    --set-secrets="$_JOB_SECRETS" \
+    --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT,$_JOB_SECRETS" \
     --project="$PROJECT" --quiet
 ok "Runner Job : $RUNNER_JOB"
 
@@ -235,3 +219,8 @@ echo "    python3 -c \"import os; os.environ['GOOGLE_CLOUD_PROJECT']='$PROJECT';
 echo ""
 echo "  Mettre à jour (après modif du code) :"
 echo "    bash deploy/deploy.sh"
+echo ""
+echo -e "\033[1;33m⚠  Nettoyage Secret Manager (si tu l'avais utilisé avant) :\033[0m"
+echo "   Les secrets suivants peuvent être supprimés depuis la console GCP si tu ne les utilises plus :"
+echo "   https://console.cloud.google.com/security/secret-manager?project=$PROJECT"
+echo "   → binance-api-key, binance-api-secret, gemini-api-key, google-client-id, google-client-secret, session-secret-key"

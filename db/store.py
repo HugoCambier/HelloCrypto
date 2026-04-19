@@ -466,6 +466,19 @@ def list_simulation_sessions_v2() -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def get_session(session_id: str) -> dict | None:
+    """Return a single session record by id, or None if not found."""
+    if _USE_FIRESTORE:
+        doc = _fs().collection("sessions").document(session_id).get()
+        if not doc.exists:
+            return None
+        return {"id": doc.id, **doc.to_dict()}
+    else:
+        with _sqlite() as c:
+            row = c.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
+        return dict(row) if row else None
+
+
 # ── Market analyses ────────────────────────────────────────────────────────────
 
 def save_market_analysis(

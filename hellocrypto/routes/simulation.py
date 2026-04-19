@@ -232,18 +232,16 @@ def sim_session_delete(session_id: str):
 @bp.get("/api/simulation/sessions/<session_id>/detail")
 def sim_session_detail(session_id: str):
     try:
-        from db.store import _sqlite
-        with _sqlite() as c:
-            row = c.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
-        if not row:
+        from db.store import get_session
+        d = get_session(session_id)
+        if not d:
             return jsonify({"error": "Session non trouvée"}), 404
-        d = dict(row)
         if d.get("initial_state"):
             try:
                 d["initial_state"] = json.loads(d["initial_state"])
             except Exception:
                 log.warning("Impossible de parser initial_state pour session %s", session_id, exc_info=True)
         return jsonify(d)
-    except Exception as exc:
+    except Exception:
         log.exception("Erreur sim_session_detail")
         return jsonify({"error": "Erreur lors du chargement du détail de session"}), 500
