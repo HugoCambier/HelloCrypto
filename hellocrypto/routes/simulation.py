@@ -1,6 +1,7 @@
 """Simulation routes + SimState thread-safe container."""
 import json
 import logging
+import os
 import threading
 import uuid
 from datetime import datetime
@@ -78,11 +79,98 @@ class SimState:
 _sim_state      = SimState()
 _sim_stop_event = threading.Event()
 
+# ── Cloud Scheduler keep-alive (keeps container alive during simulation) ──────
+
+_GCP_PROJECT      = os.getenv("GOOGLE_CLOUD_PROJECT")
+_SCHEDULER_REGION = os.getenv("SCHEDULER_REGION", "europe-west1")
+_KEEPALIVE_JOB    = os.getenv("KEEPALIVE_JOB", "hellocrypto-keepalive")
+
+
+def _set_keepalive(enabled: bool) -> None:
+    """Enable or disable the Cloud Scheduler keepalive job."""
+    if not _GCP_PROJECT:
+        return
+    try:
+        import google.auth
+        import google.auth.transport.requests as google_req
+        import requests as _req
+        creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        creds.refresh(google_req.Request())
+        action = "resume" if enabled else "pause"
+        url = (f"https://cloudscheduler.googleapis.com/v1/projects/{_GCP_PROJECT}"
+               f"/locations/{_SCHEDULER_REGION}/jobs/{_KEEPALIVE_JOB}:{action}")
+        _req.post(url, headers={"Authorization": f"Bearer {creds.token}"}, timeout=10)
+        log.info("[SIM] Keep-alive scheduler → %s", action)
+    except Exception as exc:
+        log.warning("[SIM] Keep-alive scheduler %s échoué: %s",
+                    "resume" if enabled else "pause", exc)
+
+
+# ── Auto-resume on cold start ─────────────────────────────────────────────────
+
+def _try_auto_resume() -> None:
+    """If a simulation was running when the container was killed, restart it."""
+    if _sim_state.running:
+        return
+    saved = sim_engine._load_state()
+    if not saved or not saved.get("session_id") or not saved.get("running"):
+        return
+
+    cfg       = load_config()
+    cycle_sec = int(cfg.get("cycle_seconds", 60))
+    sid       = saved["session_id"]
+    sname     = saved.get("session_name", "auto-resume")
+    budget    = saved.get("budget", float(cfg.get("budget", 100)))
+
+    log.info("[SIM] Auto-resume session %s depuis cycle %d", sid, saved.get("cycle", 0))
+
+    global _sim_stop_event
+    _sim_stop_event = threading.Event()
+    _sim_state.start(sid, sname, cycle_sec)
+
+    def _run():
+        try:
+            result = sim_engine.run(
+                budget,
+                config=cfg,
+                on_cycle=lambda _c, snap: _sim_state.update_cycle(snap),
+                stop_event=_sim_stop_event,
+                resume=True,
+                session_id=sid,
+                session_name=sname,
+            )
+            _sim_state.finish(result)
+        except Exception as exc:
+            log.exception("[SIM] Crash auto-resume")
+            _sim_state.fail(exc)
+        finally:
+            _set_keepalive(False)
+
+    _set_keepalive(True)
+    threading.Thread(target=_run, daemon=True).start()
+
+
+_auto_resumed = False
+
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+@bp.get("/api/simulation/keepalive")
+def sim_keepalive():
+    """Called by Cloud Scheduler to keep the container alive during a run."""
+    global _auto_resumed
+    if not _auto_resumed:
+        _auto_resumed = True
+        _try_auto_resume()
+    return jsonify({"running": _sim_state.running})
+
+
 @bp.get("/api/simulation/status")
 def sim_status():
+    global _auto_resumed
+    if not _auto_resumed:
+        _auto_resumed = True
+        _try_auto_resume()
     return jsonify(_sim_state.to_dict())
 
 
@@ -170,7 +258,10 @@ def sim_start():
         except Exception as exc:
             log.exception("[SIM] Crash du thread de simulation")
             _sim_state.fail(exc)
+        finally:
+            _set_keepalive(False)
 
+    _set_keepalive(True)
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({
         "ok":           True,
@@ -186,6 +277,7 @@ def sim_stop():
     global _sim_stop_event
     _sim_stop_event.set()
     _sim_state.stop()
+    _set_keepalive(False)
     return jsonify({"ok": True})
 
 

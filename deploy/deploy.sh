@@ -105,11 +105,14 @@ _ENV_SECRETS="$_ENV_SECRETS,GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}"
 _ENV_SECRETS="$_ENV_SECRETS,SESSION_SECRET_KEY=${SESSION_SECRET_KEY}"
 _ENV_SECRETS="$_ENV_SECRETS,ALLOWED_EMAILS=${ALLOWED_EMAILS:-}"
 
+KEEPALIVE_JOB="${KEEPALIVE_JOB:-hellocrypto-keepalive}"
+
 _ENV_CONFIG="GOOGLE_CLOUD_PROJECT=$PROJECT"
 _ENV_CONFIG="$_ENV_CONFIG,GCP_REGION=$REGION"
 _ENV_CONFIG="$_ENV_CONFIG,SCHEDULER_REGION=$SCHEDULER_REGION"
 _ENV_CONFIG="$_ENV_CONFIG,RUNNER_JOB=$RUNNER_JOB"
 _ENV_CONFIG="$_ENV_CONFIG,SCHEDULER_JOB=$SCHEDULER_JOB"
+_ENV_CONFIG="$_ENV_CONFIG,KEEPALIVE_JOB=$KEEPALIVE_JOB"
 
 # Clear any existing Secret Manager bindings first (one-time migration; no-op if service is new)
 gcloud run services update "$DASHBOARD_SVC" \
@@ -120,10 +123,11 @@ gcloud run deploy "$DASHBOARD_SVC" \
     --region="$REGION" \
     --platform=managed \
     --allow-unauthenticated \
-    --port=5000 \
+    --port=8080 \
     --memory=512Mi \
     --min-instances=0 \
     --max-instances=2 \
+    --no-cpu-throttling \
     --service-account="$SA@$PROJECT.iam.gserviceaccount.com" \
     --set-env-vars="$_ENV_CONFIG,$_ENV_SECRETS" \
     --project="$PROJECT" --quiet
@@ -193,6 +197,35 @@ ok "Scheduler créé : $CRON (toutes les $MINUTES min) [région: $SCHEDULER_REGI
 gcloud scheduler jobs pause "$SCHEDULER_JOB" \
     --location="$SCHEDULER_REGION" --project="$PROJECT" --quiet
 ok "Scheduler en pause — démarre les cycles depuis le dashboard"
+
+# ── 9b. Keep-alive Scheduler (keeps dashboard alive during simulation runs) ──
+step "Keep-alive Scheduler"
+KEEPALIVE_JOB="${KEEPALIVE_JOB:-hellocrypto-keepalive}"
+KEEPALIVE_URI="$DASHBOARD_URL/api/simulation/keepalive"
+
+if gcloud scheduler jobs describe "$KEEPALIVE_JOB" \
+    --location="$SCHEDULER_REGION" --project="$PROJECT" &>/dev/null; then
+    gcloud scheduler jobs update http "$KEEPALIVE_JOB" \
+        --location="$SCHEDULER_REGION" \
+        --schedule="*/10 * * * *" \
+        --time-zone="Europe/Paris" \
+        --uri="$KEEPALIVE_URI" \
+        --http-method=GET \
+        --project="$PROJECT" --quiet
+else
+    gcloud scheduler jobs create http "$KEEPALIVE_JOB" \
+        --location="$SCHEDULER_REGION" \
+        --schedule="*/10 * * * *" \
+        --time-zone="Europe/Paris" \
+        --uri="$KEEPALIVE_URI" \
+        --http-method=GET \
+        --project="$PROJECT" --quiet
+fi
+
+# Pause par défaut — activé/désactivé automatiquement par le dashboard
+gcloud scheduler jobs pause "$KEEPALIVE_JOB" \
+    --location="$SCHEDULER_REGION" --project="$PROJECT" --quiet
+ok "Keep-alive scheduler créé (en pause) : ping toutes les 10 min quand simulation active"
 
 # ── 10. Ajouter le propriétaire comme utilisateur autorisé ───────────────────
 step "Utilisateur admin"

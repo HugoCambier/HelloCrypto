@@ -6,6 +6,7 @@ COPY pyproject.toml ./
 RUN pip install --no-cache-dir \
     anthropic \
     flask \
+    gunicorn \
     requests \
     python-dotenv \
     google-genai \
@@ -14,5 +15,5 @@ RUN pip install --no-cache-dir \
 
 COPY . .
 
-EXPOSE 5000
-CMD ["python", "dashboard/app.py"]
+EXPOSE 8080
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "--threads", "4", "--timeout", "0", "dashboard.app:app"]

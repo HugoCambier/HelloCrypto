@@ -63,31 +63,32 @@ def _load_state() -> dict | None:
 
 # ── Snapshot builder ───────────────────────────────────────────────────────────
 
-def _snapshot(cycle, cash, budget, holdings, prices, history, total_fees,
-              initial_prices=None, cycle_sec=60):
+def _snapshot(cycle, cash, holdings, prices, history, total_fees,
+              initial_total_value, initial_prices, cycle_sec=60):
     portfolio_val = sum(
         h["qty"] * prices.get(sym, h["avg_price"]) for sym, h in holdings.items()
     )
     total = cash + portfolio_val
-    pnl   = total - budget
+    base  = initial_total_value or 0
+    pnl   = total - base
 
     benchmark_pnl = benchmark_pnl_pct = alpha = None
     btc_bh_pnl = btc_bh_pct = None
-    if initial_prices:
+    if initial_prices and base > 0:
         valid = [(sym, p0) for sym, p0 in initial_prices.items() if p0 and prices.get(sym)]
         if valid:
-            weight     = budget / len(valid)
+            weight     = base / len(valid)
             weight_net = weight * (1 - SIM_FEE_RATE)
             bh_value   = sum(weight_net * prices[sym] / p0 for sym, p0 in valid)
-            benchmark_pnl     = round(bh_value - budget, 2)
-            benchmark_pnl_pct = round((bh_value - budget) / budget * 100, 2)
-            alpha             = round(pnl - (bh_value - budget), 2)
+            benchmark_pnl     = round(bh_value - base, 2)
+            benchmark_pnl_pct = round((bh_value - base) / base * 100, 2)
+            alpha             = round(pnl - (bh_value - base), 2)
 
         btc_sym = next((s for s in initial_prices if "BTC" in s and initial_prices[s] and prices.get(s)), None)
         if btc_sym:
-            btc_val    = budget * (1 - SIM_FEE_RATE) * prices[btc_sym] / initial_prices[btc_sym]
-            btc_bh_pnl = round(btc_val - budget, 2)
-            btc_bh_pct = round((btc_val - budget) / budget * 100, 2)
+            btc_val    = base * (1 - SIM_FEE_RATE) * prices[btc_sym] / initial_prices[btc_sym]
+            btc_bh_pnl = round(btc_val - base, 2)
+            btc_bh_pct = round((btc_val - base) / base * 100, 2)
 
     trades_only = [t for t in history if t["action"] != "ANALYSE"]
     sells_only  = [t for t in trades_only if "SELL" in t["action"] and "stop" not in t["action"]]
@@ -99,7 +100,7 @@ def _snapshot(cycle, cash, budget, holdings, prices, history, total_fees,
         "portfolio_value": round(portfolio_val, 2),
         "total_value":     round(total, 2),
         "pnl":             round(pnl, 2),
-        "pnl_pct":         round(pnl / budget * 100, 2),
+        "pnl_pct":         round(pnl / base * 100, 2) if base > 0 else 0,
         "total_fees":      round(total_fees, 4),
         "trades":          len(trades_only),
         "buys":            len([t for t in trades_only if t["action"] == "BUY"]),
@@ -179,6 +180,7 @@ def run(
     total_fees: float    = 0.0
     prices: dict         = {}
     initial_prices: dict = {}
+    initial_total_value: float = 0.0
     peak_prices: dict    = {}   # sym → highest price seen since entry
     cooldown_map: dict   = {}   # sym → last sell cycle
     cycle: int           = 0
@@ -193,6 +195,7 @@ def run(
             recent_decisions = saved.get("recent_decisions", [])
             total_fees       = saved.get("total_fees", 0.0)
             initial_prices   = saved.get("initial_prices", {})
+            initial_total_value = saved.get("initial_total_value", 0.0) or 0.0
             peak_prices      = saved.get("peak_prices", {})
             cooldown_map     = {k: int(v) for k, v in saved.get("cooldown_map", {}).items()}
             budget           = saved.get("budget", budget)
@@ -235,8 +238,6 @@ def run(
 
         if not initial_prices:
             initial_prices = dict(prices)
-            log.info("[SIM] Prix initiaux (benchmark): %s",
-                     ", ".join(f"{s}=${p:,.4f}" for s, p in initial_prices.items()))
             # Seed holdings from initial_holdings on first cycle (fresh start only)
             if initial_holdings and not holdings:
                 for sym, qty in initial_holdings.items():
@@ -244,6 +245,14 @@ def run(
                         holdings[sym] = {"qty": qty, "avg_price": prices[sym]}
                         peak_prices[sym] = prices[sym]
                         log.info("[SIM] Avoir initial: %s qty=%.6f @ $%.4f", sym, qty, prices[sym])
+            
+            initial_portfolio_val = sum(
+                h["qty"] * prices.get(sym, h["avg_price"]) for sym, h in holdings.items()
+            )
+            initial_total_value = cash + initial_portfolio_val
+            log.info("[SIM] Valeur initiale du portefeuille: $%.2f (cash) + $%.2f (actifs) = $%.2f",
+                     cash, initial_portfolio_val, initial_total_value)
+
             # Persist initial state to sessions table
             try:
                 from db.store import upsert_session as _upsert
@@ -258,6 +267,7 @@ def run(
                             sym: {"qty": h["qty"], "avg_price": h["avg_price"]}
                             for sym, h in holdings.items()
                         },
+                        "initial_total_value": initial_total_value,
                         "watchlist": watchlist,
                     },
                 )
@@ -342,7 +352,7 @@ def run(
                 except Exception:
                     pass
                 log.info("[SIM] LIQUIDATION %s: %.6f @ $%.4f → PnL %+.2f", sym, result.qty, prices[sym], pnl)
-            snap = _snapshot(cycle, cash, budget, holdings, prices, history, total_fees, initial_prices, cycle_sec)
+            snap = _snapshot(cycle, cash, holdings, prices, history, total_fees, initial_total_value, initial_prices, cycle_sec)
             if on_cycle:
                 on_cycle(cycle, snap)
             break
@@ -368,13 +378,14 @@ def run(
             )
         except Exception as exc:
             log.error("[SIM] Erreur LLM cycle %d: %s", cycle, exc)
-            snap = _snapshot(cycle, cash, budget, holdings, prices, history, total_fees, initial_prices, cycle_sec)
+            snap = _snapshot(cycle, cash, holdings, prices, history, total_fees, initial_total_value, initial_prices, cycle_sec)
             if on_cycle:
                 on_cycle(cycle, snap)
             _save_state({"schema_version": 1, "budget": budget, "cycle": cycle, "cash": cash,
                          "holdings": holdings, "history": history, "total_fees": total_fees,
                          "initial_prices": initial_prices, "peak_prices": peak_prices,
                          "cooldown_map": cooldown_map, "recent_decisions": recent_decisions,
+                         "initial_total_value": initial_total_value,
                          "session_id": session_id, "session_name": session_name})
             if stop_event:
                 stop_event.wait(timeout=cycle_sec)
@@ -495,32 +506,33 @@ def run(
                     pass
 
         # ── Emit snapshot & persist state ─────────────────────────────────────
-        snap = _snapshot(cycle, cash, budget, holdings, prices, history, total_fees, initial_prices, cycle_sec)
+        snap = _snapshot(cycle, cash, holdings, prices, history, total_fees, initial_total_value, initial_prices, cycle_sec)
         if on_cycle:
             on_cycle(cycle, snap)
 
-        _save_state({
-            "schema_version": 1,
-            "budget":         budget,
-            "cycle":          cycle,
-            "cash":           cash,
-            "holdings":       holdings,
-            "history":        history,
-            "total_fees":     total_fees,
-            "initial_prices": initial_prices,
-            "peak_prices":    peak_prices,
-            "cooldown_map":   cooldown_map,
-            "recent_decisions": recent_decisions,
-            "session_id":     session_id,
-            "session_name":   session_name,
-        })
+        _save_state({"schema_version": 1, "budget": budget, "cycle": cycle, "cash": cash,
+                     "holdings": holdings, "history": history, "total_fees": total_fees,
+                     "initial_prices": initial_prices, "peak_prices": peak_prices,
+                     "cooldown_map": cooldown_map, "recent_decisions": recent_decisions,
+                     "initial_total_value": initial_total_value,
+                     "session_id": session_id, "session_name": session_name,
+                     "running": True})
 
         if stop_event:
             stop_event.wait(timeout=cycle_sec)
         else:
             time.sleep(cycle_sec)
 
+    # Mark simulation as stopped in persisted state
+    _save_state({"schema_version": 1, "budget": budget, "cycle": cycle, "cash": cash,
+                 "holdings": holdings, "history": history, "total_fees": total_fees,
+                 "initial_prices": initial_prices, "peak_prices": peak_prices,
+                 "cooldown_map": cooldown_map, "recent_decisions": recent_decisions,
+                 "initial_total_value": initial_total_value,
+                 "session_id": session_id, "session_name": session_name,
+                 "running": False})
+
     if _db_handler is not None:
         logging.getLogger().removeHandler(_db_handler)
 
-    return _snapshot(cycle, cash, budget, holdings, prices, history, total_fees, initial_prices, cycle_sec)
+    return _snapshot(cycle, cash, holdings, prices, history, total_fees, initial_total_value, initial_prices, cycle_sec)
