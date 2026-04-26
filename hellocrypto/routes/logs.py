@@ -1,4 +1,6 @@
 """SSE log stream + DB logs API."""
+from __future__ import annotations
+
 import json
 import time
 

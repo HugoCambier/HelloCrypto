@@ -44,12 +44,6 @@ _stop = threading.Event()
 def _handle_signal(signum, frame):
     log.info("Signal %d reçu — arrêt propre en cours...", signum)
     _stop.set()
-    # Also signal the agent if it's running
-    try:
-        from hellocrypto import agent as _agent
-        _agent._stop_requested = True
-    except Exception:
-        pass
 
 
 signal.signal(signal.SIGTERM, _handle_signal)

@@ -1,4 +1,6 @@
 """Portfolio, Binance balance & manual trade API."""
+from __future__ import annotations
+
 import logging
 
 from flask import Blueprint, jsonify, request

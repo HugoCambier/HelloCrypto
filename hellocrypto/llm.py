@@ -9,6 +9,8 @@ Both providers receive the same system prompt and user prompt, and must
 return a JSON string matching the trading decision schema.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import re

@@ -1,4 +1,6 @@
 """Backtest routes."""
+from __future__ import annotations
+
 import itertools
 import logging
 import threading

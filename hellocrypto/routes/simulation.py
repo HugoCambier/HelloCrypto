@@ -1,4 +1,7 @@
 """Simulation routes + SimState thread-safe container."""
+from __future__ import annotations
+
+import copy
 import json
 import logging
 import os
@@ -71,7 +74,7 @@ class SimState:
                 "session_name":     self.session_name,
                 "cycle_seconds":    self.cycle_seconds,
                 "cycle_started_at": self.cycle_started_at,
-                "snapshot":         self.snapshot,
+                "snapshot":         copy.deepcopy(self.snapshot),
                 "error":            self.error,
             }
 
@@ -214,8 +217,27 @@ def sim_start():
     max_cycles_raw       = body.get("max_cycles")
     max_cycles           = int(max_cycles_raw) if max_cycles_raw and int(max_cycles_raw) > 0 else None
     liquidate_at_end     = bool(body.get("liquidate_at_end", False))
-    raw_holdings         = body.get("initial_holdings") or {}
-    initial_holdings     = {k: float(v) for k, v in raw_holdings.items() if float(v) > 0}
+    raw_holdings     = body.get("initial_holdings") or {}
+    initial_holdings = {k: float(v) for k, v in raw_holdings.items() if float(v) > 0}
+
+    # Auto-fetch Binance holdings + USDC balance when not resuming and not provided
+    # This seeds the simulation with the portfolio actually owned at start time
+    if not resume and not initial_holdings:
+        try:
+            from hellocrypto.api import get_open_positions as _get_pos, get_balance as _get_bal
+            watchlist = cfg.get("watchlist", [])
+            fetched = _get_pos(watchlist)
+            initial_holdings = {sym: info["qty"] for sym, info in fetched.items() if info["qty"] > 0}
+            # Use actual USDC balance only if budget was not explicitly set in the request
+            if "budget" not in body and initial_holdings:
+                usdc = _get_bal("USDC")
+                if usdc > 0:
+                    budget = usdc
+            if initial_holdings:
+                log.info("[SIM] Avoirs Binance auto-fetchés: %s + $%.2f USDC",
+                         {k: round(v, 6) for k, v in initial_holdings.items()}, budget)
+        except Exception as exc:
+            log.info("[SIM] Auto-fetch Binance ignoré (pas de clés API ou erreur): %s", exc)
 
     # If resume requested but no saved state → downgrade silently + flag it
     resume_failed = False

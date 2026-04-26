@@ -4,12 +4,20 @@ Covers: HMAC authentication, market data, order execution,
 trade history, and local persistence helpers.
 """
 
-import os, time, json, hmac, hashlib
-from datetime import datetime
+from __future__ import annotations
+
+import hashlib
+import hmac
+import json
+import logging
+import os
+import time
 from pathlib import Path
 from urllib.parse import urlencode
 
 import requests
+
+log = logging.getLogger(__name__)
 
 BASE_URL    = "https://api.binance.com"
 CONFIG_FILE = Path("config.json")
@@ -295,18 +303,29 @@ def format_market_data(data: dict[str, dict], watchlist: list[str]) -> str:
 
 _EXTERNAL_CACHE: dict = {}
 _CACHE_TTL = 300  # seconds
+_CACHE_MAX_SIZE = 32
 
 
 def _cached(key: str, fetcher):
-    """Simple TTL cache for external API calls."""
+    """Simple TTL cache for external API calls (bounded to _CACHE_MAX_SIZE)."""
+    now = time.time()
     entry = _EXTERNAL_CACHE.get(key)
-    if entry and time.time() - entry["ts"] < _CACHE_TTL:
+    if entry and now - entry["ts"] < _CACHE_TTL:
         return entry["value"]
     try:
         value = fetcher()
     except Exception:
         value = None
-    _EXTERNAL_CACHE[key] = {"ts": time.time(), "value": value}
+    # Evict expired entries if cache is full
+    if len(_EXTERNAL_CACHE) >= _CACHE_MAX_SIZE:
+        expired = [k for k, v in _EXTERNAL_CACHE.items() if now - v["ts"] >= _CACHE_TTL]
+        for k in expired:
+            del _EXTERNAL_CACHE[k]
+        # If still full, evict oldest
+        if len(_EXTERNAL_CACHE) >= _CACHE_MAX_SIZE:
+            oldest = min(_EXTERNAL_CACHE, key=lambda k: _EXTERNAL_CACHE[k]["ts"])
+            del _EXTERNAL_CACHE[oldest]
+    _EXTERNAL_CACHE[key] = {"ts": now, "value": value}
     return value
 
 
@@ -430,8 +449,7 @@ def get_enriched_market_data(watchlist: list[str], cycle_seconds: int = 60) -> d
                 "atr":            round(atr_val, 4) if atr_val else None,
             }
         except Exception as exc:
-            import logging
-            logging.getLogger(__name__).warning("Données marché indisponibles pour %s: %s", sym, exc)
+            log.warning("Données marché indisponibles pour %s: %s", sym, exc)
     return result
 
 

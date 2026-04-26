@@ -1,6 +1,9 @@
 """Flask web dashboard — factory + blueprint registration."""
 
+from __future__ import annotations
+
 import logging
+import os
 from dotenv import load_dotenv
 from flask import Flask, render_template
 from pathlib import Path
@@ -45,8 +48,9 @@ app = create_app()
 def main() -> None:
     (_ROOT / "logs").mkdir(exist_ok=True)
     (_ROOT / "data").mkdir(exist_ok=True)
-    print("Dashboard → http://localhost:5000")
-    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
+    port = int(os.environ.get("PORT", os.environ.get("FLASK_PORT", "5000")))
+    print(f"Dashboard → http://localhost:{port}")
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,8 @@ All text sent to the model lives here so tweaking strategy
 never requires touching business logic.
 """
 
+from __future__ import annotations
+
 # System prompt: defines the model's persona and output contract.
 SYSTEM = (
     "Tu es un agent de trading crypto quantitatif expérimenté sur Binance. "
