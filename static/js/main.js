@@ -458,12 +458,12 @@ function _renderDashTrades(history) {
   const recent = history.slice(0, 20);
   document.getElementById('dash-trades-count').textContent = recent.length + ' derniers';
   const tb = document.getElementById('dash-trades-body');
-  if (!recent.length) { tb.innerHTML = '<tr><td colspan="6" class="px-4 py-6 text-center text-slate-600">Aucun trade</td></tr>'; return; }
+  if (!recent.length) { tb.innerHTML = '<tr><td colspan="7" class="px-4 py-6 text-center text-slate-600">Aucun trade</td></tr>'; return; }
   tb.innerHTML = recent.map(t => {
-    const badgeCls = t.action === 'BUY' ? 'badge-buy' : t.action.includes('stop') ? 'badge-sl' : 'badge-sell';
+    const badgeCls = t.action.startsWith('BUY') ? 'badge-buy' : t.action.includes('stop') ? 'badge-sl' : 'badge-sell';
     const dt = new Date(t.timestamp+'Z').toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
     const pnl = t.pnl != null ? `<span class="${t.pnl>=0?'pnl-pos':'pnl-neg'}">${t.pnl>=0?'+':''}$${fmt(t.pnl)}</span>` : '—';
-    return `<tr class="hover:bg-slate-700/30"><td class="px-3 py-2 text-slate-400">${dt}</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${badgeCls}">${t.action}</span></td><td class="px-3 py-2 font-medium">${t.symbol||'—'}</td><td class="px-3 py-2 text-right text-slate-300">${t.action==='BUY'?'$'+fmt(t.amount):fmt4(t.qty)}</td><td class="px-3 py-2 text-right text-slate-300">$${fmt(t.price)}</td><td class="px-3 py-2 text-right">${pnl}</td></tr>`;
+    return `<tr class="hover:bg-slate-700/30"><td class="px-3 py-2 text-slate-400">${dt}</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${badgeCls}">${t.action}</span></td><td class="px-3 py-2 font-medium">${t.symbol||'—'}</td><td class="px-3 py-2 text-right text-slate-300">${t.qty!=null?fmt4(t.qty):'—'}</td><td class="px-3 py-2 text-right text-slate-300">${t.amount!=null?'$'+fmt(t.amount):'—'}</td><td class="px-3 py-2 text-right text-slate-300">$${fmt(t.price)}</td><td class="px-3 py-2 text-right">${pnl}</td></tr>`;
   }).join('');
 }
 
@@ -478,15 +478,21 @@ function _updateDashFromSim(s) {
   const bhSign = bhPnl!=null?(bhPnl>=0?'+':''):'';
   const bhColor = bhPnl!=null?(bhPnl>=0?'pnl-pos':'pnl-neg'):'';
   const bhVal = bhPnl!=null?bhSign+'$'+fmt(bhPnl):'—';
+  const bhSub = s.benchmark_pnl_pct!=null?bhSign+fmt(s.benchmark_pnl_pct)+'%':'';
   const alpha = s.alpha;
   const alphaSign = alpha!=null?(alpha>=0?'+':''):'';
   const alphaColor = alpha!=null?(alpha>=0?'pnl-pos':'pnl-neg'):'';
   const alphaVal = alpha!=null?alphaSign+'$'+fmt(alpha):'—';
+  const btcPnl = s.btc_bh_pnl;
+  const btcSign = btcPnl!=null?(btcPnl>=0?'+':''):'';
+  const btcColor = btcPnl!=null?(btcPnl>=0?'pnl-pos':'pnl-neg'):'';
+  const btcSub = s.btc_bh_pct!=null?btcSign+fmt(s.btc_bh_pct)+'%':'';
 
   document.getElementById('dash-sim-kpis').innerHTML =
     kpiCard('Valeur totale', '$'+fmt(s.total_value)) +
     kpiCard('PnL net', sign+'$'+fmt(s.pnl), sign+fmt(s.pnl_pct)+'%', pnlColor) +
-    kpiCard('Buy & Hold', bhVal, '', bhColor) +
+    kpiCard('Buy & Hold', bhVal, bhSub, bhColor) +
+    kpiCard('BTC Hold', btcPnl!=null?btcSign+'$'+fmt(btcPnl):'—', btcSub, btcColor) +
     kpiCard('Alpha', alphaVal, '', alphaColor) +
     kpiCard('Frais', '$'+fmt(s.total_fees), '@ 0.1%', 'text-amber-400') +
     kpiCard('Trades', s.trades||0, `${s.buys||0} achats / ${s.sells||0} ventes`) +
@@ -817,38 +823,72 @@ function setPeriod(btn, period) {
 async function loadPerformance() {
   const sessionParam = _runnerMode==='simulation'&&_perfSessionId ? `&session_id=${_perfSessionId}` : '';
   try {
-    const d = await fetch(`/api/performance?period=${currentPeriod}&mode=${_runnerMode}${sessionParam}`).then(r => r.json());
-    _renderPerfKPIs(d);
-    _renderPerfChart(d);
-    _renderPerfPnlBySymbol(d);
+    const [d, posData] = await Promise.all([
+      fetch(`/api/performance?period=${currentPeriod}&mode=${_runnerMode}${sessionParam}`).then(r => r.json()),
+      _runnerMode === 'real'
+        ? fetch('/api/portfolio').then(r => r.json()).catch(() => null)
+        : fetch('/api/simulation/status').then(r => r.json()).catch(() => null),
+    ]);
+    // Resolve open positions with current prices for unrealized P&L
+    let openPositions = [];
+    if (_runnerMode === 'real' && posData?.positions) {
+      openPositions = posData.positions;
+    } else if (_runnerMode === 'simulation' && posData?.running && posData?.snapshot?.positions) {
+      openPositions = posData.snapshot.positions;
+    }
+    _renderPerfKPIs(d, openPositions);
+    _renderPerfChart(d, openPositions);
+    _renderPerfPnlBySymbol(d, openPositions);
     _renderPerfHistory(d);
     // Load session details if applicable
-    if (_runnerMode==='simulation' && _perfSessionId) { _loadSessionDetail(_perfSessionId); _loadRunLogs(_perfSessionId); }
-    else { document.getElementById('perf-session-detail').classList.add('hidden'); document.getElementById('perf-run-logs').classList.add('hidden'); }
+    if (_runnerMode==='simulation' && _perfSessionId) {
+      _loadSessionDetail(_perfSessionId);
+      _loadRunLogs(_perfSessionId, null);
+    } else if (_runnerMode === 'real') {
+      document.getElementById('perf-session-detail').classList.add('hidden');
+      _loadRunLogs(null, 'real');
+    } else {
+      document.getElementById('perf-session-detail').classList.add('hidden');
+      document.getElementById('perf-run-logs').classList.add('hidden');
+    }
   } catch {}
 }
 
-function _renderPerfKPIs(d) {
-  const netColor = d.net>=0?'pnl-pos':'pnl-neg';
-  const netSign = d.net>=0?'+':'';
+function _renderPerfKPIs(d, positions = []) {
+  const unrealized = positions.reduce((s, p) => s + ((p.current_price && p.avg_price && p.qty) ? (p.current_price - p.avg_price) * p.qty : 0), 0);
+  const totalNet = d.net + unrealized;
+  const netColor = totalNet>=0?'pnl-pos':'pnl-neg';
+  const netSign  = totalNet>=0?'+':'';
+  const netSub   = Math.abs(unrealized) > 0.005
+    ? `réalisé ${d.net>=0?'+':''}$${fmt(d.net)} · non réal. ${unrealized>=0?'+':''}$${fmt(unrealized)}`
+    : 'ventes − achats − frais';
   document.getElementById('perf-kpi-cards').innerHTML =
     kpiCard('Transactions', d.trades) +
     kpiCard('Achats / Ventes', `${d.buys} / ${d.sells}${d.stop_losses?` (+${d.stop_losses} SL)`:''}`, '', 'text-slate-100') +
     kpiCard('Win rate', d.win_rate!=null?d.win_rate+'%':'—', '', d.win_rate>=50?'text-green-400':'text-red-400') +
     kpiCard('Frais', '$'+fmt(d.fees), '', 'text-amber-400') +
-    kpiCard('Net P&L', netSign+'$'+fmt(d.net), 'ventes-achats-frais', netColor);
+    kpiCard('Net P&L', netSign+'$'+fmt(totalNet), netSub, netColor);
   document.getElementById('perf-trade-count').textContent = d.history.length+' trades';
 }
 
-function _renderPerfChart(d) {
+function _renderPerfChart(d, positions = []) {
   const ctx = document.getElementById('perf-chart').getContext('2d');
   if (_perfChart) { _perfChart.destroy(); _perfChart = null; }
   if (!d.timeseries?.length || d.timeseries.length < 2) return;
+  const unrealized = positions.reduce((s, p) => s + ((p.current_price && p.avg_price && p.qty) ? (p.current_price - p.avg_price) * p.qty : 0), 0);
+  const pts = [...d.timeseries];
+  if (Math.abs(unrealized) > 0.005 && pts.length) {
+    pts.push({ ts: new Date().toISOString(), v: +((pts[pts.length-1].v + unrealized).toFixed(2)), current: true });
+  }
+  const labels  = pts.map(p => p.current ? 'Maintenant' : new Date(p.ts+'Z').toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}));
+  const data    = pts.map(p => p.v);
+  const radii   = pts.map(p => p.current ? 5 : 0);
+  const ptColors = pts.map(p => p.current ? (unrealized >= 0 ? '#34d399' : '#f87171') : '#3b82f6');
   _perfChart = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: d.timeseries.map(p => new Date(p.ts+'Z').toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})),
-      datasets: [{ label: 'PnL cumulé', data: d.timeseries.map(p => p.v), borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', borderWidth: 1.5, pointRadius: 0, fill: true, tension: 0.3 }],
+      labels,
+      datasets: [{ label: 'PnL cumulé', data, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', borderWidth: 1.5, pointRadius: radii, pointBackgroundColor: ptColors, fill: true, tension: 0.3 }],
     },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
       scales: { x: { ticks: { color: '#64748b', maxTicksLimit: 8, font: { size: 10 } }, grid: { color: '#1e293b' } },
@@ -856,42 +896,60 @@ function _renderPerfChart(d) {
   });
 }
 
-function _renderPerfPnlBySymbol(d) {
+function _renderPerfPnlBySymbol(d, positions = []) {
   const ctx = document.getElementById('perf-pnl-chart').getContext('2d');
   if (_perfPnlChart) { _perfPnlChart.destroy(); _perfPnlChart = null; }
-  // Compute P&L per symbol from history
-  const pnlMap = {};
+  // Realized P&L from sell trades
+  const realMap = {};
   (d.history||[]).forEach(t => {
     if (t.pnl != null && t.symbol) {
       const sym = t.symbol.replace('USDC','');
-      pnlMap[sym] = (pnlMap[sym]||0) + t.pnl;
+      realMap[sym] = (realMap[sym]||0) + t.pnl;
     }
   });
-  const symbols = Object.keys(pnlMap);
-  if (!symbols.length) return;
-  const values = symbols.map(s => pnlMap[s]);
-  const colors = values.map(v => v >= 0 ? '#34d399' : '#f87171');
+  // Unrealized P&L from open positions
+  const unrealMap = {};
+  positions.forEach(p => {
+    if (p.current_price && p.avg_price && p.qty) {
+      const sym = p.symbol.replace('USDC','');
+      unrealMap[sym] = +((p.current_price - p.avg_price) * p.qty).toFixed(2);
+    }
+  });
+  const allSyms = [...new Set([...Object.keys(realMap), ...Object.keys(unrealMap)])];
+  if (!allSyms.length) return;
+  const realVals  = allSyms.map(s => +(realMap[s]||0).toFixed(2));
+  const unrealVals = allSyms.map(s => +(unrealMap[s]||0).toFixed(2));
+  const hasUnreal  = unrealVals.some(v => v !== 0);
+  const realColors  = realVals.map(v => v >= 0 ? 'rgba(52,211,153,0.9)' : 'rgba(248,113,113,0.9)');
+  const unrealColors = unrealVals.map(v => v >= 0 ? 'rgba(52,211,153,0.35)' : 'rgba(248,113,113,0.35)');
   _perfPnlChart = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: symbols,
-      datasets: [{ data: values.map(v => +v.toFixed(2)), backgroundColor: colors, borderRadius: 4 }],
+      labels: allSyms,
+      datasets: [
+        { label: 'Réalisé',     data: realVals,   backgroundColor: realColors,   borderRadius: hasUnreal ? 0 : 4 },
+        ...(hasUnreal ? [{ label: 'Non réalisé', data: unrealVals, backgroundColor: unrealColors, borderRadius: 4 }] : []),
+      ],
     },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-      scales: { x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
-                y: { ticks: { color: '#64748b', font: { size: 10 }, callback: v => '$'+v }, grid: { color: '#1e293b' } } } },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: hasUnreal, labels: { color: '#94a3b8', font: { size: 10 } } } },
+      scales: {
+        x: { stacked: true, ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
+        y: { stacked: true, ticks: { color: '#64748b', font: { size: 10 }, callback: v => '$'+v }, grid: { color: '#1e293b' } },
+      },
+    },
   });
 }
 
 function _renderPerfHistory(d) {
   const tb = document.getElementById('perf-history-body');
-  if (!d.history.length) { tb.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">Aucune transaction</td></tr>'; return; }
+  if (!d.history.length) { tb.innerHTML = '<tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">Aucune transaction</td></tr>'; return; }
   tb.innerHTML = d.history.map(t => {
-    const badgeCls = t.action==='BUY'?'badge-buy':t.action.includes('stop')?'badge-sl':'badge-sell';
+    const badgeCls = t.action.startsWith('BUY')?'badge-buy':t.action.includes('stop')?'badge-sl':'badge-sell';
     const dt = new Date(t.timestamp+'Z').toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
     const pnl = t.pnl!=null?`<span class="${t.pnl>=0?'pnl-pos':'pnl-neg'}">${t.pnl>=0?'+':''}$${fmt(t.pnl)}</span>`:'—';
     const reason = t.reason || '—';
-    return `<tr class="hover:bg-slate-700/30"><td class="px-4 py-2.5 text-slate-400 whitespace-nowrap">${dt}</td><td class="px-4 py-2.5"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${badgeCls}">${t.action}</span></td><td class="px-4 py-2.5 font-medium">${t.symbol||'—'}</td><td class="px-4 py-2.5 text-right text-slate-300">${fmt4(t.amount)}</td><td class="px-4 py-2.5 text-right text-slate-300">$${fmt(t.price)}</td><td class="px-4 py-2.5 text-right text-amber-400/80">${t.fee?'$'+fmt(t.fee):'—'}</td><td class="px-4 py-2.5 text-right">${pnl}</td><td class="px-4 py-2.5 text-slate-400 max-w-xs truncate cursor-pointer select-none reason-cell" title="Cliquer pour développer">${reason}</td></tr>`;
+    return `<tr class="hover:bg-slate-700/30"><td class="px-4 py-2.5 text-slate-400 whitespace-nowrap">${dt}</td><td class="px-4 py-2.5"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${badgeCls}">${t.action}</span></td><td class="px-4 py-2.5 font-medium">${t.symbol||'—'}</td><td class="px-4 py-2.5 text-right text-slate-300">${t.qty!=null?fmt4(t.qty):'—'}</td><td class="px-4 py-2.5 text-right text-slate-300">${t.amount!=null?'$'+fmt(t.amount):'—'}</td><td class="px-4 py-2.5 text-right text-slate-300">$${fmt(t.price)}</td><td class="px-4 py-2.5 text-right text-amber-400/80">${t.fee?'$'+fmt(t.fee):'—'}</td><td class="px-4 py-2.5 text-right">${pnl}</td><td class="px-4 py-2.5 text-slate-400 max-w-xs truncate cursor-pointer select-none reason-cell" title="Cliquer pour développer">${reason}</td></tr>`;
   }).join('');
 }
 
@@ -907,15 +965,17 @@ async function _loadSessionDetail(sessionId) {
   } catch { card.classList.add('hidden'); }
 }
 
-async function _loadRunLogs(sessionId) {
+async function _loadRunLogs(sessionId, mode) {
   const wrap = document.getElementById('perf-run-logs');
   const body = document.getElementById('perf-run-logs-body');
-  if (!sessionId) { wrap.classList.add('hidden'); return; }
+  if (!sessionId && !mode) { wrap.classList.add('hidden'); return; }
   wrap.classList.remove('hidden');
   try {
-    const logs = await fetch(`/api/logs?session_id=${sessionId}&limit=300`).then(r => r.json());
+    const qs = sessionId ? `session_id=${sessionId}` : `mode=${mode}`;
+    const logs = await fetch(`/api/logs?${qs}&limit=300`).then(r => r.json());
     if (!logs.length) { body.innerHTML = '<div class="text-slate-500 py-4 text-center">Aucun log</div>'; return; }
-    body.innerHTML = [...logs].reverse().map(l => {
+    // load_logs() already returns ORDER BY timestamp DESC — no reverse needed
+    body.innerHTML = logs.map(l => {
       const ts = l.timestamp ? new Date(l.timestamp+'Z').toLocaleTimeString('fr-FR') : '';
       const cls = classifyLine(l.message);
       return `<div class="log-line ${cls}"><span class="text-slate-600 mr-1">${ts}</span>${escHtml(l.message)}</div>`;
@@ -925,8 +985,8 @@ async function _loadRunLogs(sessionId) {
 
 function _setRunLogFilter(btn) {
   document.querySelectorAll('.perf-log-filter').forEach(b => b.classList.toggle('active', b===btn));
-  // Re-load with filter (simplified - reload all)
-  if (_perfSessionId) _loadRunLogs(_perfSessionId);
+  if (_runnerMode === 'simulation' && _perfSessionId) _loadRunLogs(_perfSessionId, null);
+  else if (_runnerMode === 'real') _loadRunLogs(null, 'real');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -990,6 +1050,7 @@ function _initBtChart(symbols) {
     type:'line', data:{labels:[],datasets:[
       {label:'Portfolio',data:[],borderColor:'#3b82f6',backgroundColor:'#3b82f618',borderWidth:2.5,pointRadius:0,tension:0.2},
       {label:'Buy & Hold',data:[],borderColor:'#64748b',backgroundColor:'transparent',borderWidth:1.5,borderDash:[5,4],pointRadius:0,tension:0.2},
+      {label:'BTC Hold',data:[],borderColor:'#f59e0b',backgroundColor:'transparent',borderWidth:1.5,borderDash:[3,3],pointRadius:0,tension:0.2},
       ...cryptoDs]},
     options:{animation:false,responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
       plugins:{legend:{labels:{color:'#94a3b8',font:{size:11},boxWidth:16,padding:16}},tooltip:{backgroundColor:'#1e293b',borderColor:'#334155',borderWidth:1,titleColor:'#94a3b8',bodyColor:'#e2e8f0',callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y>=0?'+':''}${c.parsed.y.toFixed(2)}%`}}},
@@ -1003,7 +1064,8 @@ function _redrawBtChart() {
   _btChart.data.labels = raw.map(d=>d.label);
   _btChart.data.datasets[0].data = raw.map(d=>d.portfolio);
   _btChart.data.datasets[1].data = raw.map(d=>d.bh);
-  _btChart.data.datasets.slice(2).forEach(ds=>{ds.data=raw.map(d=>d.cryptos[ds.symbolKey]??null);});
+  _btChart.data.datasets[2].data = raw.map(d=>d.btc??null);
+  _btChart.data.datasets.slice(3).forEach(ds=>{ds.data=raw.map(d=>d.cryptos[ds.symbolKey]??null);});
   _btChart.update('none');
 }
 
@@ -1017,7 +1079,8 @@ function _updateBtChart(snap) {
   const label=dt.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
   const cryptos={};
   _btChartSymbols.forEach(sym=>{const p=prices[sym],p0=_btChartInitP[sym]; cryptos[sym]=(p&&p0)?+((p/p0-1)*100).toFixed(2):null;});
-  _btChartRaw.push({label,portfolio:+(snap.pnl_pct||0).toFixed(2),bh:+(snap.benchmark_pnl_pct||0).toFixed(2),cryptos});
+  const btcPct = snap.btc_bh_pct!=null?+snap.btc_bh_pct.toFixed(2):null;
+  _btChartRaw.push({label,portfolio:+(snap.pnl_pct||0).toFixed(2),bh:+(snap.benchmark_pnl_pct||0).toFixed(2),btc:btcPct,cryptos});
   _redrawBtChart();
 }
 
@@ -1079,11 +1142,15 @@ function _updateBtDisplay(r) {
   if (!r||r.error||r.loading) return;
   const pnlColor=(r.pnl||0)>=0?'pnl-pos':'pnl-neg', sign=(r.pnl||0)>=0?'+':'';
   const bhPnl=r.benchmark_pnl, bhSign=bhPnl!=null?(bhPnl>=0?'+':''):'', bhColor=bhPnl!=null?(bhPnl>=0?'pnl-pos':'pnl-neg'):'';
+  const bhSub=r.benchmark_pnl_pct!=null?bhSign+fmt(r.benchmark_pnl_pct)+'%':'';
   const alpha=r.alpha, aSign=alpha!=null?(alpha>=0?'+':''):'', aColor=alpha!=null?(alpha>=0?'pnl-pos':'pnl-neg'):'';
+  const btcPnl=r.btc_bh_pnl, btcSign=btcPnl!=null?(btcPnl>=0?'+':''):'', btcColor=btcPnl!=null?(btcPnl>=0?'pnl-pos':'pnl-neg'):'';
+  const btcSub=r.btc_bh_pct!=null?btcSign+fmt(r.btc_bh_pct)+'%':'';
   document.getElementById('bt-kpi-cards').innerHTML =
     kpiCard('Valeur totale','$'+fmt(r.total_value)) +
     kpiCard('PnL net',sign+'$'+fmt(r.pnl),sign+fmt(r.pnl_pct)+'%',pnlColor) +
-    kpiCard('Buy & Hold',bhPnl!=null?bhSign+'$'+fmt(bhPnl):'—','',bhColor) +
+    kpiCard('Buy & Hold',bhPnl!=null?bhSign+'$'+fmt(bhPnl):'—',bhSub,bhColor) +
+    kpiCard('BTC Hold',btcPnl!=null?btcSign+'$'+fmt(btcPnl):'—',btcSub,btcColor) +
     kpiCard('Alpha',alpha!=null?aSign+'$'+fmt(alpha):'—','',aColor) +
     kpiCard('Frais','$'+fmt(r.total_fees),'','text-amber-400') +
     kpiCard('Trades',r.trades||0,`${r.buys||0}/${r.sells||0}`) +
@@ -1111,7 +1178,7 @@ function _redrawBtHistory(hist) {
   const hb=document.getElementById('bt-history-body');
   if (!rows.length) { hb.innerHTML='<tr><td colspan="11" class="px-4 py-6 text-center text-slate-600">Aucun trade</td></tr>'; return; }
   hb.innerHTML = rows.map(t=>{
-    const bc=t.action==='BUY'?'badge-buy':t.action.includes('stop')?'badge-sl':'badge-sell';
+    const bc=t.action.startsWith('BUY')?'badge-buy':t.action.includes('stop')?'badge-sl':'badge-sell';
     const pnl=t.pnl!=null?`<span class="${t.pnl>=0?'pnl-pos':'pnl-neg'}">${t.pnl>=0?'+':''}$${fmt(t.pnl)}</span>`:'—';
     const dt=t.timestamp?new Date(t.timestamp+(t.timestamp.endsWith('Z')?'':'Z')).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
     const sc=t.score!=null?`<span class="px-1 py-0.5 rounded text-xs ${t.score>=7?'bg-green-900/60 text-green-400':t.score<=3?'bg-red-900/60 text-red-400':'bg-slate-700 text-slate-300'}">${t.score}/10</span>`:'—';

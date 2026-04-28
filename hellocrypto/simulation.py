@@ -247,12 +247,38 @@ def run(
                         holdings[sym] = {"qty": qty, "avg_price": prices[sym]}
                         peak_prices[sym] = prices[sym]
                         log.info("[SIM] Avoir initial: %s qty=%.6f @ $%.4f", sym, qty, prices[sym])
-            
+                        # Synthetic BUY entry to record the initial position in history
+                        init_amount = round(qty * prices[sym], 2)
+                        init_ts = datetime.utcnow().isoformat()
+                        history.append({
+                            "cycle":     cycle,
+                            "timestamp": init_ts,
+                            "action":    "BUY (init)",
+                            "symbol":    sym,
+                            "qty":       qty,
+                            "amount":    init_amount,
+                            "price":     prices[sym],
+                            "fee":       0.0,
+                            "reason":    "Initialisation — avoir détenu au démarrage",
+                        })
+                        try:
+                            from db.store import save_trade as _db_save
+                            _db_save(
+                                action="BUY (init)", symbol=sym, amount=init_amount,
+                                price=prices[sym], reason="Initialisation — avoir détenu au démarrage",
+                                fee=0.0, qty=qty, pnl=None,
+                                mode="simulation", session_id=session_id, session_name=session_name,
+                            )
+                        except Exception:
+                            pass
+
             initial_portfolio_val = sum(
                 h["qty"] * prices.get(sym, h["avg_price"]) for sym, h in holdings.items()
             )
             initial_total_value = cash + initial_portfolio_val
-            log.info("[SIM] Valeur initiale du portefeuille: $%.2f (cash) + $%.2f (actifs) = $%.2f",
+            # Budget = total capital (USDC + crypto value) at run start
+            budget = initial_total_value
+            log.info("[SIM] Valeur initiale du portefeuille: $%.2f (cash) + $%.2f (actifs) = $%.2f (budget)",
                      cash, initial_portfolio_val, initial_total_value)
 
             # Persist initial state to sessions table
@@ -263,14 +289,14 @@ def run(
                     name=session_name,
                     mode="simulation",
                     initial_state={
-                        "budget":           budget,
-                        "initial_prices":   initial_prices,
-                        "initial_holdings": {
+                        "budget":              budget,
+                        "initial_prices":      initial_prices,
+                        "initial_holdings":    {
                             sym: {"qty": h["qty"], "avg_price": h["avg_price"]}
                             for sym, h in holdings.items()
                         },
                         "initial_total_value": initial_total_value,
-                        "watchlist": watchlist,
+                        "watchlist":           watchlist,
                     },
                 )
             except Exception:
@@ -459,6 +485,7 @@ def run(
                         "timestamp": datetime.utcnow().isoformat(),
                         "action":    "BUY",
                         "symbol":    sym,
+                        "qty":       round(result.qty, 6),
                         "amount":    amount,
                         "price":     prices[sym],
                         "fee":       round(result.fee, 6),
@@ -468,7 +495,7 @@ def run(
                         from db.store import save_trade as _db_save
                         _db_save(
                             action="BUY", symbol=sym, amount=amount, price=prices[sym],
-                            reason=full_reason, fee=result.fee, qty=None, pnl=None,
+                            reason=full_reason, fee=result.fee, qty=round(result.qty, 6), pnl=None,
                             mode="simulation", session_id=session_id, session_name=session_name,
                         )
                     except Exception:

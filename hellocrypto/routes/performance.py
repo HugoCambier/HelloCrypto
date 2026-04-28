@@ -80,10 +80,12 @@ def api_performance():
     stop_losses = [t for t in filtered if "stop" in t["action"].lower()]
     all_sells   = sells + stop_losses
 
-    invested  = sum(t.get("amount", 0) or 0 for t in buys)
-    recovered = sum((t.get("qty", 0) or 0) * (t.get("price", 0) or 0) for t in all_sells)
-    fees      = sum(t.get("fee", 0) or 0 for t in filtered)
-    net       = round(recovered - invested - fees, 2)
+    invested   = sum(t.get("amount", 0) or 0 for t in buys)
+    recovered  = sum((t.get("qty", 0) or 0) * (t.get("price", 0) or 0) for t in all_sells)
+    fees       = sum(t.get("fee", 0) or 0 for t in filtered)
+    # Only sell fees reduce net cash: buy fees are already embedded in the reduced qty received
+    sell_fees  = sum(t.get("fee", 0) or 0 for t in all_sells)
+    net        = round(recovered - invested - sell_fees, 2)
 
     sells_pnl  = [t for t in all_sells if t.get("pnl") is not None]
     profitable = [t for t in sells_pnl if t["pnl"] > 0]
@@ -95,7 +97,8 @@ def api_performance():
     timeseries, cum = [], 0.0
     for t in sorted_trades:
         if t["action"] == "BUY":
-            cum -= (t.get("amount", 0) or 0) + (t.get("fee", 0) or 0)
+            # Buy fee is embedded in reduced qty — subtract only the USDC spent
+            cum -= t.get("amount", 0) or 0
         elif "SELL" in t["action"].upper():
             cum += (t.get("qty", 0) or 0) * (t.get("price", 0) or 0) - (t.get("fee", 0) or 0)
         timeseries.append({"ts": t["timestamp"], "v": round(cum, 2)})

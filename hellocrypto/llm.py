@@ -12,8 +12,17 @@ return a JSON string matching the trading decision schema.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
+import time
+
+log = logging.getLogger(__name__)
+
+# Transient HTTP status codes that warrant a retry
+_TRANSIENT_STATUS = {429, 500, 502, 503, 504}
+_MAX_RETRIES = 3
+_RETRY_BASE_DELAY = 2.0  # seconds (doubles each attempt)
 
 
 # ── JSON helpers ──────────────────────────────────────────────────────────────
@@ -45,40 +54,76 @@ def _parse(raw: str) -> dict:
 # ── Provider implementations ──────────────────────────────────────────────────
 
 def _call_claude(prompt: str, system: str, llm_cfg: dict) -> dict:
-    from anthropic import Anthropic
+    from anthropic import Anthropic, APIStatusError
 
-    model      = llm_cfg.get("model", "claude-opus-4-5")
-    max_tokens = int(llm_cfg.get("max_tokens", 1000))
-    client     = Anthropic()
+    model       = llm_cfg.get("model", "claude-opus-4-5")
+    max_tokens  = int(llm_cfg.get("max_tokens", 1000))
     temperature = float(llm_cfg.get("temperature", 1.0))
-    resp = client.messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        system=system,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return _parse(resp.content[0].text)
+    client      = Anthropic()
+
+    last_exc: Exception | None = None
+    for attempt in range(1, _MAX_RETRIES + 1):
+        try:
+            resp = client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return _parse(resp.content[0].text)
+        except APIStatusError as exc:
+            if exc.status_code not in _TRANSIENT_STATUS or attempt == _MAX_RETRIES:
+                raise
+            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+            log.warning("[LLM] Claude %d — retry %d/%d dans %.0fs",
+                        exc.status_code, attempt, _MAX_RETRIES, delay)
+            time.sleep(delay)
+            last_exc = exc
+    raise last_exc  # type: ignore[misc]
 
 
 def _call_gemini(prompt: str, system: str, llm_cfg: dict) -> dict:
     from google import genai
     from google.genai import types
+    from google.api_core.exceptions import GoogleAPICallError
 
-    model      = llm_cfg.get("model", "gemini-2.0-flash")
-    max_tokens = int(llm_cfg.get("max_tokens", 1000))
-    client     = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    model       = llm_cfg.get("model", "gemini-2.0-flash")
+    max_tokens  = int(llm_cfg.get("max_tokens", 1000))
     temperature = float(llm_cfg.get("temperature", 1.0))
-    resp = client.models.generate_content(
-        model=model,
-        config=types.GenerateContentConfig(
-            system_instruction=system,
-            max_output_tokens=max_tokens,
-            temperature=temperature,
-        ),
-        contents=prompt,
-    )
-    return _parse(resp.text)
+    client      = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
+    last_exc: Exception | None = None
+    for attempt in range(1, _MAX_RETRIES + 1):
+        try:
+            resp = client.models.generate_content(
+                model=model,
+                config=types.GenerateContentConfig(
+                    system_instruction=system,
+                    max_output_tokens=max_tokens,
+                    temperature=temperature,
+                ),
+                contents=prompt,
+            )
+            return _parse(resp.text)
+        except GoogleAPICallError as exc:
+            status = getattr(exc, "grpc_status_code", None)
+            http_status = getattr(exc, "code", None)
+            is_transient = (
+                (status is not None and status.value[0] in (14, 8))  # UNAVAILABLE, RESOURCE_EXHAUSTED
+                or (http_status in _TRANSIENT_STATUS)
+                or "503" in str(exc)
+                or "UNAVAILABLE" in str(exc)
+                or "429" in str(exc)
+            )
+            if not is_transient or attempt == _MAX_RETRIES:
+                raise
+            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+            log.warning("[LLM] Gemini erreur transitoire — retry %d/%d dans %.0fs: %s",
+                        attempt, _MAX_RETRIES, delay, exc)
+            time.sleep(delay)
+            last_exc = exc
+    raise last_exc  # type: ignore[misc]
 
 
 def _call_ollama(prompt: str, system: str, llm_cfg: dict) -> dict:
