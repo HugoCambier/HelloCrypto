@@ -23,6 +23,15 @@ function kpiCard(label, value, sub = '', color = 'text-slate-100') {
     ${sub ? `<div class="text-xs text-slate-500 mt-0.5">${sub}</div>` : ''}
   </div>`;
 }
+// Two-row KPI card (label, primary value+color+sub, secondary label+value+color)
+function kpiCard2(label, val1, color1, sub1, line2label, val2, color2, sub2 = '') {
+  return `<div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
+    <div class="text-xs text-slate-500 mb-1">${label}</div>
+    <div class="text-xl font-bold ${color1}">${val1}</div>
+    ${sub1 ? `<div class="text-xs text-slate-500">${sub1}</div>` : ''}
+    ${line2label ? `<div class="text-xs text-slate-400 mt-1.5">${line2label} <span class="font-semibold ${color2}">${val2}</span>${sub2 ? `<span class="text-slate-500 ml-1">${sub2}</span>` : ''}</div>` : ''}
+  </div>`;
+}
 
 // ─── Toast ───────────────────────────────────────────────────────────────────
 let _toastTimer = null;
@@ -463,7 +472,8 @@ function _renderDashTrades(history) {
     const badgeCls = t.action.startsWith('BUY') ? 'badge-buy' : t.action.includes('stop') ? 'badge-sl' : 'badge-sell';
     const dt = new Date(t.timestamp+'Z').toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
     const pnl = t.pnl != null ? `<span class="${t.pnl>=0?'pnl-pos':'pnl-neg'}">${t.pnl>=0?'+':''}$${fmt(t.pnl)}</span>` : '—';
-    return `<tr class="hover:bg-slate-700/30"><td class="px-3 py-2 text-slate-400">${dt}</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${badgeCls}">${t.action}</span></td><td class="px-3 py-2 font-medium">${t.symbol||'—'}</td><td class="px-3 py-2 text-right text-slate-300">${t.qty!=null?fmt4(t.qty):'—'}</td><td class="px-3 py-2 text-right text-slate-300">${t.amount!=null?'$'+fmt(t.amount):'—'}</td><td class="px-3 py-2 text-right text-slate-300">$${fmt(t.price)}</td><td class="px-3 py-2 text-right">${pnl}</td></tr>`;
+    const montant = t.amount != null ? '$'+fmt(t.amount) : (t.qty && t.price) ? '$'+fmt(t.qty * t.price) : '—';
+    return `<tr class="hover:bg-slate-700/30"><td class="px-3 py-2 text-slate-400">${dt}</td><td class="px-3 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${badgeCls}">${t.action}</span></td><td class="px-3 py-2 font-medium">${t.symbol||'—'}</td><td class="px-3 py-2 text-right text-slate-300">${t.qty!=null?fmt4(t.qty):'—'}</td><td class="px-3 py-2 text-right text-slate-300">${montant}</td><td class="px-3 py-2 text-right text-slate-300">$${fmt(t.price)}</td><td class="px-3 py-2 text-right">${pnl}</td></tr>`;
   }).join('');
 }
 
@@ -836,7 +846,7 @@ async function loadPerformance() {
     } else if (_runnerMode === 'simulation' && posData?.running && posData?.snapshot?.positions) {
       openPositions = posData.snapshot.positions;
     }
-    _renderPerfKPIs(d, openPositions);
+    _renderPerfKPIs(d, openPositions, posData);
     _renderPerfChart(d, openPositions);
     _renderPerfPnlBySymbol(d, openPositions);
     _renderPerfHistory(d);
@@ -854,20 +864,66 @@ async function loadPerformance() {
   } catch {}
 }
 
-function _renderPerfKPIs(d, positions = []) {
-  const unrealized = positions.reduce((s, p) => s + ((p.current_price && p.avg_price && p.qty) ? (p.current_price - p.avg_price) * p.qty : 0), 0);
-  const totalNet = d.net + unrealized;
-  const netColor = totalNet>=0?'pnl-pos':'pnl-neg';
-  const netSign  = totalNet>=0?'+':'';
-  const netSub   = Math.abs(unrealized) > 0.005
-    ? `réalisé ${d.net>=0?'+':''}$${fmt(d.net)} · non réal. ${unrealized>=0?'+':''}$${fmt(unrealized)}`
-    : 'ventes − achats − frais';
+function _renderPerfKPIs(d, positions = [], posData = null) {
+  // ── Live portfolio metrics (from snapshot or /api/portfolio) ──
+  let totalVal = null, cash = null, livePnl = null, livePnlPct = null;
+  let bhPnl = null, bhPct = null, btcPnl = null, btcPct = null, alpha = null, alphaBtc = null;
+  const snap = posData?.snapshot;
+  if (snap && (posData.running || (snap.cycle || 0) > 0)) {
+    totalVal   = snap.total_value;
+    cash       = snap.cash;
+    livePnl    = snap.pnl;
+    livePnlPct = snap.pnl_pct;
+    bhPnl      = snap.benchmark_pnl;
+    bhPct      = snap.benchmark_pnl_pct;
+    btcPnl     = snap.btc_bh_pnl;
+    btcPct     = snap.btc_bh_pct;
+    alpha      = snap.alpha;
+    alphaBtc   = (snap.pnl != null && snap.btc_bh_pnl != null) ? +(snap.pnl - snap.btc_bh_pnl).toFixed(2) : null;
+  } else if (posData?.total != null) {
+    totalVal   = posData.total;
+    cash       = posData.cash;
+    livePnl    = posData.gain;
+    livePnlPct = posData.gain_pct;
+  }
+  // Fall back to trade-history net + current portfolio value.
+  // d.net already subtracts invested (negative), so we add the full current market
+  // value of open positions — NOT just the gain — to recover the correct P&L.
+  if (livePnl == null) {
+    const portfolioValue = positions.reduce((s, p) => s + (p.qty ? (p.current_price || p.avg_price || 0) * p.qty : 0), 0);
+    livePnl = d.net + portfolioValue;
+  }
+  const sg = v => v != null ? (v >= 0 ? '+' : '') : '';
+  const cl = v => v != null ? (v >= 0 ? 'pnl-pos' : 'pnl-neg') : 'text-slate-400';
+
+  // ── Row 1 — Portfolio cards ──
+  const pnlSub = livePnlPct != null ? sg(livePnl)+fmt(livePnlPct)+'%' : '';
+  const bhCard = kpiCard2(
+    'Buy & Hold', bhPnl != null ? sg(bhPnl)+'$'+fmt(bhPnl) : '—', cl(bhPnl),
+    bhPct != null ? sg(bhPnl)+fmt(bhPct)+'%' : '',
+    'BTC:', btcPnl != null ? sg(btcPnl)+'$'+fmt(btcPnl) : '—', cl(btcPnl),
+    btcPct != null ? '('+sg(btcPnl)+fmt(btcPct)+'%)' : ''
+  );
+  const alphaCard = kpiCard2(
+    'Alpha', alpha != null ? sg(alpha)+'$'+fmt(alpha) : '—', cl(alpha),
+    'vs Buy & Hold',
+    'vs BTC:', alphaBtc != null ? sg(alphaBtc)+'$'+fmt(alphaBtc) : '—', cl(alphaBtc)
+  );
   document.getElementById('perf-kpi-cards').innerHTML =
+    kpiCard('Valeur totale', totalVal != null ? '$'+fmt(totalVal) : '—') +
+    kpiCard('USDC', cash != null ? '$'+fmt(cash) : '—', '', 'text-slate-100') +
+    kpiCard('Net P&L', sg(livePnl)+'$'+fmt(livePnl), pnlSub, cl(livePnl)) +
+    bhCard + alphaCard;
+
+  // ── Row 2 — Trade stats ──
+  const winColor = (d.win_rate||0) >= 50 ? 'text-green-400' : 'text-red-400';
+  const bestSub = d.worst_trade != null ? (d.worst_trade>=0?'+':'')+'$'+fmt(d.worst_trade) : '';
+  document.getElementById('perf-stats-cards').innerHTML =
     kpiCard('Transactions', d.trades) +
     kpiCard('Achats / Ventes', `${d.buys} / ${d.sells}${d.stop_losses?` (+${d.stop_losses} SL)`:''}`, '', 'text-slate-100') +
-    kpiCard('Win rate', d.win_rate!=null?d.win_rate+'%':'—', '', d.win_rate>=50?'text-green-400':'text-red-400') +
+    kpiCard('Win rate', d.win_rate!=null?d.win_rate+'%':'—', '', winColor) +
     kpiCard('Frais', '$'+fmt(d.fees), '', 'text-amber-400') +
-    kpiCard('Net P&L', netSign+'$'+fmt(totalNet), netSub, netColor);
+    kpiCard('Meilleur / Pire', d.best_trade!=null?(d.best_trade>=0?'+':'')+'$'+fmt(d.best_trade):'—', bestSub, d.best_trade!=null?cl(d.best_trade):'text-slate-400');
   document.getElementById('perf-trade-count').textContent = d.history.length+' trades';
 }
 
@@ -875,10 +931,12 @@ function _renderPerfChart(d, positions = []) {
   const ctx = document.getElementById('perf-chart').getContext('2d');
   if (_perfChart) { _perfChart.destroy(); _perfChart = null; }
   if (!d.timeseries?.length || d.timeseries.length < 2) return;
-  const unrealized = positions.reduce((s, p) => s + ((p.current_price && p.avg_price && p.qty) ? (p.current_price - p.avg_price) * p.qty : 0), 0);
+  // Use full current portfolio value (not just gain) to match the Net P&L semantic:
+  // equity_curve ends at (recovered − invested + portfolio_value) = true economic P&L
+  const portfolioValue = positions.reduce((s, p) => s + (p.qty ? (p.current_price || p.avg_price || 0) * p.qty : 0), 0);
   const pts = [...d.timeseries];
-  if (Math.abs(unrealized) > 0.005 && pts.length) {
-    pts.push({ ts: new Date().toISOString(), v: +((pts[pts.length-1].v + unrealized).toFixed(2)), current: true });
+  if (portfolioValue > 0.005 && pts.length) {
+    pts.push({ ts: new Date().toISOString(), v: +((pts[pts.length-1].v + portfolioValue).toFixed(2)), current: true });
   }
   const labels  = pts.map(p => p.current ? 'Maintenant' : new Date(p.ts+'Z').toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}));
   const data    = pts.map(p => p.v);
@@ -949,7 +1007,8 @@ function _renderPerfHistory(d) {
     const dt = new Date(t.timestamp+'Z').toLocaleString('fr-FR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
     const pnl = t.pnl!=null?`<span class="${t.pnl>=0?'pnl-pos':'pnl-neg'}">${t.pnl>=0?'+':''}$${fmt(t.pnl)}</span>`:'—';
     const reason = t.reason || '—';
-    return `<tr class="hover:bg-slate-700/30"><td class="px-4 py-2.5 text-slate-400 whitespace-nowrap">${dt}</td><td class="px-4 py-2.5"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${badgeCls}">${t.action}</span></td><td class="px-4 py-2.5 font-medium">${t.symbol||'—'}</td><td class="px-4 py-2.5 text-right text-slate-300">${t.qty!=null?fmt4(t.qty):'—'}</td><td class="px-4 py-2.5 text-right text-slate-300">${t.amount!=null?'$'+fmt(t.amount):'—'}</td><td class="px-4 py-2.5 text-right text-slate-300">$${fmt(t.price)}</td><td class="px-4 py-2.5 text-right text-amber-400/80">${t.fee?'$'+fmt(t.fee):'—'}</td><td class="px-4 py-2.5 text-right">${pnl}</td><td class="px-4 py-2.5 text-slate-400 max-w-xs truncate cursor-pointer select-none reason-cell" title="Cliquer pour développer">${reason}</td></tr>`;
+    const montant = t.amount != null ? '$'+fmt(t.amount) : (t.qty && t.price) ? '$'+fmt(t.qty * t.price) : '—';
+    return `<tr class="hover:bg-slate-700/30"><td class="px-4 py-2.5 text-slate-400 whitespace-nowrap">${dt}</td><td class="px-4 py-2.5"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${badgeCls}">${t.action}</span></td><td class="px-4 py-2.5 font-medium">${t.symbol||'—'}</td><td class="px-4 py-2.5 text-right text-slate-300">${t.qty!=null?fmt4(t.qty):'—'}</td><td class="px-4 py-2.5 text-right text-slate-300">${montant}</td><td class="px-4 py-2.5 text-right text-slate-300">$${fmt(t.price)}</td><td class="px-4 py-2.5 text-right text-amber-400/80">${t.fee?'$'+fmt(t.fee):'—'}</td><td class="px-4 py-2.5 text-right">${pnl}</td><td class="px-4 py-2.5 text-slate-400 max-w-xs truncate cursor-pointer select-none reason-cell" title="Cliquer pour développer">${reason}</td></tr>`;
   }).join('');
 }
 
