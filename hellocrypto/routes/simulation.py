@@ -114,10 +114,25 @@ def _serverless_status_dict() -> dict:
         snap_data = {}
 
     if active:
+        active_sid = active.get("session_id", "")
         params = active.get("params", {})
+        # Snapshot is only meaningful if it belongs to the current active sim.
+        # Otherwise it's leftover from a previous run — show a fresh state.
+        if snap_data.get("session_id") != active_sid:
+            snap_data = {
+                "cycle":        0,
+                "pnl":          0,
+                "trades":       0,
+                "history":      [],
+                "positions":    [],
+                "holdings":     {},
+                "session_id":   active_sid,
+                "session_name": active.get("session_name", ""),
+                "budget":       params.get("budget", 100),
+            }
         return {
             "running":          True,
-            "session_id":       active.get("session_id", ""),
+            "session_id":       active_sid,
             "session_name":     active.get("session_name", ""),
             "cycle_seconds":    int(params.get("cycle_seconds") or 60),
             "cycle_started_at": snap_data.get("saved_at"),
