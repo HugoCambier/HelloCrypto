@@ -55,6 +55,8 @@ def _run_sim_cycle(active_sim: dict, stop_event: threading.Event) -> dict:
     sid            = active_sim.get("session_id", "")
     sname          = active_sim.get("session_name", "")
     is_first_cycle = not active_sim.get("started")
+    user_max       = active_sim.get("max_cycles")
+    user_max       = int(user_max) if user_max else None
 
     # Time-gate: skip if the previous cycle (for this session) is too recent.
     # `saved_at` is when the previous cycle FINISHED, but we want intervals
@@ -81,12 +83,27 @@ def _run_sim_cycle(active_sim: dict, stop_event: threading.Event) -> dict:
     run_cfg = {**cfg, **{k: v for k, v in params.items() if v is not None}}
     initial_holdings = active_sim.get("initial_holdings") if is_first_cycle else None
 
-    log.info("[SIM] Running 1 cycle | session=%s | first=%s | cycle_seconds=%ds",
-             sid, is_first_cycle, cycle_seconds)
+    # sim.run's max_cycles is an ABSOLUTE counter (compared against the
+    # persisted cycle), not invocation-local. To run exactly one more cycle,
+    # we need (current_cycle + 1). If user requested a total max, clamp.
+    current_cycle = 0
+    if last_state.get("session_id") == sid:
+        current_cycle = int(last_state.get("cycle", 0))
+    target_max = current_cycle + 1
+    if user_max is not None:
+        if current_cycle >= user_max:
+            log.info("[SIM] cycle %d >= user_max %d — already done, clearing flag",
+                     current_cycle, user_max)
+            store.set_state("active_sim", None)
+            return {"action": "sim_already_done", "session_id": sid}
+        target_max = min(target_max, user_max)
+
+    log.info("[SIM] Running 1 cycle | session=%s | first=%s | from_cycle=%d → max=%d | cycle_seconds=%ds",
+             sid, is_first_cycle, current_cycle, target_max, cycle_seconds)
 
     # Short-circuit the post-cycle wait inside sim.run by setting stop_event
-    # from the on_cycle callback. Without this, sim.run(max_cycles=1) idles
-    # for cycle_seconds before exiting.
+    # from the on_cycle callback. Without this, sim.run idles for cycle_seconds
+    # before exiting once max_cycles is reached.
     def _short_circuit(_c: int, _s: dict) -> None:
         stop_event.set()
 
@@ -96,7 +113,7 @@ def _run_sim_cycle(active_sim: dict, stop_event: threading.Event) -> dict:
         on_cycle=_short_circuit,
         stop_event=stop_event,
         resume=not is_first_cycle,
-        max_cycles=1,
+        max_cycles=target_max,
         initial_holdings=initial_holdings,
         session_id=sid,
         session_name=sname,
@@ -106,18 +123,19 @@ def _run_sim_cycle(active_sim: dict, stop_event: threading.Event) -> dict:
     if is_first_cycle:
         store.set_state("active_sim", {**active_sim, "started": True})
 
-    user_max  = active_sim.get("max_cycles")
     sim_ended = False
     if user_max:
         latest = store.get_state("simulation") or {}
-        if int(latest.get("cycle", 0)) >= int(user_max):
+        latest_cycle = int(latest.get("cycle", 0))
+        if latest_cycle >= user_max:
             log.info("[SIM] max_cycles=%d atteint — fin", user_max)
             if active_sim.get("liquidate_at_end"):
                 stop_event.clear()
+                # Liquidation = one MORE cycle past max, with liquidate flag on
                 sim.run(
                     budget, config=run_cfg,
                     on_cycle=_short_circuit, stop_event=stop_event,
-                    resume=True, max_cycles=1, liquidate_at_end=True,
+                    resume=True, max_cycles=latest_cycle + 1, liquidate_at_end=True,
                     session_id=sid, session_name=sname,
                 )
             store.set_state("active_sim", None)
