@@ -1,4 +1,4 @@
-name: Trading Runner (cron tick)
+name: Cron Tick
 
 on:
   schedule:
