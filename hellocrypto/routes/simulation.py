@@ -339,9 +339,6 @@ def sim_start():
     sell_cooldown_cycles = max(0, int(body.get("sell_cooldown_cycles", cfg.get("sell_cooldown_cycles", 3))))
     resume               = bool(body.get("resume", False))
     from_binance         = bool(body.get("from_binance", False))
-    max_cycles_raw       = body.get("max_cycles")
-    max_cycles           = int(max_cycles_raw) if max_cycles_raw and int(max_cycles_raw) > 0 else None
-    liquidate_at_end     = bool(body.get("liquidate_at_end", False))
     raw_holdings = body.get("initial_holdings") or {}
     # Accept either {sym: qty} (legacy) or {sym: {qty, avg_price}} (preferred)
     initial_holdings: dict = {}
@@ -422,8 +419,6 @@ def sim_start():
                 "sell_cooldown_cycles": sell_cooldown_cycles,
             },
             "initial_holdings": initial_holdings,
-            "max_cycles":       max_cycles,
-            "liquidate_at_end": liquidate_at_end,
             "resume":           resume,
             "started":          False,
             "started_at":       datetime.utcnow().isoformat(),
@@ -445,11 +440,11 @@ def sim_start():
                 on_cycle=lambda _cycle, snap: _sim_state.update_cycle(snap),
                 stop_event=_sim_stop_event,
                 resume=resume,
-                max_cycles=max_cycles,
+                max_cycles=None,
                 initial_holdings=initial_holdings if not resume else None,
                 session_id=session_id,
                 session_name=session_name,
-                liquidate_at_end=liquidate_at_end,
+                liquidate_at_end=False,
             )
             _sim_state.finish(result)
         except Exception as exc:
