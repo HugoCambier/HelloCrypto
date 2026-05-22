@@ -213,7 +213,7 @@ function _closeModalBg(e, id) {
 function openNewRunModal() {
   // Pre-fill from current config
   document.getElementById('nr-budget').value = _cfg?.budget ?? 100;
-  document.getElementById('nr-cycle').value  = _cfg?.cycle_seconds ?? 300;
+  document.getElementById('nr-cycle').value  = Math.max(5, Math.round((_cfg?.cycle_seconds ?? 300) / 60));
   document.getElementById('nr-sl').value     = _cfg?.stop_loss_pct ?? 10;
   document.getElementById('nr-ts').value     = _cfg?.trailing_stop_pct ?? 5;
   document.getElementById('nr-risk').value   = _cfg?.risk_level ?? 5;
@@ -273,7 +273,7 @@ async function launchNewRun() {
   const mode = document.getElementById('nr-mode-seg').dataset.val || 'simulation';
   const body = {
     budget:            +document.getElementById('nr-budget').value,
-    cycle_seconds:     +document.getElementById('nr-cycle').value,
+    cycle_seconds:     Math.max(5, +document.getElementById('nr-cycle').value) * 60,
     stop_loss_pct:     +document.getElementById('nr-sl').value,
     trailing_stop_pct: +document.getElementById('nr-ts').value,
     risk_level:        +document.getElementById('nr-risk').value,
