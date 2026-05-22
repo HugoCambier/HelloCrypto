@@ -24,9 +24,11 @@ from hellocrypto.dashboard import app, log  # noqa: E402  (must be after sys.pat
 from db.store import init_db, is_user_allowed, sync_users_from_env  # noqa: E402
 
 # Ensure DB schema exists at module import (Vercel doesn't call main()).
+_INIT_DB_ERROR: str | None = None
 try:
     init_db()
-except Exception:
+except Exception as _exc:
+    _INIT_DB_ERROR = f"{type(_exc).__name__}: {_exc}"
     log.exception("init_db() failed at module load")
 
 # Trust X-Forwarded-Proto so request.url uses https://
@@ -135,6 +137,8 @@ def auth_start():
 def callback():
     from google.oauth2 import id_token  # type: ignore
     from google.auth.transport import requests as google_requests  # type: ignore
+    if not request.args.get("code"):
+        return redirect(url_for("login"))
     try:
         flow = _oauth_flow()
         flow.code_verifier = session.pop("oauth_code_verifier", None)
@@ -168,6 +172,39 @@ def logout():
 def healthz():
     from flask import jsonify
     return jsonify({"ok": True})
+
+
+@app.get("/debug/health")
+def debug_health():
+    """Public diagnostics — no secrets exposed, only presence of env vars."""
+    from flask import jsonify
+    db_status: str
+    db_error: str | None = None
+    try:
+        from db.store import _USE_POSTGRES, _postgres  # type: ignore
+        if _USE_POSTGRES:
+            with _postgres() as c:
+                c.execute("SELECT 1")
+            db_status = "ok (postgres)"
+        else:
+            db_status = "ok (sqlite)"
+    except Exception as exc:
+        db_status = "error"
+        db_error = f"{type(exc).__name__}: {exc}"
+    return jsonify({
+        "init_db_error_at_boot": _INIT_DB_ERROR,
+        "db_runtime_check": db_status,
+        "db_runtime_error": db_error,
+        "auth_enabled": _AUTH_ENABLED,
+        "client_id_set": bool(_CLIENT_ID),
+        "client_secret_set": bool(_CLIENT_SECRET),
+        "session_secret_set": bool(_session_secret) and _session_secret != "dev-secret-change-me-in-prod",
+        "database_url_set": bool(os.getenv("DATABASE_URL")),
+        "allowed_emails_set": bool(os.getenv("ALLOWED_EMAILS")),
+        "redirect_uri_would_be": request.url_root.rstrip("/") + "/callback",
+        "request_scheme": request.scheme,
+        "request_host": request.host,
+    })
 
 
 @app.get("/debug/auth")
