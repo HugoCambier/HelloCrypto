@@ -18,6 +18,7 @@ let _savedResume  = null;            // saved sim state, if any
 let _countdownIv  = null;
 let _simCycleStartedAt = null;
 let _simCycleSeconds   = null;
+let _simNextCycleAt    = null;
 let _renameTargetId    = null;
 
 const _refs = {
@@ -397,6 +398,7 @@ async function _pollSimStatus() {
     _simSessionId = d.session_id || _simSnap?.session_id || null;
     _simCycleStartedAt = d.cycle_started_at || null;
     _simCycleSeconds   = d.cycle_seconds || null;
+    _simNextCycleAt    = d.next_cycle_at || null;
 
     if (_simRunning) {
       if (!_countdownIv) _countdownIv = setInterval(_tickCountdown, 1000);
@@ -418,12 +420,22 @@ async function _pollSimStatus() {
 
 function _tickCountdown() {
   const el = document.getElementById('sim-countdown');
-  if (!el || !_simCycleStartedAt || !_simCycleSeconds) { if(el) el.textContent='—'; return; }
-  const elapsed = (Date.now() - new Date(_simCycleStartedAt+'Z').getTime())/1000;
-  const rem     = Math.max(0, Math.round(_simCycleSeconds - elapsed));
+  if (!el) return;
+  // Prefer server-computed next_cycle_at (aligned on GH Actions 5-min boundary
+  // in serverless mode). Falls back to the legacy cycle_started_at + cycle_seconds
+  // calculation for local dev (threading-based loop).
+  let rem;
+  if (_simNextCycleAt) {
+    rem = Math.max(0, Math.round((new Date(_simNextCycleAt+'Z').getTime() - Date.now())/1000));
+  } else if (_simCycleStartedAt && _simCycleSeconds) {
+    const elapsed = (Date.now() - new Date(_simCycleStartedAt+'Z').getTime())/1000;
+    rem = Math.max(0, Math.round(_simCycleSeconds - elapsed));
+  } else {
+    el.textContent = '—'; return;
+  }
   if (rem === 0) { el.textContent = 'exécution…'; return; }
-  const m=Math.floor(rem/60), s=rem%60;
-  el.textContent = m>0 ? `${m}m${String(s).padStart(2,'0')}s` : `${s}s`;
+  const m = Math.floor(rem/60), s = rem%60;
+  el.textContent = m > 0 ? `${m}m${String(s).padStart(2,'0')}s` : `${s}s`;
 }
 function _stopCountdown() {
   clearInterval(_countdownIv); _countdownIv = null;

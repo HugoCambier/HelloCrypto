@@ -105,6 +105,32 @@ def _write_active_sim(state: dict | None) -> None:
         log.warning("Impossible d'écrire active_sim", exc_info=True)
 
 
+def _compute_next_cycle_at(active_sim: dict, snap_data: dict) -> str | None:
+    """When the next cron-driven cycle should fire, aligned to the GH Actions
+    5-min UTC clock boundary. Lets the UI countdown be honest about cron timing.
+    """
+    import math
+    from datetime import datetime, timedelta
+
+    params = active_sim.get("params") or {}
+    cycle_seconds = int(params.get("cycle_seconds") or 300)
+
+    last_saved = (snap_data.get("saved_at")
+                  if snap_data.get("session_id") == active_sim.get("session_id") else None)
+    if last_saved:
+        try:
+            target = datetime.fromisoformat(last_saved) + timedelta(seconds=cycle_seconds)
+        except Exception:
+            target = datetime.utcnow()
+    else:
+        # No cycle has run yet for this session → next fire is the next 5-min boundary
+        target = datetime.utcnow()
+
+    epoch_target  = target.timestamp()
+    aligned_epoch = math.ceil(epoch_target / 300) * 300
+    return datetime.utcfromtimestamp(aligned_epoch).isoformat()
+
+
 def _serverless_status_dict() -> dict:
     active = _read_active_sim()
     try:
@@ -136,6 +162,7 @@ def _serverless_status_dict() -> dict:
             "session_name":     active.get("session_name", ""),
             "cycle_seconds":    int(params.get("cycle_seconds") or 60),
             "cycle_started_at": snap_data.get("saved_at"),
+            "next_cycle_at":    _compute_next_cycle_at(active, snap_data),
             "snapshot":         snap_data,
             "error":            None,
         }
