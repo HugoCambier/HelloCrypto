@@ -82,6 +82,58 @@ class SimState:
 _sim_state      = SimState()
 _sim_stop_event = threading.Event()
 
+# Vercel can't run long-lived threads (function dies after each HTTP response).
+# When detected, the dashboard persists a flag in DB; the GitHub Actions runner
+# picks it up and executes cycles. See [[vercel-serverless-sim]].
+_IS_SERVERLESS  = bool(os.getenv("VERCEL"))
+
+
+def _read_active_sim() -> dict | None:
+    try:
+        from db.store import get_state
+        v = get_state("active_sim")
+        return v if isinstance(v, dict) else None
+    except Exception:
+        return None
+
+
+def _write_active_sim(state: dict | None) -> None:
+    try:
+        from db.store import set_state
+        set_state("active_sim", state)
+    except Exception:
+        log.warning("Impossible d'écrire active_sim", exc_info=True)
+
+
+def _serverless_status_dict() -> dict:
+    active = _read_active_sim()
+    try:
+        from db.store import get_state
+        snap_data = get_state("simulation") or {}
+    except Exception:
+        snap_data = {}
+
+    if active:
+        params = active.get("params", {})
+        return {
+            "running":          True,
+            "session_id":       active.get("session_id", ""),
+            "session_name":     active.get("session_name", ""),
+            "cycle_seconds":    int(params.get("cycle_seconds") or 60),
+            "cycle_started_at": snap_data.get("saved_at"),
+            "snapshot":         snap_data,
+            "error":            None,
+        }
+    return {
+        "running":          False,
+        "session_id":       snap_data.get("session_id", ""),
+        "session_name":     snap_data.get("session_name", ""),
+        "cycle_seconds":    int((snap_data.get("params") or {}).get("cycle_seconds") or 60),
+        "cycle_started_at": snap_data.get("saved_at"),
+        "snapshot":         snap_data,
+        "error":            None,
+    }
+
 # ── Cloud Scheduler keep-alive (keeps container alive during simulation) ──────
 
 _GCP_PROJECT      = os.getenv("GOOGLE_CLOUD_PROJECT")
@@ -170,6 +222,8 @@ def sim_keepalive():
 
 @bp.get("/api/simulation/status")
 def sim_status():
+    if _IS_SERVERLESS:
+        return jsonify(_serverless_status_dict())
     global _auto_resumed
     if not _auto_resumed:
         _auto_resumed = True
@@ -224,7 +278,10 @@ def sim_saved():
 @bp.post("/api/simulation/start")
 def sim_start():
     global _sim_stop_event
-    if _sim_state.running:
+    # On serverless, "running" is tracked via DB flag instead of in-memory state.
+    if _IS_SERVERLESS and _read_active_sim():
+        return jsonify({"error": "Simulation déjà en cours"}), 409
+    if not _IS_SERVERLESS and _sim_state.running:
         return jsonify({"error": "Simulation déjà en cours"}), 409
 
     body                 = request.json or {}
@@ -232,6 +289,9 @@ def sim_start():
     budget               = float(body.get("budget", cfg.get("budget", 100)))
     risk_level           = max(1, min(int(body.get("risk_level", cfg.get("risk_level", 5))), 10))
     cycle_sec            = max(5, int(body.get("cycle_seconds", cfg.get("cycle_seconds", 60))))
+    # On serverless (GitHub Actions cron, min 5 min interval), enforce 300s floor
+    if _IS_SERVERLESS:
+        cycle_sec = max(cycle_sec, 300)
     stop_loss_pct        = float(body.get("stop_loss_pct", cfg.get("stop_loss_pct", 10)))
     trailing_stop_pct    = float(body.get("trailing_stop_pct", cfg.get("trailing_stop_pct", 5)))
     sell_cooldown_cycles = max(0, int(body.get("sell_cooldown_cycles", cfg.get("sell_cooldown_cycles", 3))))
@@ -305,6 +365,36 @@ def sim_start():
     except Exception:
         log.warning("Impossible de sauvegarder la session dans la base", exc_info=True)
 
+    if _IS_SERVERLESS:
+        # Persist the request — the GitHub Actions cron runner will pick it up
+        # and execute one cycle per fire, gated by cycle_seconds.
+        _write_active_sim({
+            "session_id":       session_id,
+            "session_name":     session_name,
+            "params": {
+                "budget":               budget,
+                "risk_level":           risk_level,
+                "cycle_seconds":        cycle_sec,
+                "stop_loss_pct":        stop_loss_pct,
+                "trailing_stop_pct":    trailing_stop_pct,
+                "sell_cooldown_cycles": sell_cooldown_cycles,
+            },
+            "initial_holdings": initial_holdings,
+            "max_cycles":       max_cycles,
+            "liquidate_at_end": liquidate_at_end,
+            "resume":           resume,
+            "started":          False,
+            "started_at":       datetime.utcnow().isoformat(),
+        })
+        return jsonify({
+            "ok":           True,
+            "budget":       budget,
+            "risk_level":   risk_level,
+            "cycle_seconds": cycle_sec,
+            "resume_failed": resume_failed,
+            "serverless":   True,
+        })
+
     def _run():
         try:
             result = sim_engine.run(
@@ -340,6 +430,9 @@ def sim_start():
 @bp.post("/api/simulation/stop")
 def sim_stop():
     global _sim_stop_event
+    if _IS_SERVERLESS:
+        _write_active_sim(None)
+        return jsonify({"ok": True})
     _sim_stop_event.set()
     _sim_state.stop()
     _set_keepalive(False)
