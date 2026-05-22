@@ -191,16 +191,31 @@ def debug_health():
     except Exception as exc:
         db_status = "error"
         db_error = f"{type(exc).__name__}: {exc}"
+    binance_status: str
+    binance_error: str | None = None
+    try:
+        from hellocrypto.api import get_balance  # type: ignore
+        usdc = get_balance("USDC")
+        binance_status = f"ok (USDC balance read: {usdc:.4f})"
+    except Exception as exc:
+        binance_status = "error"
+        binance_error = f"{type(exc).__name__}: {exc}"
     return jsonify({
         "init_db_error_at_boot": _INIT_DB_ERROR,
         "db_runtime_check": db_status,
         "db_runtime_error": db_error,
+        "binance_check": binance_status,
+        "binance_error": binance_error,
         "auth_enabled": _AUTH_ENABLED,
         "client_id_set": bool(_CLIENT_ID),
         "client_secret_set": bool(_CLIENT_SECRET),
         "session_secret_set": bool(_session_secret) and _session_secret != "dev-secret-change-me-in-prod",
         "database_url_set": bool(os.getenv("DATABASE_URL")),
         "allowed_emails_set": bool(os.getenv("ALLOWED_EMAILS")),
+        "binance_api_key_set": bool(os.getenv("BINANCE_API_KEY")),
+        "binance_api_secret_set": bool(os.getenv("BINANCE_API_SECRET")),
+        "gemini_api_key_set": bool(os.getenv("GEMINI_API_KEY")),
+        "anthropic_api_key_set": bool(os.getenv("ANTHROPIC_API_KEY")),
         "redirect_uri_would_be": request.url_root.rstrip("/") + "/callback",
         "request_scheme": request.scheme,
         "request_host": request.host,
