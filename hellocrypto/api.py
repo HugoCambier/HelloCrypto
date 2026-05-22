@@ -23,10 +23,24 @@ BASE_URL    = "https://api.binance.com"
 CONFIG_FILE = Path("config.json")
 
 _DEFAULT_CONFIG = {
+    "enabled": False,
+    "mode": "simulation",
     "budget": 100,
-    "stop_loss_pct": 10,
-    "cycle_seconds": 60,
-    "watchlist": ["BTCUSDC", "ETHUSDC", "SOLUSDC", "XRPUSDC", "BNBUSDC"],
+    "stop_loss_pct": 21,
+    "trailing_stop_pct": 10,
+    "cycle_seconds": 300,
+    "risk_level": 5,
+    "sell_cooldown_cycles": 3,
+    "llm_cooldown_seconds": 300,
+    "price_change_threshold_pct": 0.5,
+    "max_tokens": 1000,
+    "watchlist": [
+        "BTCUSDC", "ETHUSDC", "BNBUSDC", "SOLUSDC", "XRPUSDC", "DOGEUSDC",
+        "ADAUSDC", "AVAXUSDC", "LINKUSDC", "DOTUSDC", "LTCUSDC", "NEARUSDC",
+        "UNIUSDC", "AAVEUSDC", "ATOMUSDC", "APTUSDC", "ARBUSDC", "OPUSDC",
+        "SUIUSDC", "INJUSDC",
+    ],
+    "llm": {"provider": "gemini", "model": "gemini-3.1-flash-lite-preview"},
 }
 
 
@@ -587,11 +601,31 @@ def save_trade(
 
 
 def load_config() -> dict:
+    """Load config — file is authoritative for local dev, DB is fallback."""
     try:
         return json.loads(CONFIG_FILE.read_text())
     except FileNotFoundError:
-        return _DEFAULT_CONFIG
+        pass
+    except Exception:
+        log.exception("config.json read failed, trying DB")
+    try:
+        from db.store import get_state
+        cfg = get_state("config")
+        if cfg is not None:
+            return cfg
+    except Exception:
+        log.exception("DB load_config failed, using defaults")
+    return dict(_DEFAULT_CONFIG)
 
 
 def save_config(cfg: dict) -> None:
-    CONFIG_FILE.write_text(json.dumps(cfg, indent=2, ensure_ascii=False))
+    """Save config to DB (authoritative). Mirror to file for local dev convenience."""
+    try:
+        from db.store import set_state
+        set_state("config", cfg)
+    except Exception:
+        log.exception("DB save_config failed, writing to file only")
+    try:
+        CONFIG_FILE.write_text(json.dumps(cfg, indent=2, ensure_ascii=False))
+    except Exception:
+        pass

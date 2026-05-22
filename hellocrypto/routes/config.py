@@ -22,6 +22,28 @@ _DEFAULT_LLM_MODELS = {
 }
 
 
+# ── Global config CRUD ────────────────────────────────────────────────────────
+
+@bp.get("/api/config")
+def config_get():
+    """Return the full config object (NoSQL JSON blob)."""
+    cfg = load_config()
+    cfg.setdefault("llm_models", _DEFAULT_LLM_MODELS)
+    return jsonify(cfg)
+
+
+@bp.post("/api/config")
+def config_set():
+    """Partial update: merge body into existing config and persist."""
+    body = request.json or {}
+    if not isinstance(body, dict):
+        return jsonify({"error": "JSON object required"}), 400
+    cfg = load_config()
+    cfg.update(body)
+    save_config(cfg)
+    return jsonify({"ok": True, "config": cfg})
+
+
 def _llm_models() -> dict:
     return load_config().get("llm_models", _DEFAULT_LLM_MODELS)
 

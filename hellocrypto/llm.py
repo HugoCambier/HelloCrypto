@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import re
 import time
 
@@ -21,8 +22,20 @@ log = logging.getLogger(__name__)
 
 # Transient HTTP status codes that warrant a retry
 _TRANSIENT_STATUS = {429, 500, 502, 503, 504}
-_MAX_RETRIES = 3
-_RETRY_BASE_DELAY = 2.0  # seconds (doubles each attempt)
+_MAX_RETRIES = 5
+_RETRY_BASE_DELAY = 2.0  # seconds (doubles each attempt, with jitter)
+
+# Stable fallback models used when the primary model stays unavailable.
+_FALLBACK_MODELS = {
+    "gemini": "gemini-2.0-flash",
+    "claude": "claude-haiku-4-5",
+}
+
+
+def _backoff_delay(attempt: int) -> float:
+    """Exponential backoff with jitter to avoid thundering-herd retries."""
+    base = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
+    return base + random.uniform(0, base * 0.3)
 
 
 # ── JSON helpers ──────────────────────────────────────────────────────────────
@@ -53,10 +66,9 @@ def _parse(raw: str) -> dict:
 
 # ── Provider implementations ──────────────────────────────────────────────────
 
-def _call_claude(prompt: str, system: str, llm_cfg: dict) -> dict:
+def _claude_request(model: str, prompt: str, system: str, llm_cfg: dict) -> dict:
     from anthropic import Anthropic, APIStatusError
 
-    model       = llm_cfg.get("model", "claude-opus-4-5")
     max_tokens  = int(llm_cfg.get("max_tokens", 1000))
     temperature = float(llm_cfg.get("temperature", 1.0))
     client      = Anthropic()
@@ -75,20 +87,47 @@ def _call_claude(prompt: str, system: str, llm_cfg: dict) -> dict:
         except APIStatusError as exc:
             if exc.status_code not in _TRANSIENT_STATUS or attempt == _MAX_RETRIES:
                 raise
-            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
-            log.warning("[LLM] Claude %d — retry %d/%d dans %.0fs",
-                        exc.status_code, attempt, _MAX_RETRIES, delay)
+            delay = _backoff_delay(attempt)
+            log.warning("[LLM] Claude(%s) %d — retry %d/%d dans %.1fs",
+                        model, exc.status_code, attempt, _MAX_RETRIES, delay)
             time.sleep(delay)
             last_exc = exc
     raise last_exc  # type: ignore[misc]
 
 
-def _call_gemini(prompt: str, system: str, llm_cfg: dict) -> dict:
+def _call_claude(prompt: str, system: str, llm_cfg: dict) -> dict:
+    model    = llm_cfg.get("model", "claude-opus-4-5")
+    fallback = _FALLBACK_MODELS["claude"]
+    try:
+        return _claude_request(model, prompt, system, llm_cfg)
+    except Exception as exc:
+        if model == fallback:
+            raise
+        log.warning("[LLM] Claude(%s) indisponible, fallback → %s : %s", model, fallback, exc)
+        return _claude_request(fallback, prompt, system, llm_cfg)
+
+
+def _gemini_is_transient(exc: Exception) -> bool:
+    """Detect transient Gemini errors (503/UNAVAILABLE, 429/RESOURCE_EXHAUSTED, etc)."""
+    try:
+        from google.api_core.exceptions import GoogleAPICallError  # type: ignore
+    except ImportError:
+        GoogleAPICallError = Exception  # type: ignore
+    if isinstance(exc, GoogleAPICallError):
+        status = getattr(exc, "grpc_status_code", None)
+        http_status = getattr(exc, "code", None)
+        if status is not None and status.value[0] in (14, 8):  # UNAVAILABLE, RESOURCE_EXHAUSTED
+            return True
+        if http_status in _TRANSIENT_STATUS:
+            return True
+    s = str(exc)
+    return any(k in s for k in ("503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "500", "502", "504"))
+
+
+def _gemini_request(model: str, prompt: str, system: str, llm_cfg: dict) -> dict:
     from google import genai
     from google.genai import types
-    from google.api_core.exceptions import GoogleAPICallError
 
-    model       = llm_cfg.get("model", "gemini-2.0-flash")
     max_tokens  = int(llm_cfg.get("max_tokens", 1000))
     temperature = float(llm_cfg.get("temperature", 1.0))
     client      = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
@@ -106,24 +145,28 @@ def _call_gemini(prompt: str, system: str, llm_cfg: dict) -> dict:
                 contents=prompt,
             )
             return _parse(resp.text)
-        except GoogleAPICallError as exc:
-            status = getattr(exc, "grpc_status_code", None)
-            http_status = getattr(exc, "code", None)
-            is_transient = (
-                (status is not None and status.value[0] in (14, 8))  # UNAVAILABLE, RESOURCE_EXHAUSTED
-                or (http_status in _TRANSIENT_STATUS)
-                or "503" in str(exc)
-                or "UNAVAILABLE" in str(exc)
-                or "429" in str(exc)
-            )
-            if not is_transient or attempt == _MAX_RETRIES:
+        except Exception as exc:
+            if not _gemini_is_transient(exc) or attempt == _MAX_RETRIES:
                 raise
-            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 1))
-            log.warning("[LLM] Gemini erreur transitoire — retry %d/%d dans %.0fs: %s",
-                        attempt, _MAX_RETRIES, delay, exc)
+            delay = _backoff_delay(attempt)
+            log.warning("[LLM] Gemini(%s) erreur transitoire — retry %d/%d dans %.1fs: %s",
+                        model, attempt, _MAX_RETRIES, delay, exc)
             time.sleep(delay)
             last_exc = exc
     raise last_exc  # type: ignore[misc]
+
+
+def _call_gemini(prompt: str, system: str, llm_cfg: dict) -> dict:
+    model    = llm_cfg.get("model", "gemini-2.0-flash")
+    fallback = _FALLBACK_MODELS["gemini"]
+    try:
+        return _gemini_request(model, prompt, system, llm_cfg)
+    except Exception as exc:
+        if model == fallback or not _gemini_is_transient(exc):
+            raise
+        log.warning("[LLM] Gemini(%s) indisponible après %d retries, fallback → %s",
+                    model, _MAX_RETRIES, fallback)
+        return _gemini_request(fallback, prompt, system, llm_cfg)
 
 
 def _call_ollama(prompt: str, system: str, llm_cfg: dict) -> dict:

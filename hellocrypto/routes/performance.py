@@ -2,16 +2,85 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+import time
+from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 
 from ..api import load_config, load_history, get_enriched_market_data, compute_scores
+from ..backtest import _fetch_klines
 from .shared import PERIODS
 
 log = logging.getLogger(__name__)
 
 bp = Blueprint("performance", __name__)
+
+_FEE_RATE = 0.001  # 0.1% per trade
+_BENCH_CACHE: dict = {}
+_BENCH_TTL  = 600  # seconds (benchmarks change slowly; aggressive cache)
+
+
+def _compute_benchmarks(start_iso: str, watchlist: list[str], budget: float) -> dict:
+    """Compute BH + BTC benchmark timeseries from Binance klines.
+
+    Returns ``{"bh": [{ts, v}], "btc": [{ts, v}]}`` where v is the portfolio
+    value (USDC equivalent) at each hourly candle.
+    """
+    cache_key = (start_iso, tuple(watchlist), round(budget, 2))
+    now = time.time()
+    cached = _BENCH_CACHE.get(cache_key)
+    if cached and (now - cached[0]) < _BENCH_TTL:
+        return cached[1]
+
+    try:
+        start_dt = datetime.fromisoformat(start_iso)
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+        start_ms = int(start_dt.timestamp() * 1000)
+        end_ms   = int(datetime.now(timezone.utc).timestamp() * 1000)
+    except Exception:
+        return {"bh": [], "btc": []}
+
+    # Cap symbols to avoid storms (BTC + up to 9 watchlist coins)
+    symbols = list(dict.fromkeys(["BTCUSDC"] + list(watchlist)))[:10]
+    klines: dict[str, list] = {}
+    for sym in symbols:
+        try:
+            klines[sym] = _fetch_klines(sym, "1h", start_ms, end_ms)
+        except Exception:
+            klines[sym] = []
+
+    btc_kl = klines.get("BTCUSDC", [])
+    bh_syms = [s for s in watchlist if klines.get(s)]
+    if not btc_kl and not bh_syms:
+        result = {"bh": [], "btc": []}
+        _BENCH_CACHE[cache_key] = (now, result)
+        return result
+
+    # BTC benchmark
+    btc_ts = []
+    if btc_kl:
+        p0 = float(btc_kl[0][4])
+        for k in btc_kl:
+            ts_iso = datetime.utcfromtimestamp(int(k[0]) / 1000).isoformat()
+            v = budget * (1 - _FEE_RATE) * float(k[4]) / p0
+            btc_ts.append({"ts": ts_iso, "v": round(v, 2)})
+
+    # Buy & Hold benchmark — equal-weight split across watchlist
+    bh_ts = []
+    if bh_syms:
+        initial = {s: float(klines[s][0][4]) for s in bh_syms}
+        w_net = (budget / len(bh_syms)) * (1 - _FEE_RATE)
+        # Align on shortest series
+        min_len = min(len(klines[s]) for s in bh_syms)
+        for i in range(min_len):
+            ts_iso = datetime.utcfromtimestamp(int(klines[bh_syms[0]][i][0]) / 1000).isoformat()
+            v = sum(w_net * float(klines[s][i][4]) / initial[s] for s in bh_syms)
+            bh_ts.append({"ts": ts_iso, "v": round(v, 2)})
+
+    result = {"bh": bh_ts, "btc": btc_ts}
+    _BENCH_CACHE[cache_key] = (now, result)
+    return result
 
 
 @bp.get("/api/watchlist")
@@ -59,10 +128,11 @@ def api_watchlist_enriched():
 
 @bp.get("/api/performance")
 def api_performance():
-    period     = request.args.get("period", "all")
-    mode       = request.args.get("mode", "real")
-    session_id = request.args.get("session_id")
-    config     = load_config()
+    period         = request.args.get("period", "all")
+    mode           = request.args.get("mode", "real")
+    session_id     = request.args.get("session_id")
+    with_bench     = request.args.get("with_benchmarks", "1") not in ("0", "false", "no")
+    config         = load_config()
 
     try:
         from db.store import load_history as _db_load
@@ -115,22 +185,37 @@ def api_performance():
             prev_ts = t["timestamp"]
         sessions.append({"start": session_start, "end": prev_ts})
 
+    # Benchmark timeseries (BH + BTC) — compute since first trade
+    bh_ts: list = []
+    btc_ts: list = []
+    if with_bench and sorted_trades:
+        start_iso = sorted_trades[0]["timestamp"]
+        budget = float(config.get("budget", 100))
+        try:
+            bench = _compute_benchmarks(start_iso, config.get("watchlist", []), budget)
+            bh_ts  = bench.get("bh", [])
+            btc_ts = bench.get("btc", [])
+        except Exception:
+            log.exception("Failed to compute benchmarks")
+
     return jsonify({
-        "period":      period,
-        "mode":        mode,
-        "trades":      len(filtered),
-        "buys":        len(buys),
-        "sells":       len(sells),
-        "stop_losses": len(stop_losses),
-        "invested":    round(invested, 2),
-        "recovered":   round(recovered, 2),
-        "fees":        round(fees, 4),
-        "net":         net,
-        "win_rate":    win_rate,
-        "best_trade":  best_trade,
-        "worst_trade": worst_trade,
-        "history":     list(reversed(sorted_trades[-200:])),
-        "timeseries":  timeseries,
-        "sessions":    sessions,
-        "budget":      config.get("budget", 100),
+        "period":         period,
+        "mode":           mode,
+        "trades":         len(filtered),
+        "buys":           len(buys),
+        "sells":          len(sells),
+        "stop_losses":    len(stop_losses),
+        "invested":       round(invested, 2),
+        "recovered":      round(recovered, 2),
+        "fees":           round(fees, 4),
+        "net":            net,
+        "win_rate":       win_rate,
+        "best_trade":     best_trade,
+        "worst_trade":    worst_trade,
+        "history":        list(reversed(sorted_trades[-200:])),
+        "timeseries":     timeseries,
+        "bh_timeseries":  bh_ts,
+        "btc_timeseries": btc_ts,
+        "sessions":       sessions,
+        "budget":         config.get("budget", 100),
     })

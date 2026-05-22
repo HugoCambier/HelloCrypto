@@ -1,8 +1,7 @@
-"""HelloCrypto Dashboard — Cloud Run Service.
+"""HelloCrypto Dashboard.
 
 Wraps hellocrypto.dashboard (all existing routes) and adds:
-  - Google OAuth2 authentication (whitelist via Firestore / ALLOWED_EMAILS)
-  - Cloud Run Job control (start / stop / status)
+  - Google OAuth2 authentication (whitelist via ALLOWED_EMAILS)
   - User management API
 """
 import os
@@ -10,7 +9,6 @@ import sys
 from functools import wraps
 from pathlib import Path
 
-import requests as _req
 from flask import redirect, render_template, request, session, url_for
 from jinja2 import ChoiceLoader, FileSystemLoader
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -23,9 +21,15 @@ load_dotenv()
 
 # ── import existing Flask app ─────────────────────────────────────────────────
 from hellocrypto.dashboard import app, log  # noqa: E402  (must be after sys.path)
-from db.store import is_user_allowed, sync_users_from_env  # noqa: E402
+from db.store import init_db, is_user_allowed, sync_users_from_env  # noqa: E402
 
-# Trust Cloud Run's X-Forwarded-Proto so request.url uses https://
+# Ensure DB schema exists at module import (Vercel doesn't call main()).
+try:
+    init_db()
+except Exception:
+    log.exception("init_db() failed at module load")
+
+# Trust X-Forwarded-Proto so request.url uses https://
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # ── Jinja: look in dashboard/templates/ first (login page), then templates/ ──
@@ -37,7 +41,7 @@ app.jinja_loader = ChoiceLoader([
 
 # ── Session secret ────────────────────────────────────────────────────────────
 _session_secret = os.getenv("SESSION_SECRET_KEY")
-_is_production  = bool(os.getenv("K_SERVICE") or os.getenv("GOOGLE_CLOUD_PROJECT"))
+_is_production  = bool(os.getenv("K_SERVICE") or os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("RENDER"))
 if not _session_secret:
     if _is_production:
         raise RuntimeError(
@@ -83,17 +87,6 @@ def _oauth_flow():
         ],
         redirect_uri=request.url_root.rstrip("/") + "/callback",
     )
-
-
-def _gcp_token() -> str:
-    """Get a short-lived GCP identity token (works on Cloud Run via metadata server)."""
-    import google.auth  # type: ignore
-    import google.auth.transport.requests  # type: ignore
-    creds, _ = google.auth.default(
-        scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
-    creds.refresh(google.auth.transport.requests.Request())
-    return creds.token
 
 
 def require_login(f):
@@ -190,157 +183,6 @@ def debug_auth():
         "client_secret_set": bool(_CLIENT_SECRET),
         "redirect_uri_would_be": request.url_root.rstrip("/") + "/callback",
     })
-
-
-# ── Cloud Run Job control ─────────────────────────────────────────────────────
-
-_GCP_PROJECT     = os.getenv("GOOGLE_CLOUD_PROJECT")
-_GCP_REGION      = os.getenv("GCP_REGION", "europe-west9")
-_SCHEDULER_REGION = os.getenv("SCHEDULER_REGION", "europe-west1")
-_RUNNER_JOB      = os.getenv("RUNNER_JOB", "hellocrypto-runner")
-_SCHEDULER_JOB   = os.getenv("SCHEDULER_JOB", "hellocrypto-trigger")
-
-
-@app.get("/api/runner/status")
-def runner_status():
-    from flask import jsonify
-    if not _GCP_PROJECT:
-        return jsonify({"cloud_run": False, "message": "GCP_PROJECT non configuré (mode local)"})
-    try:
-        token  = _gcp_token()
-        url    = (f"https://run.googleapis.com/v2/projects/{_GCP_PROJECT}"
-                  f"/locations/{_GCP_REGION}/jobs/{_RUNNER_JOB}/executions")
-        r      = _req.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=8)
-        r.raise_for_status()
-        execs  = r.json().get("executions", [])
-        latest = execs[0] if execs else None
-        running = bool(latest and latest.get("completionTime") is None)
-        return jsonify({"cloud_run": True, "running": running, "latest": latest})
-    except Exception as exc:
-        log.exception("Erreur runner_status")
-        return jsonify({"cloud_run": True, "error": "Erreur interne du serveur"}), 500
-
-
-@app.post("/api/runner/start")
-def runner_start():
-    from flask import jsonify
-    if not _GCP_PROJECT:
-        return jsonify({"error": "GCP_PROJECT non configuré"}), 400
-    body = request.json or {}
-    mode = body.get("mode", "real")
-    try:
-        token = _gcp_token()
-        url   = (f"https://run.googleapis.com/v2/projects/{_GCP_PROJECT}"
-                 f"/locations/{_GCP_REGION}/jobs/{_RUNNER_JOB}:run")
-        r = _req.post(
-            url,
-            headers={"Authorization": f"Bearer {token}"},
-            json={"overrides": {"containerOverrides": [{"args": [f"--mode={mode}"]}]}},
-            timeout=10,
-        )
-        r.raise_for_status()
-        return jsonify({"ok": True, "execution": r.json().get("name")})
-    except Exception as exc:
-        log.exception("Erreur runner_start")
-        return jsonify({"error": "Erreur interne du serveur"}), 500
-
-
-@app.post("/api/runner/stop")
-def runner_stop():
-    from flask import jsonify
-    if not _GCP_PROJECT:
-        return jsonify({"error": "GCP_PROJECT non configuré"}), 400
-    try:
-        token = _gcp_token()
-        # Get latest execution
-        list_url = (f"https://run.googleapis.com/v2/projects/{_GCP_PROJECT}"
-                    f"/locations/{_GCP_REGION}/jobs/{_RUNNER_JOB}/executions?pageSize=1")
-        execs = _req.get(list_url, headers={"Authorization": f"Bearer {token}"}, timeout=8).json()
-        latest = (execs.get("executions") or [{}])[0]
-        name = latest.get("name")
-        if not name:
-            return jsonify({"ok": True, "message": "Aucune exécution en cours"})
-        cancel_url = f"https://run.googleapis.com/v2/{name}:cancel"
-        _req.post(cancel_url, headers={"Authorization": f"Bearer {token}"}, timeout=10).raise_for_status()
-        return jsonify({"ok": True})
-    except Exception as exc:
-        log.exception("Erreur runner_stop")
-        return jsonify({"error": "Erreur interne du serveur"}), 500
-
-
-def _scheduler_action(action: str):
-    """Pause or resume the Cloud Scheduler job. action = 'pause' | 'resume'."""
-    from flask import jsonify
-    if not _GCP_PROJECT:
-        return jsonify({"error": "GCP_PROJECT non configuré"}), 400
-    try:
-        token = _gcp_token()
-        url   = (f"https://cloudscheduler.googleapis.com/v1/projects/{_GCP_PROJECT}"
-                 f"/locations/{_SCHEDULER_REGION}/jobs/{_SCHEDULER_JOB}:{action}")
-        r = _req.post(url, headers={"Authorization": f"Bearer {token}"}, timeout=10)
-        r.raise_for_status()
-        return jsonify({"ok": True, "action": action})
-    except Exception as exc:
-        log.exception("Erreur scheduler_action %s", action)
-        return jsonify({"error": "Erreur interne du serveur"}), 500
-
-
-@app.get("/api/runner/schedule")
-def runner_schedule_status():
-    """Return scheduler state: enabled (resumed) or disabled (paused)."""
-    from flask import jsonify
-    if not _GCP_PROJECT:
-        return jsonify({"cloud_run": False, "enabled": False})
-    try:
-        token = _gcp_token()
-        url   = (f"https://cloudscheduler.googleapis.com/v1/projects/{_GCP_PROJECT}"
-                 f"/locations/{_SCHEDULER_REGION}/jobs/{_SCHEDULER_JOB}")
-        r = _req.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=8)
-        r.raise_for_status()
-        state   = r.json().get("state", "")
-        enabled = state == "ENABLED"
-        schedule = r.json().get("schedule", "")
-        return jsonify({"cloud_run": True, "enabled": enabled, "schedule": schedule})
-    except Exception as exc:
-        log.exception("Erreur runner_schedule_status")
-        return jsonify({"cloud_run": True, "enabled": False, "error": "Erreur interne"})
-
-
-@app.post("/api/runner/schedule/enable")
-def runner_schedule_enable():
-    return _scheduler_action("resume")
-
-
-@app.post("/api/runner/schedule/disable")
-def runner_schedule_disable():
-    return _scheduler_action("pause")
-
-
-@app.post("/api/runner/frequency")
-def runner_frequency():
-    """Update Cloud Scheduler interval (minimum 1 minute)."""
-    from flask import jsonify
-    if not _GCP_PROJECT:
-        return jsonify({"error": "GCP_PROJECT non configuré"}), 400
-    seconds = max(60, int((request.json or {}).get("seconds", 60)))
-    minutes = seconds // 60
-    cron    = f"*/{minutes} * * * *"
-    try:
-        token = _gcp_token()
-        url   = (f"https://cloudscheduler.googleapis.com/v1/projects/{_GCP_PROJECT}"
-                 f"/locations/{_SCHEDULER_REGION}/jobs/{_SCHEDULER_JOB}")
-        r = _req.patch(
-            url,
-            headers={"Authorization": f"Bearer {token}"},
-            json={"schedule": cron},
-            params={"updateMask": "schedule"},
-            timeout=10,
-        )
-        r.raise_for_status()
-        return jsonify({"ok": True, "cron": cron, "minutes": minutes})
-    except Exception as exc:
-        log.exception("Erreur runner_frequency")
-        return jsonify({"error": "Erreur interne du serveur"}), 500
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

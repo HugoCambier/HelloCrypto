@@ -101,6 +101,7 @@ def _snapshot(cycle, cash, holdings, prices, history, total_fees,
         "cash":            round(cash, 2),
         "portfolio_value": round(portfolio_val, 2),
         "total_value":     round(total, 2),
+        "budget":          round(base, 2),
         "pnl":             round(pnl, 2),
         "pnl_pct":         round(pnl / base * 100, 2) if base > 0 else 0,
         "total_fees":      round(total_fees, 4),
@@ -186,6 +187,7 @@ def run(
     peak_prices: dict    = {}   # sym → highest price seen since entry
     cooldown_map: dict   = {}   # sym → last sell cycle
     cycle: int           = 0
+    value_timeseries: list = []  # [{ts, v}] — total_value per cycle
 
     if resume:
         saved = _load_state()
@@ -201,6 +203,7 @@ def run(
             peak_prices      = saved.get("peak_prices", {})
             cooldown_map     = {k: int(v) for k, v in saved.get("cooldown_map", {}).items()}
             budget           = saved.get("budget", budget)
+            value_timeseries = saved.get("value_timeseries", [])
             log.info("[SIM] Reprise depuis cycle %d — cash $%.2f", cycle, cash)
         else:
             log.info("[SIM] Aucun état sauvegardé — démarrage propre")
@@ -240,15 +243,23 @@ def run(
 
         if not initial_prices:
             initial_prices = dict(prices)
-            # Seed holdings from initial_holdings on first cycle (fresh start only)
+            # Seed holdings from initial_holdings on first cycle (fresh start only).
+            # initial_holdings accepts {sym: qty} (legacy) or {sym: {qty, avg_price}} (preferred).
             if initial_holdings and not holdings:
-                for sym, qty in initial_holdings.items():
-                    if qty > 0 and sym in prices:
-                        holdings[sym] = {"qty": qty, "avg_price": prices[sym]}
-                        peak_prices[sym] = prices[sym]
-                        log.info("[SIM] Avoir initial: %s qty=%.6f @ $%.4f", sym, qty, prices[sym])
+                for sym, info in initial_holdings.items():
+                    if isinstance(info, dict):
+                        qty   = float(info.get("qty", 0))
+                        entry = float(info.get("avg_price") or 0) or prices.get(sym)
+                    else:
+                        qty   = float(info)
+                        entry = prices.get(sym)
+                    if qty > 0 and sym in prices and entry:
+                        holdings[sym] = {"qty": qty, "avg_price": entry}
+                        peak_prices[sym] = max(prices[sym], entry)
+                        log.info("[SIM] Avoir initial: %s qty=%.6f entry=$%.4f (prix actuel: $%.4f)",
+                                 sym, qty, entry, prices[sym])
                         # Synthetic BUY entry to record the initial position in history
-                        init_amount = round(qty * prices[sym], 2)
+                        init_amount = round(qty * entry, 2)
                         init_ts = datetime.utcnow().isoformat()
                         history.append({
                             "cycle":     cycle,
@@ -257,28 +268,27 @@ def run(
                             "symbol":    sym,
                             "qty":       qty,
                             "amount":    init_amount,
-                            "price":     prices[sym],
+                            "price":     entry,
                             "fee":       0.0,
-                            "reason":    "Initialisation — avoir détenu au démarrage",
+                            "reason":    "Initialisation — avoir détenu au démarrage (prix d'entrée Binance)",
                         })
                         try:
                             from db.store import save_trade as _db_save
                             _db_save(
                                 action="BUY (init)", symbol=sym, amount=init_amount,
-                                price=prices[sym], reason="Initialisation — avoir détenu au démarrage",
+                                price=entry, reason="Initialisation — avoir détenu au démarrage",
                                 fee=0.0, qty=qty, pnl=None,
                                 mode="simulation", session_id=session_id, session_name=session_name,
                             )
                         except Exception:
                             pass
 
-            initial_portfolio_val = sum(
-                h["qty"] * prices.get(sym, h["avg_price"]) for sym, h in holdings.items()
-            )
+            # Budget = capital invested at entry prices (USDC cash + crypto at avg_price).
+            # This way, the unrealized gain/loss of pre-existing positions counts toward PnL.
+            initial_portfolio_val = sum(h["qty"] * h["avg_price"] for sym, h in holdings.items())
             initial_total_value = cash + initial_portfolio_val
-            # Budget = total capital (USDC + crypto value) at run start
             budget = initial_total_value
-            log.info("[SIM] Valeur initiale du portefeuille: $%.2f (cash) + $%.2f (actifs) = $%.2f (budget)",
+            log.info("[SIM] Capital initial (prix d'entrée): $%.2f cash + $%.2f actifs = $%.2f budget",
                      cash, initial_portfolio_val, initial_total_value)
 
             # Persist initial state to sessions table
@@ -414,7 +424,11 @@ def run(
                          "initial_prices": initial_prices, "peak_prices": peak_prices,
                          "cooldown_map": cooldown_map, "recent_decisions": recent_decisions,
                          "initial_total_value": initial_total_value,
-                         "session_id": session_id, "session_name": session_name})
+                         "session_id": session_id, "session_name": session_name,
+                         "params": {"risk_level": risk_level, "cycle_seconds": cycle_sec,
+                                    "stop_loss_pct": round(stop_loss * 100, 2),
+                                    "trailing_stop_pct": round(trail_stop * 100, 2),
+                                    "sell_cooldown_cycles": sell_cooldown_cycles}})
             if stop_event:
                 stop_event.wait(timeout=cycle_sec)
             else:
@@ -536,6 +550,12 @@ def run(
 
         # ── Emit snapshot & persist state ─────────────────────────────────────
         snap = _snapshot(cycle, cash, holdings, prices, history, total_fees, initial_total_value, initial_prices, cycle_sec)
+        # Track per-cycle total value so the PnL chart matches the displayed PnL exactly.
+        value_timeseries.append({"ts": datetime.utcnow().isoformat(), "v": snap["total_value"]})
+        if len(value_timeseries) > 1000:
+            step = max(1, len(value_timeseries) // 500)
+            value_timeseries = value_timeseries[::step] + [value_timeseries[-1]]
+        snap["value_timeseries"] = list(value_timeseries)
         if on_cycle:
             on_cycle(cycle, snap)
 
@@ -544,8 +564,13 @@ def run(
                      "initial_prices": initial_prices, "peak_prices": peak_prices,
                      "cooldown_map": cooldown_map, "recent_decisions": recent_decisions,
                      "initial_total_value": initial_total_value,
+                     "value_timeseries": value_timeseries,
                      "session_id": session_id, "session_name": session_name,
-                     "running": True})
+                     "running": True,
+                     "params": {"risk_level": risk_level, "cycle_seconds": cycle_sec,
+                                "stop_loss_pct": round(stop_loss * 100, 2),
+                                "trailing_stop_pct": round(trail_stop * 100, 2),
+                                "sell_cooldown_cycles": sell_cooldown_cycles}})
 
         if stop_event:
             stop_event.wait(timeout=cycle_sec)
@@ -559,7 +584,11 @@ def run(
                  "cooldown_map": cooldown_map, "recent_decisions": recent_decisions,
                  "initial_total_value": initial_total_value,
                  "session_id": session_id, "session_name": session_name,
-                 "running": False})
+                 "running": False,
+                 "params": {"risk_level": risk_level, "cycle_seconds": cycle_sec,
+                            "stop_loss_pct": round(stop_loss * 100, 2),
+                            "trailing_stop_pct": round(trail_stop * 100, 2),
+                            "sell_cooldown_cycles": sell_cooldown_cycles}})
 
     if _db_handler is not None:
         logging.getLogger().removeHandler(_db_handler)

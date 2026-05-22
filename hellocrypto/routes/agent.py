@@ -17,7 +17,17 @@ _agent_process = None
 def agent_status():
     global _agent_process
     running = _agent_process is not None and _agent_process.poll() is None
-    return jsonify({"running": running, "pid": _agent_process.pid if running else None})
+    last_run_at = None
+    try:
+        from db.store import get_state
+        last_run_at = get_state("last_run_at")
+    except Exception:
+        pass
+    return jsonify({
+        "running": running,
+        "pid": _agent_process.pid if running else None,
+        "last_run_at": last_run_at,
+    })
 
 
 @bp.post("/api/agent/start")

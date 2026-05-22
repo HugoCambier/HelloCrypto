@@ -44,7 +44,9 @@ def analysis_start():
         try:
             cfg           = load_config()
             watchlist     = cfg.get("watchlist", [])
+            log.info("[ANALYSIS] watchlist (%d) : %s", len(watchlist), watchlist)
             market_raw    = get_enriched_market_data(watchlist, cycle_seconds=300)
+            log.info("[ANALYSIS] market_raw loaded for %d/%d symbols", len(market_raw), len(watchlist))
             scores        = compute_scores(market_raw)
             fear_greed    = get_fear_and_greed()
             btc_dominance = get_btc_dominance()
@@ -94,7 +96,10 @@ def analysis_start():
                 }
             else:
                 market_data = format_market_data(market_raw, watchlist)
-                call_cfg    = {**cfg, "max_tokens": max(int(cfg.get("max_tokens", 1000)), 4000)}
+                # ~500 tokens per crypto with full scenarios, min 4000
+                needed_tokens = max(4000, 500 * len(watchlist))
+                call_cfg = {**cfg, "max_tokens": max(int(cfg.get("max_tokens", 1000)), needed_tokens)}
+                log.info("[ANALYSIS] max_tokens=%d for %d cryptos", call_cfg["max_tokens"], len(watchlist))
                 result = llm_call(
                     prompt=build_market_analysis(market_data, fear_greed, btc_dominance, scores),
                     system=SYSTEM_ANALYSIS,
@@ -105,6 +110,36 @@ def analysis_start():
                     sym = item.get("symbol", "")
                     if sym in market_raw:
                         item["current_price"] = market_raw[sym]["price"]
+
+            # Backfill any watchlist symbol the model skipped, so all cryptos appear.
+            analyses_out = list(result.get("analyses", []))
+            present = {a.get("symbol") for a in analyses_out if a.get("symbol")}
+            for sym in watchlist:
+                if sym in present:
+                    continue
+                analyses_out.append({
+                    "symbol":        sym,
+                    "current_price": market_raw.get(sym, {}).get("price"),
+                    "sentiment":     "neutral",
+                    "confidence":    0,
+                    "summary":       "Analyse indisponible pour cet actif.",
+                    "action":        "hold",
+                    "action_reason": "Aucune analyse retournée par le modèle.",
+                    "scenarios":     [],
+                })
+            result["analyses"] = analyses_out
+
+            # Persist to DB so GET /api/analyses can find it
+            try:
+                from db.store import save_market_analysis
+                save_market_analysis(
+                    sentiment=result.get("global_sentiment") or result.get("sentiment", "neutral"),
+                    summary=result.get("market_summary") or result.get("summary", ""),
+                    analyses=result.get("analyses", []),
+                    mode="real",
+                )
+            except Exception:
+                log.warning("Impossible de sauvegarder l'analyse en base", exc_info=True)
 
             with _analysis_lock:
                 _analysis_state = {"running": False, "result": result, "error": None}

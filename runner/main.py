@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
-"""HelloCrypto — Cloud Run Job / local runner entry point.
+"""HelloCrypto runner entry point.
 
-Deux modes d'exécution :
+La config (mode, budget, watchlist, enabled, ...) est lue depuis la DB
+au démarrage de chaque exécution. Le flag --mode permet de surcharger
+le mode depuis la ligne de commande (utile pour les tests).
 
-  MODE CLOUD RUN JOB (défaut, RUNNER_LOOP non défini) :
+  MODE GITHUB ACTIONS (défaut, RUNNER_LOOP non défini) :
     - Un seul cycle puis exit.
-    - Cloud Scheduler déclenche le job à chaque intervalle configuré.
-    - Usage : python runner/main.py --mode real
+    - GitHub Actions déclenche le job toutes les 5 minutes.
+    - Si config["enabled"] est False → exit immédiat.
 
-  MODE BOUCLE CONTINUE (VM locale ou prod avec RUNNER_LOOP=true) :
+  MODE BOUCLE CONTINUE (VM locale ou RUNNER_LOOP=true) :
     - Boucle infinie avec sleep entre cycles.
     - RUNNER_LOOP=true  OU  --loop  pour l'activer.
-    - Usage : RUNNER_LOOP=true python runner/main.py --mode simulation
-    - Note : en mode simulation, --loop est TOUJOURS activé car la simulation
-      gère elle-même sa boucle interne (stop_event).
 
 SIGTERM/SIGINT → arrêt propre en fin de cycle courant.
 """
@@ -55,14 +54,14 @@ def main() -> None:
     parser.add_argument(
         "--mode",
         choices=["real", "simulation"],
-        default=os.getenv("RUNNER_MODE", "real"),
-        help="Trading mode: real (Binance) or simulation (paper trading)",
+        default=None,
+        help="Override config mode (real or simulation). Default: read from config.",
     )
     parser.add_argument(
         "--loop",
         action="store_true",
         default=os.getenv("RUNNER_LOOP", "").lower() in ("1", "true", "yes"),
-        help="Loop continuously (VM/local mode). Default: single cycle then exit (Cloud Run Job mode).",
+        help="Loop continuously (VM/local mode). Default: single cycle then exit.",
     )
     args = parser.parse_args()
 
@@ -72,17 +71,24 @@ def main() -> None:
 
     from hellocrypto.api import load_config
     cfg = load_config()
-    cycle_sec = int(cfg.get("cycle_seconds", 1800))
+
+    if not cfg.get("enabled", False):
+        log.info("Config.enabled=false — arrêt immédiat.")
+        sys.exit(0)
+
+    mode      = args.mode or cfg.get("mode", "simulation")
+    cycle_sec = int(cfg.get("cycle_seconds", 300))
+
+    from datetime import datetime
+    store.set_state("last_run_at", datetime.utcnow().isoformat())
 
     log.info(
         "Runner démarré | mode=%s | loop=%s | cycle=%ss",
-        args.mode, args.loop, cycle_sec,
+        mode, args.loop, cycle_sec,
     )
 
-    if args.mode == "simulation":
+    if mode == "simulation":
         # La simulation gère sa propre boucle interne via stop_event.
-        # On passe toujours max_cycles=None pour qu'elle tourne indéfiniment
-        # jusqu'à réception de SIGTERM/SIGINT (qui déclenche _stop).
         from hellocrypto import simulation as sim
         log.info("Mode simulation — boucle continue jusqu'à SIGTERM")
         sim.run(
@@ -94,14 +100,12 @@ def main() -> None:
         )
     elif args.loop:
         # VM / local mode : boucle infinie avec sleep entre cycles
-        import time
         from hellocrypto.agent import run_one_cycle
         while not _stop.is_set():
             run_one_cycle()
             _stop.wait(timeout=cycle_sec)
     else:
-        # Cloud Run Job mode : un seul cycle puis exit
-        # Cloud Scheduler se charge de déclencher au bon interval
+        # GitHub Actions mode : un seul cycle puis exit
         from hellocrypto.agent import run_one_cycle
         run_one_cycle()
 

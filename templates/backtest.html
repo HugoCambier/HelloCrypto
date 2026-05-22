@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Backtest — HelloCrypto</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    body { background: #0b1220; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+
+    .fld { width: 100%; padding: 7px 10px; font-size: 13px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #e2e8f0; }
+    .fld:focus { outline: none; border-color: #3b82f6; }
+    .lbl { font-size: 11px; color: #94a3b8; margin-bottom: 4px; display: block; letter-spacing: .3px; text-transform: uppercase; }
+
+    .rtab { padding:8px 14px; font-size:12px; font-weight:600; border-bottom:2px solid transparent; color:#64748b; transition:all .15s; letter-spacing:.3px; text-transform:uppercase; display:inline-block; }
+    .rtab.active { color:#60a5fa; border-bottom-color:#3b82f6; }
+    .rtab:hover:not(.active) { color:#94a3b8; }
+
+    .progress { height: 6px; background: #1e293b; border-radius: 3px; overflow: hidden; }
+    .progress > div { height: 100%; background: #3b82f6; transition: width .3s; }
+    .progress-strip { background:#0d1424; border-bottom:1px solid #1f2937; padding:10px 24px; display:flex; align-items:center; gap:18px; }
+    .progress-strip .bar { flex:1; height:6px; background:#1e293b; border-radius:3px; overflow:hidden; }
+    .progress-strip .bar > div { height:100%; background:#3b82f6; transition:width .3s; }
+
+    .pnl-pos{color:#34d399} .pnl-neg{color:#f87171}
+    .kpi { background:#111827; border:1px solid #1f2937; border-radius:10px; padding:12px 14px; }
+    .kpi-label { font-size:10px; color:#6b7280; text-transform:uppercase; letter-spacing:.3px; }
+    .kpi-val { font-size:18px; font-weight:700; margin-top:2px; color:#e2e8f0; }
+    .kpi-sub { font-size:11px; color:#6b7280; margin-top:1px; }
+
+    .cdrop { position:relative; }
+    .cdrop-btn { width:100%; padding:7px 10px; font-size:13px; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#e2e8f0; text-align:left; display:flex; align-items:center; justify-content:space-between; cursor:pointer; }
+    .cdrop-btn:hover { border-color:#475569; }
+    .cdrop-menu { position:absolute; z-index:50; top:calc(100% + 4px); left:0; right:0; max-height:280px; overflow-y:auto; background:#0f172a; border:1px solid #334155; border-radius:8px; padding:6px; box-shadow:0 8px 24px rgba(0,0,0,.4); display:none; }
+    .cdrop-menu.open { display:block; }
+    .cdrop-header { display:flex; gap:8px; padding:4px 6px 6px; border-bottom:1px solid #1e293b; margin-bottom:4px; }
+    .cdrop-action { font-size:11px; padding:2px 8px; border-radius:4px; background:transparent; color:#94a3b8; cursor:pointer; }
+    .cdrop-action:hover { background:#1e293b; color:#e2e8f0; }
+    .cdrop-item { display:flex; align-items:center; gap:8px; padding:4px 6px; border-radius:4px; cursor:pointer; font-size:13px; color:#cbd5e1; }
+    .cdrop-item:hover { background:#1e293b; }
+
+    .trade-row { display:grid; grid-template-columns: 110px 80px 60px 80px 90px 80px 1fr; gap:8px; align-items:center; padding:6px 4px; border-bottom:1px solid #1e293b; font-size:12px; }
+    .trade-header { font-size:10px; text-transform:uppercase; letter-spacing:.3px; color:#64748b; border-bottom:1px solid #334155; padding-bottom:6px; margin-bottom:4px; font-weight:600; }
+
+    .fbtn { padding:3px 9px; border-radius:5px; font-size:11px; color:#94a3b8; background:transparent; cursor:pointer; border:1px solid transparent; transition:all .15s; font-weight:500; }
+    .fbtn:hover { color:#cbd5e1; background:#1e293b; }
+    .fbtn.on { background:#1d4ed8; color:white; border-color:#1d4ed8; }
+  </style>
+</head>
+<body class="text-slate-100 h-full flex flex-col">
+
+  <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
+    <span class="text-lg font-bold text-blue-400 tracking-tight">HelloCrypto</span>
+    <a href="/logout" class="text-xs text-slate-500 hover:text-red-400 transition-colors">Déconnexion</a>
+  </header>
+  <nav class="bg-slate-900 border-b border-slate-700 px-6 flex gap-1 shrink-0">
+    <a href="/" class="rtab">Home</a>
+    <a href="/backtest" class="rtab active">Backtest</a>
+    <a href="/market" class="rtab">Analyse de marché</a>
+  </nav>
+
+  <!-- Progress strip (full width) -->
+  <div id="bt-progress-strip" class="progress-strip shrink-0">
+    <div class="text-xs text-slate-500 whitespace-nowrap">
+      <span class="uppercase tracking-wider mr-1.5">Début :</span>
+      <span id="bt-start-ts" class="text-slate-200 font-semibold">—</span>
+    </div>
+    <div class="bar"><div id="bt-progress" style="width:0%"></div></div>
+    <div class="text-xs text-slate-400 whitespace-nowrap">
+      <span id="bt-step" class="font-semibold">—</span>
+      <span id="bt-status" class="text-slate-500 ml-2">En attente…</span>
+    </div>
+  </div>
+
+  <div class="flex-1 flex overflow-hidden">
+
+    <!-- LEFT: PARAMS -->
+    <aside class="w-[320px] shrink-0 bg-slate-900 border-r border-slate-800 overflow-y-auto p-4 space-y-4">
+      <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Paramètres</h2>
+
+      <div>
+        <label class="lbl">Cryptos list</label>
+        <div class="cdrop" id="bt-cryptos-drop">
+          <button type="button" class="cdrop-btn" onclick="toggleCryptoDrop('bt-cryptos-drop')">
+            <span class="cdrop-summary">—</span>
+            <span class="text-slate-500">▾</span>
+          </button>
+          <div class="cdrop-menu">
+            <div class="cdrop-header">
+              <button type="button" class="cdrop-action" onclick="cdropSelectAll('bt-cryptos-drop')">Tout</button>
+              <button type="button" class="cdrop-action" onclick="cdropSelectNone('bt-cryptos-drop')">Aucune</button>
+            </div>
+            <div class="cdrop-items"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="lbl">Jours</label><input class="fld" type="number" id="bt-days" value="30" min="1" max="365"></div>
+        <div><label class="lbl">Budget ($)</label><input class="fld" type="number" id="bt-budget" value="1000" min="100"></div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="lbl">Stop-loss (%)</label><input class="fld" type="number" id="bt-sl" value="10"></div>
+        <div><label class="lbl">Trailing (%)</label><input class="fld" type="number" id="bt-ts" value="5"></div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="lbl">Seuil achat</label><input class="fld" type="number" id="bt-buy-thr" value="7" min="1" max="10"></div>
+        <div><label class="lbl">Seuil vente</label><input class="fld" type="number" id="bt-sell-thr" value="3" min="1" max="10"></div>
+      </div>
+
+      <div>
+        <label class="lbl">Risque : <span id="bt-risk-val" class="text-blue-400 font-bold">5</span> / 10</label>
+        <input class="w-full accent-blue-500" type="range" id="bt-risk" min="1" max="10" value="5" oninput="document.getElementById('bt-risk-val').textContent = this.value">
+      </div>
+
+      <div>
+        <label class="lbl">Date de début (optionnelle)</label>
+        <input class="fld" type="date" id="bt-start">
+      </div>
+
+      <div>
+        <label class="lbl">Vitesse : <span id="bt-speed-val" class="text-blue-400 font-bold">50</span>x</label>
+        <input class="w-full accent-blue-500" type="range" id="bt-speed" min="1" max="500" value="50" oninput="onSpeedChange(this.value)">
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button id="bt-start-btn" onclick="startBacktest()" class="flex-1 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 transition-colors font-semibold text-sm">Lancer</button>
+        <button id="bt-stop-btn" onclick="stopBacktest()" disabled class="flex-1 py-2.5 rounded-lg bg-red-700 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-semibold text-sm">Arrêter</button>
+      </div>
+
+      <p id="bt-skipped" class="hidden text-[11px] text-amber-400 leading-snug"></p>
+    </aside>
+
+    <!-- RIGHT: RESULTS -->
+    <main class="flex-1 overflow-y-auto flex flex-col">
+
+      <!-- Right-panel tabs -->
+      <div class="bg-slate-900 border-b border-slate-800 px-4 flex gap-0 shrink-0">
+        <button class="rtab active" data-rtab="cockpit" onclick="switchRTab('cockpit',this)">Cockpit</button>
+        <button class="rtab" data-rtab="charts" onclick="switchRTab('charts',this)">Graphiques</button>
+      </div>
+
+      <!-- Tab: Cockpit -->
+      <div id="rtab-cockpit" class="flex-1 overflow-y-auto p-5 space-y-4">
+
+        <!-- Performance KPIs -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="kpi">
+            <div class="kpi-label">Budget</div>
+            <div class="kpi-val" id="kpi-budget">—</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Total actuel</div>
+            <div class="kpi-val" id="kpi-total">—</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">PnL net</div>
+            <div class="kpi-val" id="kpi-pnl">—</div>
+            <div class="kpi-sub" id="kpi-pnl-pct">—</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Win rate</div>
+            <div class="kpi-val" id="kpi-winrate">—</div>
+            <div class="kpi-sub" id="kpi-trades">—</div>
+          </div>
+        </div>
+
+        <!-- Comparisons -->
+        <div class="grid grid-cols-3 gap-3">
+          <div class="kpi">
+            <div class="kpi-label">vs Buy &amp; Hold</div>
+            <div class="kpi-val" id="kpi-alpha">—</div>
+            <div class="kpi-sub text-slate-500">stratégie − hold</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">vs BTC seul</div>
+            <div class="kpi-val" id="kpi-btc-bh">—</div>
+            <div class="kpi-sub text-slate-500">si tout en BTC</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Meilleur / Pire trade</div>
+            <div class="kpi-val" id="kpi-best">—</div>
+            <div class="kpi-sub" id="kpi-worst">—</div>
+          </div>
+        </div>
+
+        <!-- Chart PnL -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Courbe PnL cumulé</h3>
+            <div id="pnl-filters"></div>
+          </div>
+          <canvas id="pnl-chart" height="120"></canvas>
+          <p id="chart-empty" class="text-center text-slate-500 text-xs mt-2 hidden">Aucune donnée</p>
+        </div>
+
+        <!-- Positions ouvertes -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Positions ouvertes</h3>
+          <div id="holdings-list" class="text-sm text-slate-500">—</div>
+        </div>
+
+        <!-- Historique des trades -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Historique des trades</h3>
+            <div id="trades-filters"></div>
+          </div>
+          <div id="bt-trades-header" class="trade-row trade-header hidden">
+            <span>Date</span>
+            <span>Action</span>
+            <span>Crypto</span>
+            <span class="text-right">Prix</span>
+            <span class="text-right">Quantité</span>
+            <span class="text-right">Montant</span>
+            <span class="text-right">PnL</span>
+          </div>
+          <div id="bt-trades-list" class="text-sm text-slate-400 max-h-[28rem] overflow-y-auto">—</div>
+        </div>
+
+      </div>
+
+      <!-- Tab: Graphiques -->
+      <div id="rtab-charts" class="hidden flex-1 overflow-y-auto p-5 space-y-4">
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Répartition du portefeuille</h3>
+          <div class="flex items-center gap-6 flex-wrap">
+            <div style="width:180px;height:180px;flex-shrink:0"><canvas id="alloc-chart"></canvas></div>
+            <div id="alloc-legend" class="text-xs space-y-1.5 flex-1 min-w-[140px]"></div>
+          </div>
+          <p id="alloc-empty" class="text-center text-slate-500 text-xs mt-2 hidden">Aucune position ouverte</p>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Profit / Perte par crypto (réalisé + en cours)</h3>
+          <canvas id="pnl-bars-chart" height="140"></canvas>
+          <p id="pnl-bars-empty" class="text-center text-slate-500 text-xs mt-2 hidden">Aucun trade sur ce run</p>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Volume traité par crypto ($)</h3>
+          <canvas id="vol-bars-chart" height="120"></canvas>
+          <p id="vol-bars-empty" class="text-center text-slate-500 text-xs mt-2 hidden">Aucun trade</p>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+  <div id="toast" class="fixed bottom-5 right-5 px-4 py-3 rounded-xl text-sm font-medium shadow-xl z-50 hidden"></div>
+
+  <script src="/static/js/analytics.js"></script>
+  <script src="/static/js/backtest.js"></script>
+</body>
+</html>
