@@ -26,12 +26,12 @@ def create_app() -> Flask:
     from .routes import (
         bp_logs, bp_performance, bp_portfolio,
         bp_simulation, bp_backtest, bp_agent,
-        bp_config, bp_analysis,
+        bp_config, bp_analysis, bp_cron,
     )
     for bp in (
         bp_logs, bp_performance, bp_portfolio,
         bp_simulation, bp_backtest, bp_agent,
-        bp_config, bp_analysis,
+        bp_config, bp_analysis, bp_cron,
     ):
         app.register_blueprint(bp)
 

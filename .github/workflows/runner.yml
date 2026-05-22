@@ -1,47 +1,32 @@
-name: Trading Runner
+name: Trading Runner (cron tick)
 
 on:
   schedule:
-    # Toutes les 5 minutes — le runner vérifie config.enabled en DB
-    # et exit immédiatement si désactivé (consommation ~0).
+    # Toutes les 5 minutes — déclenche /api/cron/tick sur Vercel,
+    # qui fait le vrai travail (Binance OK depuis cdg1, contrairement
+    # aux runners GH Actions qui sont sur des IPs US bloquées).
     - cron: "*/5 * * * *"
-  workflow_dispatch:
-    inputs:
-      mode:
-        description: "Override config mode"
-        required: false
-        type: choice
-        options: ["", real, simulation]
+  workflow_dispatch: {}
 
 jobs:
-  run:
+  tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
+    timeout-minutes: 2
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: |
-          pip install poetry
-          poetry install --extras postgres --extras gemini --no-root
-
-      - name: Run agent cycle
+      - name: Ping Vercel cron tick
         env:
-          DATABASE_URL:        ${{ secrets.DATABASE_URL }}
-          BINANCE_API_KEY:     ${{ secrets.BINANCE_API_KEY }}
-          BINANCE_API_SECRET:  ${{ secrets.BINANCE_API_SECRET }}
-          GEMINI_API_KEY:      ${{ secrets.GEMINI_API_KEY }}
-          ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
+          VERCEL_URL:   ${{ secrets.VERCEL_URL }}
+          CRON_SECRET:  ${{ secrets.CRON_SECRET }}
         run: |
-          MODE="${{ github.event.inputs.mode }}"
-          if [ -n "$MODE" ]; then
-            poetry run python runner/main.py --mode "$MODE"
-          else
-            poetry run python runner/main.py
+          response=$(curl -sS -w "\n%{http_code}" -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            --max-time 90 \
+            "$VERCEL_URL/api/cron/tick")
+          body=$(echo "$response" | head -n -1)
+          code=$(echo "$response" | tail -n 1)
+          echo "HTTP $code"
+          echo "$body"
+          if [ "$code" != "200" ]; then
+            exit 1
           fi

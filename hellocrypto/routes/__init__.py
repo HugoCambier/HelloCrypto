@@ -7,9 +7,10 @@ from .backtest    import bp as bp_backtest
 from .agent       import bp as bp_agent
 from .config      import bp as bp_config
 from .analysis    import bp as bp_analysis
+from .cron        import bp as bp_cron
 
 __all__ = [
     "bp_logs", "bp_performance", "bp_portfolio",
     "bp_simulation", "bp_backtest", "bp_agent",
-    "bp_config", "bp_analysis",
+    "bp_config", "bp_analysis", "bp_cron",
 ]

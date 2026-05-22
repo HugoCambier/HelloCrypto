@@ -108,7 +108,7 @@ def _auth_gate():
     if not _AUTH_ENABLED:
         return  # Auth disabled locally
     public = ("/login", "/auth/", "/callback", "/healthz", "/debug/",
-               "/api/simulation/keepalive")
+               "/api/simulation/keepalive", "/api/cron/")
     if request.path.startswith(public):
         return
     if not session.get("user"):
