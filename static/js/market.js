@@ -83,11 +83,29 @@ function zoneOf(urgency) {
   return 'hold';
 }
 
+function _isStale(a) {
+  if (!a || !a.timestamp) return true;
+  const d = new Date(a.timestamp);
+  if (isNaN(d.getTime())) return true;
+  return d.toDateString() !== new Date().toDateString();
+}
+
+async function _maybeAutoAnalyze(latest) {
+  if (!_isStale(latest)) return;
+  try {
+    const s = await fetch('/api/analysis/status').then(r => r.json());
+    if (s?.running) return;
+  } catch { return; }
+  toast(latest ? 'Analyse obsolète, mise à jour automatique…' : 'Aucune analyse récente, lancement automatique…', 'warn');
+  runAnalysis();
+}
+
 async function load() {
   try {
     const list = await fetch('/api/analyses?limit=1').then(r => r.json());
     const latest = Array.isArray(list) && list.length ? list[0] : null;
     render(latest);
+    _maybeAutoAnalyze(latest);
   } catch {
     document.getElementById('empty-state').textContent = 'Erreur de chargement';
     document.getElementById('empty-state').classList.remove('hidden');
