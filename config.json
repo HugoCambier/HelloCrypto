@@ -2,7 +2,7 @@
   "enabled": false,
   "mode": "simulation",
   "budget": 100,
-  "cycle_seconds": 30,
+  "cycle_seconds": 60,
   "watchlist": [
     "BTCUSDC",
     "ETHUSDC",
