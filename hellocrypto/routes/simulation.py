@@ -464,12 +464,66 @@ def sim_start():
     })
 
 
+def _serverless_liquidate(active_sim: dict) -> dict:
+    """Force-sell all remaining positions to USDC as the run's final cycle.
+
+    Runs synchronously in the stop request (within Vercel's 60s budget):
+    fetches current Binance prices, sells all holdings, persists the
+    "SELL (liquidation)" trades, updates the snapshot. Skips entirely
+    if there's nothing to sell.
+    """
+    from db.store import get_state
+    from .. import simulation as sim_engine
+
+    sid = active_sim.get("session_id", "")
+    last_state = get_state("simulation") or {}
+    if last_state.get("session_id") != sid:
+        return {"skipped": "no state for this session"}
+    holdings = last_state.get("holdings") or {}
+    if not holdings:
+        return {"skipped": "no holdings to liquidate"}
+
+    params  = active_sim.get("params") or {}
+    cfg     = load_config()
+    budget  = float(params.get("budget") or cfg.get("budget", 100))
+    run_cfg = {**cfg, **{k: v for k, v in params.items() if v is not None}}
+    sname   = active_sim.get("session_name", "")
+    cur_cyc = int(last_state.get("cycle", 0))
+
+    # sim.run with liquidate_at_end=True + max_cycles=current_cycle makes
+    # the next loop iteration trigger is_liquidation_cycle (cycle > max).
+    local_stop = threading.Event()
+    def _short_circuit(_c: int, _s: dict) -> None:
+        local_stop.set()
+
+    sim_engine.run(
+        budget,
+        config=run_cfg,
+        on_cycle=_short_circuit,
+        stop_event=local_stop,
+        resume=True,
+        max_cycles=cur_cyc,
+        liquidate_at_end=True,
+        session_id=sid,
+        session_name=sname,
+    )
+    return {"liquidated_symbols": list(holdings.keys()), "from_cycle": cur_cyc}
+
+
 @bp.post("/api/simulation/stop")
 def sim_stop():
     global _sim_stop_event
     if _IS_SERVERLESS:
+        active = _read_active_sim()
+        liquidation_result = None
+        if active:
+            try:
+                liquidation_result = _serverless_liquidate(active)
+            except Exception:
+                log.exception("Liquidation finale échouée")
+                liquidation_result = {"error": "liquidation failed"}
         _write_active_sim(None)
-        return jsonify({"ok": True})
+        return jsonify({"ok": True, "liquidation": liquidation_result})
     _sim_stop_event.set()
     _sim_state.stop()
     _set_keepalive(False)
