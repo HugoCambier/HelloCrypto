@@ -131,3 +131,45 @@ def api_sell():
     except Exception as exc:
         log.exception("Erreur api_sell")
         return jsonify({"error": "Erreur lors de l'exécution de l'ordre de vente"}), 500
+
+
+@bp.post("/api/trade/liquidate")
+def api_liquidate():
+    """Market-sell every open position on Binance to USDC.
+
+    REAL TRADING: emits actual sell orders. Used by the "Tout vendre"
+    button in the Orders tab. Each sale is recorded as a SELL trade
+    with reason "Liquidation totale — Tout vendre".
+    """
+    try:
+        cfg       = load_config()
+        watchlist = cfg.get("watchlist", [])
+        positions = get_open_positions(watchlist)
+        results: list = []
+        errors:  list = []
+        for sym, info in positions.items():
+            qty = float(info.get("qty", 0))
+            if qty <= 0:
+                continue
+            try:
+                _, fee, fee_asset = market_sell(sym, qty)
+                price = get_ticker(sym)
+                save_trade("SELL", sym, qty, price,
+                           "Liquidation totale — Tout vendre", fee, fee_asset)
+                results.append({
+                    "symbol": sym, "qty": round(qty, 8),
+                    "price": price, "fee": fee, "fee_asset": fee_asset,
+                })
+            except Exception as exc:
+                log.exception("Erreur liquidation %s", sym)
+                errors.append({"symbol": sym, "error": str(exc)})
+        return jsonify({
+            "ok":            True,
+            "sold":          results,
+            "errors":        errors,
+            "sold_count":    len(results),
+            "error_count":   len(errors),
+        })
+    except Exception:
+        log.exception("Erreur api_liquidate")
+        return jsonify({"error": "Erreur lors de la liquidation"}), 500

@@ -467,9 +467,11 @@ def sim_start():
 def _liquidate_session(session_id: str, params: dict, session_name: str) -> dict:
     """Force-sell every position of `session_id` to USDC at current Binance prices.
 
-    Runs one extra liquidation cycle via sim_engine.run(liquidate_at_end=True),
-    which fetches prices, sells everything, persists each sale as a
-    "SELL (liquidation)" trade. Skips if no holdings.
+    SIMULATION-ONLY: uses sim_engine.run(liquidate_at_end=True), which does
+    paper trading — fetches Binance prices for valuation but never sends
+    real sell orders. For real-mode "tout vendre" use /api/trade/liquidate.
+
+    Skips if no holdings.
     """
     from db.store import get_state
     from .. import simulation as sim_engine

@@ -521,7 +521,13 @@
               À vendre <span class="text-slate-500 ml-2 normal-case font-normal">— positions détenues, triées par urgence</span>
               <span id="loading-orders-sell" class="spinner-mini hidden"></span>
             </h3>
-            <span id="sell-count" class="text-xs text-slate-500"></span>
+            <div class="flex items-center gap-2">
+              <span id="sell-count" class="text-xs text-slate-500"></span>
+              <button id="liquidate-all-btn" onclick="confirmLiquidateAll()"
+                      class="hidden text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-900/50 hover:bg-red-800 text-red-300 hover:text-red-100 border border-red-800/50 transition">
+                Tout vendre
+              </button>
+            </div>
           </div>
           <div id="orders-sell-cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>
         </div>

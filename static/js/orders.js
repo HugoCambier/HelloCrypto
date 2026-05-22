@@ -85,6 +85,7 @@ function _renderOrdersTab() {
     .sort((a, b) => b.score - a.score);
 
   document.getElementById('sell-count').textContent = sellList.length ? `${sellList.length} position${sellList.length>1?'s':''}` : '';
+  document.getElementById('liquidate-all-btn').classList.toggle('hidden', !sellList.length);
   if (!sellList.length) {
     sellCardsEl.innerHTML = '<p class="text-xs text-slate-500 italic col-span-full">Aucune position ouverte.</p>';
   } else {
@@ -329,5 +330,46 @@ async function confirmOrder() {
   } finally {
     btn.disabled = false;
     btn.textContent = side === 'buy' ? 'Acheter' : 'Vendre';
+  }
+}
+
+// ── Liquidate all positions ────────────────────────────────────────────────────
+async function confirmLiquidateAll() {
+  const positions = _ordersData?.portfolio?.positions || [];
+  const owned = positions.filter(p => (p.qty || 0) > 0);
+  if (!owned.length) {
+    toast('Aucune position à vendre', 'warn');
+    return;
+  }
+  const total = owned.reduce((s, p) => s + (p.value || 0), 0);
+  const lines = owned.map(p => `  • ${shortSym(p.symbol)} : ${fmtQty(p.qty)} (~$${fmt(p.value || 0)})`).join('\n');
+  const msg = `Vendre TOUTES les positions au prix de marché Binance ?\n\n${lines}\n\nTotal estimé : ~$${fmt(total)} en USDC\n\nCette action est IRRÉVERSIBLE.`;
+  if (!confirm(msg)) return;
+
+  const btn = document.getElementById('liquidate-all-btn');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Vente en cours…';
+  try {
+    const r = await fetch('/api/trade/liquidate', { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Erreur de liquidation");
+    const sold = d.sold_count || 0;
+    const failed = d.error_count || 0;
+    if (failed > 0) {
+      toast(`${sold} vendue(s), ${failed} erreur(s) — voir logs`, 'warn');
+      console.error('Liquidation errors:', d.errors);
+    } else {
+      toast(`${sold} position(s) liquidée(s) en USDC`, 'ok');
+    }
+    invalidateCache('/api/portfolio');
+    invalidateCache('/api/performance');
+    await loadOrdersTab({ force: true });
+    if (typeof loadPerformance === 'function') loadPerformance();
+  } catch (e) {
+    toast(e.message || 'Erreur', 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
   }
 }
