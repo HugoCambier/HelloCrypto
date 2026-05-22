@@ -219,6 +219,7 @@ def debug_health():
         "redirect_uri_would_be": request.url_root.rstrip("/") + "/callback",
         "request_scheme": request.scheme,
         "request_host": request.host,
+        "vercel_region": os.getenv("VERCEL_REGION"),
     })
 
 
