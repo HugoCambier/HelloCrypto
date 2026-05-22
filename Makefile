@@ -1,7 +1,11 @@
-.PHONY: install agent dashboard simulation shell deploy clean backtest
+.PHONY: install hooks agent dashboard simulation shell deploy clean backtest
 
 install:     ## Install dependencies (Gemini + PostgreSQL)
 	poetry install --extras gemini --extras postgres
+
+hooks:       ## Install local git hooks (regenerates requirements.txt on poetry changes)
+	git config core.hooksPath scripts/git-hooks
+	@echo "Hooks installed (core.hooksPath = scripts/git-hooks)"
 
 agent:       ## Run the trading agent locally (loops)
 	RUNNER_LOOP=true poetry run python runner/main.py --mode real

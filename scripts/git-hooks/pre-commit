@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+staged=$(git diff --cached --name-only)
+if echo "$staged" | grep -qE '^(pyproject\.toml|poetry\.lock)$'; then
+    echo "[pre-commit] poetry deps changed → regenerating requirements.txt"
+    poetry export -f requirements.txt --output requirements.txt --without-hashes --quiet
+    git add requirements.txt
+fi
