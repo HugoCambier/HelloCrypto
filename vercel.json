@@ -4,6 +4,10 @@
     {
       "src": "dashboard/app.py",
       "use": "@vercel/python"
+    },
+    {
+      "src": "static/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
