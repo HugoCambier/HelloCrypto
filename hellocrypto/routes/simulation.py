@@ -464,38 +464,34 @@ def sim_start():
     })
 
 
-def _serverless_liquidate(active_sim: dict) -> dict:
-    """Force-sell all remaining positions to USDC as the run's final cycle.
+def _liquidate_session(session_id: str, params: dict, session_name: str) -> dict:
+    """Force-sell every position of `session_id` to USDC at current Binance prices.
 
-    Runs synchronously in the stop request (within Vercel's 60s budget):
-    fetches current Binance prices, sells all holdings, persists the
-    "SELL (liquidation)" trades, updates the snapshot. Skips entirely
-    if there's nothing to sell.
+    Runs one extra liquidation cycle via sim_engine.run(liquidate_at_end=True),
+    which fetches prices, sells everything, persists each sale as a
+    "SELL (liquidation)" trade. Skips if no holdings.
     """
     from db.store import get_state
     from .. import simulation as sim_engine
 
-    sid = active_sim.get("session_id", "")
     last_state = get_state("simulation") or {}
-    if last_state.get("session_id") != sid:
+    if last_state.get("session_id") != session_id:
         return {"skipped": "no state for this session"}
     holdings = last_state.get("holdings") or {}
     if not holdings:
         return {"skipped": "no holdings to liquidate"}
 
-    params  = active_sim.get("params") or {}
     cfg     = load_config()
     budget  = float(params.get("budget") or cfg.get("budget", 100))
     run_cfg = {**cfg, **{k: v for k, v in params.items() if v is not None}}
-    sname   = active_sim.get("session_name", "")
     cur_cyc = int(last_state.get("cycle", 0))
 
-    # sim.run with liquidate_at_end=True + max_cycles=current_cycle makes
-    # the next loop iteration trigger is_liquidation_cycle (cycle > max).
     local_stop = threading.Event()
     def _short_circuit(_c: int, _s: dict) -> None:
         local_stop.set()
 
+    # max_cycles=cur_cyc + liquidate_at_end=True makes effective_max = cur_cyc+1,
+    # so the next loop iteration runs the liquidation block then breaks.
     sim_engine.run(
         budget,
         config=run_cfg,
@@ -504,8 +500,8 @@ def _serverless_liquidate(active_sim: dict) -> dict:
         resume=True,
         max_cycles=cur_cyc,
         liquidate_at_end=True,
-        session_id=sid,
-        session_name=sname,
+        session_id=session_id,
+        session_name=session_name,
     )
     return {"liquidated_symbols": list(holdings.keys()), "from_cycle": cur_cyc}
 
@@ -513,21 +509,51 @@ def _serverless_liquidate(active_sim: dict) -> dict:
 @bp.post("/api/simulation/stop")
 def sim_stop():
     global _sim_stop_event
+    liquidation_result = None
+
     if _IS_SERVERLESS:
         active = _read_active_sim()
-        liquidation_result = None
         if active:
             try:
-                liquidation_result = _serverless_liquidate(active)
+                liquidation_result = _liquidate_session(
+                    session_id=active.get("session_id", ""),
+                    params=active.get("params") or {},
+                    session_name=active.get("session_name", ""),
+                )
             except Exception:
                 log.exception("Liquidation finale échouée")
                 liquidation_result = {"error": "liquidation failed"}
         _write_active_sim(None)
         return jsonify({"ok": True, "liquidation": liquidation_result})
+
+    # Local / threaded mode: stop the background loop, wait for it to exit,
+    # then liquidate synchronously using the saved state.
+    import time as _time
+    sid = _sim_state.session_id
+    sname = _sim_state.session_name
+    cycle_sec = _sim_state.cycle_seconds
     _sim_stop_event.set()
     _sim_state.stop()
     _set_keepalive(False)
-    return jsonify({"ok": True})
+
+    # Wait up to 15s for the background loop to exit cleanly (it checks
+    # stop_event at the top of each iteration + after each cycle's wait).
+    deadline = _time.time() + 15
+    while _sim_state.running and _time.time() < deadline:
+        _time.sleep(0.2)
+
+    if sid:
+        try:
+            liquidation_result = _liquidate_session(
+                session_id=sid,
+                params={"cycle_seconds": cycle_sec},
+                session_name=sname,
+            )
+        except Exception:
+            log.exception("Liquidation finale échouée")
+            liquidation_result = {"error": "liquidation failed"}
+
+    return jsonify({"ok": True, "liquidation": liquidation_result})
 
 
 @bp.get("/api/simulation/sessions")
