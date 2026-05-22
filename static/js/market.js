@@ -403,21 +403,15 @@ async function runAnalysis() {
   bar.classList.remove('hidden');
   try {
     const r = await fetch('/api/analysis/start', {method:'POST'});
-    if (!r.ok) throw new Error('failed');
-    toast('Analyse lancée');
-    let tries = 0;
-    const iv = setInterval(async () => {
-      tries++;
-      const s = await fetch('/api/analysis/status').then(r=>r.json()).catch(()=>null);
-      if (!s?.running || tries > 60) {
-        clearInterval(iv);
-        btn.disabled = false; btn.textContent = 'Analyser maintenant';
-        bar.classList.add('hidden');
-        load();
-      }
-    }, 2000);
-  } catch {
-    toast('Erreur lors de l\'analyse','err');
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok || body.ok === false) {
+      throw new Error(body.error || 'failed');
+    }
+    toast('Analyse terminée');
+    await load();
+  } catch (e) {
+    toast('Erreur lors de l\'analyse : ' + (e.message || ''), 'err');
+  } finally {
     btn.disabled = false; btn.textContent = 'Analyser maintenant';
     bar.classList.add('hidden');
   }

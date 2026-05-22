@@ -33,6 +33,11 @@ def analysis_status():
 
 @bp.post("/api/analysis/start")
 def analysis_start():
+    """Run market analysis synchronously and persist to DB.
+
+    Background threads don't survive on serverless (Vercel kills the
+    function once the HTTP response is sent), so we block until done.
+    """
     global _analysis_state
     with _analysis_lock:
         if _analysis_state["running"]:
@@ -148,8 +153,12 @@ def analysis_start():
             with _analysis_lock:
                 _analysis_state = {"running": False, "result": None, "error": "Erreur lors de l'analyse"}
 
-    threading.Thread(target=_run, daemon=True).start()
-    return jsonify({"ok": True})
+    _run()
+    with _analysis_lock:
+        state = dict(_analysis_state)
+    if state.get("error"):
+        return jsonify({"ok": False, "error": state["error"]}), 500
+    return jsonify({"ok": True, "result": state.get("result")})
 
 
 @bp.get("/api/analyses")
