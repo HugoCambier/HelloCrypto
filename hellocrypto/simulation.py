@@ -188,6 +188,7 @@ def run(
     cooldown_map: dict   = {}   # sym → last sell cycle
     cycle: int           = 0
     value_timeseries: list = []  # [{ts, v}] — total_value per cycle
+    snap: dict           = {}    # latest computed snapshot (for save state on exit)
 
     if resume:
         saved = _load_state()
@@ -419,7 +420,8 @@ def run(
             snap = _snapshot(cycle, cash, holdings, prices, history, total_fees, initial_total_value, initial_prices, cycle_sec)
             if on_cycle:
                 on_cycle(cycle, snap)
-            _save_state({"schema_version": 1, "budget": budget, "cycle": cycle, "cash": cash,
+            _save_state({**snap,
+                         "schema_version": 1, "budget": budget, "cycle": cycle, "cash": cash,
                          "holdings": holdings, "history": history, "total_fees": total_fees,
                          "initial_prices": initial_prices, "peak_prices": peak_prices,
                          "cooldown_map": cooldown_map, "recent_decisions": recent_decisions,
@@ -564,7 +566,8 @@ def run(
         if on_cycle:
             on_cycle(cycle, snap)
 
-        _save_state({"schema_version": 1, "budget": budget, "cycle": cycle, "cash": cash,
+        _save_state({**snap,
+                     "schema_version": 1, "budget": budget, "cycle": cycle, "cash": cash,
                      "holdings": holdings, "history": history, "total_fees": total_fees,
                      "initial_prices": initial_prices, "peak_prices": peak_prices,
                      "cooldown_map": cooldown_map, "recent_decisions": recent_decisions,
@@ -583,7 +586,8 @@ def run(
             time.sleep(cycle_sec)
 
     # Mark simulation as stopped in persisted state
-    _save_state({"schema_version": 1, "budget": budget, "cycle": cycle, "cash": cash,
+    _save_state({**snap,
+                 "schema_version": 1, "budget": budget, "cycle": cycle, "cash": cash,
                  "holdings": holdings, "history": history, "total_fees": total_fees,
                  "initial_prices": initial_prices, "peak_prices": peak_prices,
                  "cooldown_map": cooldown_map, "recent_decisions": recent_decisions,
