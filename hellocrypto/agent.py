@@ -249,11 +249,16 @@ def _execute_cycle(
                 reason = f"[{horizon}] {reason}"
 
             if atype == "buy" and cash > 10:
-                last_sell = cooldown_map.get(sym, 0)
-                if cycle - last_sell < sell_cooldown_cyc:
-                    log.info("COOLDOWN %s — %d cycles restants",
-                             sym, sell_cooldown_cyc - (cycle - last_sell))
-                    continue
+                # Only apply cooldown if the symbol was actually sold before
+                # (without this guard, .get(sym, 0) treats never-sold symbols
+                # as sold at cycle 0 and blocks the first sell_cooldown_cyc
+                # cycles of any fresh start).
+                if sym in cooldown_map:
+                    last_sell = cooldown_map[sym]
+                    if cycle - last_sell < sell_cooldown_cyc:
+                        log.info("COOLDOWN %s — %d cycles restants",
+                                 sym, sell_cooldown_cyc - (cycle - last_sell))
+                        continue
 
                 rsi = market_data_raw.get(sym, {}).get("rsi14")
                 amount = compute_position_size(action.get("usdc_amount", 0), cash, risk_level, rsi)

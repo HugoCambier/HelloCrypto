@@ -477,12 +477,17 @@ def run(
             reason = action.get("reason", "")
 
             if atype == "buy" and cash > 10 and sym in prices:
-                # Cooldown check
-                last_sell = cooldown_map.get(sym, 0)
-                if cycle - last_sell < sell_cooldown_cycles:
-                    log.info("[SIM] COOLDOWN %s (%d cycles restants)", sym,
-                             sell_cooldown_cycles - (cycle - last_sell))
-                    continue
+                # Cooldown check — only applies if the symbol was actually sold
+                # in a previous cycle. Without the `in cooldown_map` guard,
+                # `.get(sym, 0)` treats a never-sold symbol as sold at cycle 0
+                # and blocks every buy during the first sell_cooldown_cycles
+                # cycles of a fresh sim.
+                if sym in cooldown_map:
+                    last_sell = cooldown_map[sym]
+                    if cycle - last_sell < sell_cooldown_cycles:
+                        log.info("[SIM] COOLDOWN %s (%d cycles restants)", sym,
+                                 sell_cooldown_cycles - (cycle - last_sell))
+                        continue
 
                 rsi         = market_raw.get(sym, {}).get("rsi14")
                 horizon     = action.get("horizon", "").upper()
