@@ -1,11 +1,11 @@
-name: Cron Tick
+name: Cron Tick (manual only)
 
+# Note: scheduled execution is handled by cron-job.org which pings
+# /api/cron/tick directly on Vercel. GitHub Actions schedules proved
+# unreliable on this account (frequent skips). This workflow is kept
+# only for manual triggers via `gh workflow run runner.yml` or the
+# Actions UI's "Run workflow" button.
 on:
-  schedule:
-    # Toutes les 5 minutes — déclenche /api/cron/tick sur Vercel,
-    # qui fait le vrai travail (Binance OK depuis cdg1, contrairement
-    # aux runners GH Actions qui sont sur des IPs US bloquées).
-    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 jobs:

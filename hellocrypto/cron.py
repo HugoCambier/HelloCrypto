@@ -56,13 +56,22 @@ def _run_sim_cycle(active_sim: dict, stop_event: threading.Event) -> dict:
     sname          = active_sim.get("session_name", "")
     is_first_cycle = not active_sim.get("started")
 
-    # Time-gate: skip if the previous cycle (for this session) is too recent
+    # Time-gate: skip if the previous cycle (for this session) is too recent.
+    # `saved_at` is when the previous cycle FINISHED, but we want intervals
+    # between cycle STARTS. Without tolerance, a 5-min cycle that finished at
+    # 16:00:20 would block the 16:05:00 fire (elapsed=280s < 300s) and only
+    # run at 16:10:00 — wrong. With a 60s tolerance, 16:05:00 executes
+    # because 280s >= (300 - 60). Tolerance is larger than typical cycle
+    # duration (~20-30s), so cycle_seconds > 300 (10 min, 15 min, ...) still
+    # correctly skip intermediate fires.
+    GATE_TOLERANCE_SEC = 60
     last_state = store.get_state("simulation") or {}
     if last_state.get("session_id") == sid and last_state.get("saved_at"):
         try:
             elapsed = (datetime.utcnow() - datetime.fromisoformat(last_state["saved_at"])).total_seconds()
-            if elapsed < cycle_seconds:
-                log.info("[SIM] %.0fs since last cycle (need %ds) — skip", elapsed, cycle_seconds)
+            if elapsed < cycle_seconds - GATE_TOLERANCE_SEC:
+                log.info("[SIM] %.0fs since last cycle (need %ds - %ds tolerance) — skip",
+                         elapsed, cycle_seconds, GATE_TOLERANCE_SEC)
                 return {"action": "sim_skip", "elapsed": elapsed, "cycle_seconds": cycle_seconds}
         except Exception:
             log.warning("[SIM] Could not parse saved_at, running anyway", exc_info=True)
