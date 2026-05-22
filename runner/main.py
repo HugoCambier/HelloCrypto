@@ -89,9 +89,17 @@ def _run_sim_cycle_if_due(active_sim: dict, stop_event: threading.Event) -> None
     log.info("[SIM] Running 1 cycle | session=%s | first=%s | cycle_seconds=%ds",
              sid, is_first_cycle, cycle_seconds)
 
+    # sim.run's main loop waits cycle_seconds AFTER each cycle before checking
+    # max_cycles. With max_cycles=1 + cycle_seconds=300, that's a useless 5-min
+    # wait every cron fire. Short-circuit by setting stop_event in on_cycle, so
+    # the post-cycle wait returns immediately and the loop exits cleanly.
+    def _short_circuit_after_cycle(_cycle: int, _snap: dict) -> None:
+        stop_event.set()
+
     sim.run(
         budget,
         config=run_cfg,
+        on_cycle=_short_circuit_after_cycle,
         stop_event=stop_event,
         resume=not is_first_cycle,
         max_cycles=1,
@@ -113,8 +121,12 @@ def _run_sim_cycle_if_due(active_sim: dict, stop_event: threading.Event) -> None
             log.info("[SIM] max_cycles=%d atteint — fin de simulation", user_max)
             if active_sim.get("liquidate_at_end"):
                 log.info("[SIM] Cycle de liquidation final")
+                # Reset stop_event (set by short-circuit above) before re-using it
+                stop_event.clear()
                 sim.run(
-                    budget, config=run_cfg, stop_event=stop_event,
+                    budget, config=run_cfg,
+                    on_cycle=_short_circuit_after_cycle,
+                    stop_event=stop_event,
                     resume=True, max_cycles=1, liquidate_at_end=True,
                     session_id=sid, session_name=sname,
                 )
