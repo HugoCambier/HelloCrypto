@@ -6,838 +6,621 @@
   <title>HelloCrypto</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script>
-    tailwind.config = {
-      theme: { extend: { colors: { surface: '#0f172a', card: '#1e293b', border: '#334155' } } }
-    }
-  </script>
   <style>
-    body { background: #0f172a; }
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-track { background: #1e293b; }
-    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+    body { background: #0b1220; }
+    ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #0f172a; } ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
 
-    .tab-active  { border-bottom: 2px solid #3b82f6; color: #60a5fa; }
-    .tab-inactive{ border-bottom: 2px solid transparent; color: #94a3b8; }
-    .tab-inactive:hover { color: #cbd5e1; }
+    .toggle-master { position:relative; width:100%; padding:16px 20px; border-radius:14px; border:2px solid transparent; font-weight:700; font-size:17px; letter-spacing:.4px; transition:all .2s; }
+    .toggle-master.on  { background:#064e3b; color:#6ee7b7; border-color:#10b981; box-shadow:0 0 24px rgba(16,185,129,.18); }
+    .toggle-master.off { background:#1e293b; color:#94a3b8; border-color:#334155; }
+    .toggle-master .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:8px; }
+    .toggle-master.on  .dot { background:#34d399; animation:pulse-dot 1.8s infinite; }
+    .toggle-master.off .dot { background:#64748b; }
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.35} }
 
-    .log-line   { font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace; font-size: 0.72rem; line-height: 1.55; padding: 1px 0; }
-    .log-info   { color: #94a3b8; }
-    .log-warn   { color: #f59e0b; }
-    .log-error  { color: #f87171; }
-    .log-buy    { color: #34d399; }
-    .log-sell   { color: #fb923c; }
-    .log-hold   { color: #60a5fa; }
-    .log-cycle  { color: #a78bfa; font-weight: 600; }
-    .log-report { color: #fbbf24; }
+    .seg { display:flex; border:1px solid #334155; border-radius:8px; overflow:hidden; }
+    .seg button { flex:1; padding:7px 10px; font-size:13px; color:#94a3b8; background:transparent; transition:all .15s; }
+    .seg button.active { background:#1d4ed8; color:white; }
+    .seg button:not(.active):hover { background:#1e293b; color:#cbd5e1; }
 
-    .badge-buy  { background: #064e3b; color: #34d399; }
-    .badge-sell { background: #431407; color: #fb923c; }
-    .badge-sl   { background: #450a0a; color: #f87171; }
-    .badge-hold { background: #1e3a5f; color: #60a5fa; }
+    .fld { width:100%; padding:7px 10px; font-size:13px; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#e2e8f0; }
+    .fld:focus { outline:none; border-color:#3b82f6; }
+    .lbl { font-size:11px; color:#94a3b8; margin-bottom:4px; display:block; letter-spacing:.3px; text-transform:uppercase; }
 
-    .pnl-pos { color: #34d399; }
-    .pnl-neg { color: #f87171; }
+    .chip { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; border:1px solid #334155; background:#0f172a; color:#94a3b8; transition:all .15s; }
+    .chip.on { background:#1d4ed8; color:white; border-color:#1d4ed8; }
+    .chip:hover { filter:brightness(1.2); }
 
-    @keyframes pulse-dot { 0%,100%{ opacity:1; } 50%{ opacity:.3; } }
-    .animate-pulse-dot { animation: pulse-dot 2s infinite; }
+    .cdrop { position:relative; }
+    .cdrop-btn { width:100%; padding:7px 10px; font-size:13px; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#e2e8f0; text-align:left; display:flex; align-items:center; justify-content:space-between; cursor:pointer; }
+    .cdrop-btn:hover { border-color:#475569; }
+    .cdrop-menu { position:absolute; z-index:50; top:calc(100% + 4px); left:0; right:0; max-height:280px; overflow-y:auto; background:#0f172a; border:1px solid #334155; border-radius:8px; padding:6px; box-shadow:0 8px 24px rgba(0,0,0,.4); display:none; }
+    .cdrop-menu.open { display:block; }
+    .cdrop-header { display:flex; gap:8px; padding:4px 6px 6px; border-bottom:1px solid #1e293b; margin-bottom:4px; }
+    .cdrop-action { font-size:11px; padding:2px 8px; border-radius:4px; background:transparent; color:#94a3b8; cursor:pointer; }
+    .cdrop-action:hover { background:#1e293b; color:#e2e8f0; }
+    .cdrop-item { display:flex; align-items:center; gap:8px; padding:4px 6px; border-radius:4px; cursor:pointer; font-size:13px; color:#cbd5e1; }
+    .cdrop-item:hover { background:#1e293b; }
 
-    .spinner { border: 2px solid #334155; border-top-color: #3b82f6; border-radius: 50%; width: 16px; height: 16px; animation: spin .6s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .rtab { padding:8px 14px; font-size:12px; font-weight:600; border-bottom:2px solid transparent; color:#64748b; transition:all .15s; letter-spacing:.3px; text-transform:uppercase; }
+    .rtab.active { color:#60a5fa; border-bottom-color:#3b82f6; }
+    .rtab:hover:not(.active) { color:#94a3b8; }
 
-    .tip { position: relative; display: inline-flex; align-items: center; }
-    .tip .tip-icon { width: 14px; height: 14px; border-radius: 50%; background: #334155; color: #94a3b8; font-size: 9px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; cursor: default; flex-shrink: 0; }
-    .tip .tip-box { visibility: hidden; opacity: 0; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #1e293b; border: 1px solid #334155; color: #cbd5e1; font-size: 11px; line-height: 1.5; padding: 7px 10px; border-radius: 8px; width: 220px; z-index: 100; pointer-events: none; transition: opacity .15s; white-space: normal; }
-    .tip .tip-box::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #334155; }
-    .tip:hover .tip-box, .tip:focus-within .tip-box { visibility: visible; opacity: 1; }
+    .log-line { font-family:'JetBrains Mono',ui-monospace,monospace; font-size:11px; line-height:1.5; padding:1px 0; }
+    .log-info{color:#94a3b8} .log-warn{color:#f59e0b} .log-error{color:#f87171}
+    .log-buy{color:#34d399} .log-sell{color:#fb923c} .log-hold{color:#60a5fa} .log-cycle{color:#a78bfa;font-weight:600}
+    .log-filter-btn { background:transparent; color:#94a3b8; transition:all .15s; border-radius:4px; }
+    .log-filter-btn:hover { background:#334155; color:#e2e8f0; }
+    .log-filter-btn.active { background:#1d4ed8; color:#fff; }
+    #logs-drawer { transform:translateX(100%); transition:transform .25s ease; }
+    #logs-drawer.open { transform:translateX(0); }
+    #logs-overlay { opacity:0; pointer-events:none; transition:opacity .25s ease; }
+    #logs-overlay.open { opacity:1; pointer-events:auto; }
 
-    .log-filter-btn { background: transparent; color: #94a3b8; transition: background .15s, color .15s; }
-    .log-filter-btn:hover { background: #334155; color: #e2e8f0; }
-    .log-filter-btn.active { background: #1d4ed8; color: #fff; }
+    .pnl-pos{color:#34d399} .pnl-neg{color:#f87171}
+    .badge-up{background:#064e3b;color:#34d399} .badge-down{background:#431407;color:#fb923c} .badge-flat{background:#1e293b;color:#94a3b8}
+    .kpi { background:#111827; border:1px solid #1f2937; border-radius:10px; padding:12px 14px; }
+    .kpi-label { font-size:10px; color:#6b7280; text-transform:uppercase; letter-spacing:.3px; }
+    .kpi-val { font-size:18px; font-weight:700; margin-top:2px; color:#e2e8f0; }
+    .kpi-sub { font-size:11px; color:#6b7280; margin-top:1px; }
 
-    /* Logs drawer slide */
-    #logs-drawer { transform: translateX(100%); transition: transform .25s ease; }
-    #logs-drawer.open { transform: translateX(0); }
-    #logs-overlay { opacity: 0; pointer-events: none; transition: opacity .25s ease; }
-    #logs-overlay.open { opacity: 1; pointer-events: auto; }
+    .kpi-hero { position:relative; background:#0f172a; border:1px solid #1f2937; border-radius:12px; padding:16px 18px; overflow:hidden; transition:background .25s, border-color .25s; }
+    .kpi-hero::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:#475569; transition:background .25s; }
+    .kpi-hero.pos { background:linear-gradient(135deg, rgba(52,211,153,0.10), rgba(52,211,153,0.02)); border-color:rgba(52,211,153,0.30); }
+    .kpi-hero.pos::before { background:#34d399; }
+    .kpi-hero.neg { background:linear-gradient(135deg, rgba(248,113,113,0.10), rgba(248,113,113,0.02)); border-color:rgba(248,113,113,0.30); }
+    .kpi-hero.neg::before { background:#f87171; }
+    .kpi-hero-label { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:.4px; font-weight:600; }
+    .kpi-hero-val { font-size:24px; font-weight:800; margin-top:5px; color:#e2e8f0; line-height:1.1; }
+    .kpi-hero-val.pnl-pos { color:#34d399; }
+    .kpi-hero-val.pnl-neg { color:#f87171; }
+    .kpi-hero-sub { font-size:11px; color:#94a3b8; margin-top:3px; font-weight:500; }
+    .kpi-hero-sub.pnl-pos { color:#86efac; }
+    .kpi-hero-sub.pnl-neg { color:#fca5a5; }
 
-    /* Trend arrows */
-    .trend-up   { color: #34d399; }
-    .trend-down { color: #f87171; }
-    .trend-flat { color: #94a3b8; }
+    .spinner-mini { display:inline-block; width:11px; height:11px; border:2px solid #334155; border-top-color:#60a5fa; border-radius:50%; animation:spin-mini .7s linear infinite; vertical-align:middle; margin-left:6px; }
+    @keyframes spin-mini { to { transform:rotate(360deg); } }
+    .panel-loading { position:relative; }
+    .panel-loading::after { content:''; position:absolute; left:0; right:0; top:0; height:2px; background:linear-gradient(90deg, transparent, #3b82f6, transparent); background-size:200% 100%; animation:shimmer 1.2s linear infinite; border-radius:12px 12px 0 0; pointer-events:none; }
+    @keyframes shimmer { 0% { background-position:200% 0; } 100% { background-position:-200% 0; } }
+
+    .order-card { background:#0f172a; border:1px solid #1e293b; border-radius:12px; padding:14px; transition:border-color .15s; }
+    .order-card:hover { border-color:#334155; }
+    .order-card.has-pos { border-color:#1e3a5f; }
+    .order-card .sym { font-size:18px; font-weight:800; color:#e2e8f0; }
+    .order-card .price { font-size:14px; font-weight:600; color:#cbd5e1; }
+    .order-card .delta { font-size:11px; font-weight:600; padding:2px 6px; border-radius:4px; }
+    .delta.up { background:rgba(52,211,153,0.12); color:#34d399; }
+    .delta.down { background:rgba(248,113,113,0.12); color:#f87171; }
+    .delta.flat { background:#1e293b; color:#94a3b8; }
+    .order-card .pos-block { background:#0a1424; border:1px solid #1e3a5f; border-radius:8px; padding:8px 10px; margin-top:8px; font-size:12px; }
+    .order-card .pos-block .row { display:flex; justify-content:space-between; gap:8px; padding:1px 0; }
+    .order-card .pos-block .row span:first-child { color:#64748b; }
+    .order-card .pos-block .row span:last-child { color:#cbd5e1; font-weight:500; }
+    .order-card .actions { display:flex; gap:6px; margin-top:10px; }
+    .order-card .actions button { flex:1; padding:7px 0; font-size:12px; font-weight:600; border-radius:6px; transition:all .15s; }
+    .btn-buy { background:#065f46; color:#a7f3d0; }
+    .btn-buy:hover:not(:disabled) { background:#047857; color:#fff; }
+    .btn-sell { background:#7f1d1d; color:#fecaca; }
+    .btn-sell:hover:not(:disabled) { background:#991b1b; color:#fff; }
+    .order-card .actions button:disabled { opacity:0.4; cursor:not-allowed; }
+    .order-tech { display:flex; gap:8px; font-size:10px; color:#64748b; margin-top:4px; }
+    .order-tech .tag { background:#1e293b; padding:1px 6px; border-radius:3px; }
+
+    .fbtn { padding:3px 9px; border-radius:5px; font-size:11px; color:#94a3b8; background:transparent; cursor:pointer; border:1px solid transparent; transition:all .15s; font-weight:500; }
+    .fbtn:hover { color:#cbd5e1; background:#1e293b; }
+    .fbtn.on { background:#1d4ed8; color:white; border-color:#1d4ed8; }
+    .trade-row { display:grid; grid-template-columns: 110px 80px 60px 80px 90px 80px 1fr; gap:8px; align-items:center; padding:6px 4px; border-bottom:1px solid #1e293b; font-size:12px; }
+    .trade-header { font-size:10px; text-transform:uppercase; letter-spacing:.3px; color:#64748b; border-bottom:1px solid #334155; padding-bottom:6px; margin-bottom:4px; font-weight:600; }
+
+    .run-card { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; border:1px solid #1e293b; background:#0f172a; cursor:pointer; transition:all .15s; position:relative; }
+    .run-card:hover { border-color:#475569; background:#13203a; }
+    .run-card.active { border-color:#3b82f6; background:#172554; }
+    .run-card.real { border-color:#7c2d12; background:#1c1410; }
+    .run-card.real:hover { border-color:#c2410c; }
+    .run-card.real.active { border-color:#f97316; background:#3a1d0b; }
+    .run-tag { font-size:9px; padding:1px 6px; border-radius:4px; font-weight:600; letter-spacing:.4px; text-transform:uppercase; }
+    .tag-sim  { background:#1e293b; color:#94a3b8; }
+    .tag-real { background:#7c2d12; color:#fed7aa; }
+    .run-actions { display:flex; gap:2px; align-items:center; }
+    .run-actions button { width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:5px; background:transparent; color:#64748b; font-size:13px; line-height:1; transition:all .15s; }
+    .run-actions button:hover { background:#1e293b; color:#cbd5e1; }
+    .run-actions button.danger:hover { background:#7f1d1d; color:#fecaca; }
+
+    .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:60; display:flex; align-items:center; justify-content:center; padding:20px; }
+    .modal-card { background:#0f172a; border:1px solid #334155; border-radius:14px; max-width:540px; width:100%; max-height:92vh; overflow-y:auto; padding:24px; }
   </style>
 </head>
 <body class="text-slate-100 h-full flex flex-col">
 
-  <!-- ═══ HEADER ═══ -->
-  <header class="bg-slate-800 border-b border-slate-700 px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-y-2 shrink-0">
+  <!-- HEADER 1 -->
+  <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
+    <span class="text-lg font-bold text-blue-400 tracking-tight">HelloCrypto</span>
     <div class="flex items-center gap-3">
-      <span class="text-lg md:text-xl font-bold text-blue-400 tracking-tight">HelloCrypto</span>
-    </div>
-    <div class="flex items-center gap-2 flex-wrap">
-      <!-- Status indicator -->
-      <div class="flex items-center gap-2 text-sm mr-1">
-        <div class="w-2 h-2 rounded-full bg-slate-500" id="status-dot"></div>
-        <span class="text-slate-400 text-xs hidden sm:inline" id="status-label">Inactif</span>
-      </div>
-      <!-- Stop button -->
-      <button id="stop-btn" onclick="stopAll()"
-        class="hidden px-3 py-1.5 rounded-lg text-xs font-medium bg-red-700 hover:bg-red-600 transition-colors">
-        Stop
+      <button onclick="toggleLogs()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs text-slate-300 transition-colors">
+        Logs <span id="log-count" class="ml-1 text-slate-500">0</span>
       </button>
-      <!-- Mode: Simulation / Real -->
-      <div class="flex rounded-lg overflow-hidden border border-slate-600 text-xs">
-        <button id="mode-sim-btn" onclick="setMode('simulation')"
-          class="px-3 py-1.5 bg-blue-700 text-white transition-colors">Simulation</button>
-        <button id="mode-real-btn" onclick="setMode('real')"
-          class="px-3 py-1.5 text-slate-400 hover:text-white border-l border-slate-600 transition-colors">Réel</button>
-      </div>
-      <!-- Error badge -->
-      <span id="sim-error-badge" class="hidden px-2 py-0.5 rounded text-xs bg-red-700 text-red-100 cursor-help" title="">Erreur</span>
-      <!-- Cycle badge + countdown -->
-      <div id="cycle-badge" class="hidden flex flex-col items-end">
-        <span id="cycle-badge-text" class="px-2 py-0.5 rounded text-xs border border-slate-600 text-slate-400">Cycle —</span>
-        <span id="countdown-text" class="text-xs text-slate-500 mt-0.5"></span>
-      </div>
-      <!-- Power ON/OFF -->
-      <button id="power-btn" onclick="togglePower()"
-        class="px-3 md:px-4 py-1.5 rounded-lg text-sm font-medium border-2 border-slate-600 text-slate-400 hover:border-slate-400 transition-colors">
-        <span id="power-label">OFF</span>
-      </button>
-      <!-- Logs drawer toggle -->
-      <button onclick="toggleLogs()" id="logs-toggle-btn"
-        class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-xs text-slate-300 transition-colors">
-        Logs
-      </button>
+      <a href="/logout" class="text-xs text-slate-500 hover:text-red-400 transition-colors">Déconnexion</a>
     </div>
   </header>
 
-  <!-- ═══ TAB BAR ═══ -->
-  <nav class="bg-slate-800 border-b border-slate-700 px-2 md:px-6 flex gap-0.5 md:gap-1 shrink-0 items-center overflow-x-auto">
-    <button class="tab-btn tab-active   px-3 md:px-5 py-3 text-xs md:text-sm font-medium transition-colors whitespace-nowrap" data-tab="dashboard"   onclick="switchTab('dashboard')">
-      Dashboard
-    </button>
-    <button class="tab-btn tab-inactive px-3 md:px-5 py-3 text-xs md:text-sm font-medium transition-colors whitespace-nowrap" data-tab="markets"      onclick="switchTab('markets')">
-      Marchés
-    </button>
-    <button class="tab-btn tab-inactive px-3 md:px-5 py-3 text-xs md:text-sm font-medium transition-colors whitespace-nowrap" data-tab="performance"  onclick="switchTab('performance')">
-      Performance
-    </button>
-    <button class="tab-btn tab-inactive px-3 md:px-5 py-3 text-xs md:text-sm font-medium transition-colors whitespace-nowrap" data-tab="backtest"     onclick="switchTab('backtest')">
-      Backtest
-    </button>
-    <!-- LLM Selector -->
-    <div class="ml-auto flex items-center gap-2" id="llm-selector-wrap">
-      <button id="llm-selector-btn" onclick="_toggleLlmPanel(event)"
-        class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-xs text-slate-300 transition-colors">
-        <span id="llm-selector-label">LLM</span> ▾
-      </button>
-    </div>
+  <!-- HEADER 2: NAV -->
+  <nav class="bg-slate-900 border-b border-slate-700 px-6 flex gap-1 shrink-0">
+    <a href="/" class="rtab active">Home</a>
+    <a href="/backtest" class="rtab">Backtest</a>
+    <a href="/market" class="rtab">Analyse de marché</a>
   </nav>
 
-  <!-- ═══ MAIN CONTENT ═══ -->
-  <main class="flex-1 overflow-hidden relative">
+  <!-- COCKPIT -->
+  <div class="flex-1 flex overflow-hidden">
 
-    <!-- ─── TAB: DASHBOARD ─── -->
-    <div id="pane-dashboard" class="h-full overflow-y-auto p-4 space-y-4">
+    <!-- LEFT: RUNS -->
+    <aside class="w-[320px] shrink-0 bg-slate-900 border-r border-slate-800 overflow-y-auto p-4 space-y-4">
 
-      <!-- Summary KPI row -->
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3" id="dash-kpi-cards">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Valeur totale</div><div class="text-xl font-bold text-slate-600" id="dash-total">—</div><div class="text-xs text-slate-500" id="dash-total-sub"></div></div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Cash USDC</div><div class="text-xl font-bold text-slate-600" id="dash-cash">—</div></div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">P&L</div><div class="text-xl font-bold text-slate-600" id="dash-pnl">—</div><div class="text-xs text-slate-500" id="dash-pnl-sub"></div></div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Trades</div><div class="text-xl font-bold text-slate-600" id="dash-trades">—</div></div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Win rate</div><div class="text-xl font-bold text-slate-600" id="dash-winrate">—</div></div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Frais cumulés</div><div class="text-xl font-bold text-amber-400" id="dash-fees">—</div></div>
-      </div>
-
-      <!-- Two columns: positions + recent trades -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <!-- Positions -->
-        <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-          <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-            <span class="text-sm font-medium text-slate-300">Positions</span>
-            <span class="text-xs text-slate-500" id="dash-positions-mode"></span>
-          </div>
-          <div class="overflow-x-auto" style="max-height:350px;overflow-y:auto">
-            <table class="w-full text-xs">
-              <thead class="sticky top-0 bg-slate-800">
-                <tr class="text-slate-500 border-b border-slate-700">
-                  <th class="px-4 py-2 text-left">Actif</th>
-                  <th class="px-4 py-2 text-right">Quantité</th>
-                  <th class="px-4 py-2 text-right">Prix entrée</th>
-                  <th class="px-4 py-2 text-right">Prix actuel</th>
-                  <th class="px-4 py-2 text-right">Valeur</th>
-                  <th class="px-4 py-2 text-right">PnL</th>
-                </tr>
-              </thead>
-              <tbody id="dash-positions-body">
-                <tr><td colspan="6" class="px-4 py-6 text-center text-slate-600 text-sm">Chargement…</td></tr>
-              </tbody>
-            </table>
-          </div>
+      <!-- Current run -->
+      <div id="current-run-box" class="hidden bg-slate-800/40 border border-slate-700 rounded-xl p-3 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Run en cours</span>
+          <button onclick="stopCurrentRun()" class="text-[11px] text-red-400 hover:text-red-300 font-semibold">Arrêter</button>
         </div>
-
-        <!-- Recent trades -->
-        <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-          <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-            <span class="text-sm font-medium text-slate-300">Trades récents</span>
-            <span class="text-xs text-slate-500" id="dash-trades-count"></span>
-          </div>
-          <div class="overflow-x-auto" style="max-height:350px;overflow-y:auto">
-            <table class="w-full text-xs">
-              <thead class="sticky top-0 bg-slate-800">
-                <tr class="text-slate-500 border-b border-slate-700">
-                  <th class="px-3 py-2 text-left">Date</th>
-                  <th class="px-3 py-2 text-left">Action</th>
-                  <th class="px-3 py-2 text-left">Symbole</th>
-                  <th class="px-3 py-2 text-right">Qté</th>
-                  <th class="px-3 py-2 text-right">Montant</th>
-                  <th class="px-3 py-2 text-right">Prix</th>
-                  <th class="px-3 py-2 text-right">PnL</th>
-                </tr>
-              </thead>
-              <tbody id="dash-trades-body">
-                <tr><td colspan="7" class="px-4 py-6 text-center text-slate-600 text-sm">—</td></tr>
-              </tbody>
-            </table>
-          </div>
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="current-run-name" class="text-sm font-semibold text-slate-200">—</span>
         </div>
+        <div class="text-xs text-slate-400" id="current-run-meta">—</div>
+        <div class="text-xs text-slate-500">Prochain cycle dans <span id="sim-countdown" class="text-slate-300">—</span></div>
       </div>
 
-      <!-- Live simulation / benchmark (shown when sim is running) -->
-      <div id="dash-sim-live" class="hidden space-y-3">
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3" id="dash-sim-kpis"></div>
-      </div>
+      <!-- New run button -->
+      <button onclick="openNewRunModal()"
+              class="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 transition-colors font-semibold text-sm flex items-center justify-center gap-2">
+        <span class="text-base leading-none">+</span> Nouveau run
+      </button>
 
-      <!-- Sessions management -->
-      <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-        <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-          <span class="text-sm font-medium text-slate-300">Sessions</span>
-          <button onclick="_loadSimList()" class="text-xs text-slate-500 hover:text-slate-300 transition-colors">Actualiser</button>
-        </div>
-        <div id="dash-sessions-body" class="divide-y divide-slate-700/50 text-xs">
-          <div class="px-4 py-4 text-center text-slate-600">Chargement…</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ─── TAB: MARKETS ─── -->
-    <div id="pane-markets" class="hidden h-full overflow-y-auto p-4 space-y-4">
-
-      <!-- Watchlist table -->
-      <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-        <div class="px-4 py-3 border-b border-slate-700">
-          <span class="text-sm font-medium text-slate-300">Watchlist</span>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-xs">
-            <thead>
-              <tr class="text-slate-500 border-b border-slate-700">
-                <th class="px-4 py-2 text-left">Symbole</th>
-                <th class="px-4 py-2 text-right">Prix</th>
-                <th class="px-4 py-2 text-right">24h %</th>
-                <th class="px-4 py-2 text-right">RSI</th>
-                <th class="px-4 py-2 text-center">Tendance</th>
-                <th class="px-4 py-2 text-right">Score</th>
-                <th class="px-4 py-2 text-right">Volume 24h</th>
-              </tr>
-            </thead>
-            <tbody id="mkt-watchlist-body">
-              <tr><td colspan="7" class="px-4 py-6 text-center text-slate-600">Chargement…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Two columns: buy/sell + AI analysis -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <!-- Buy/Sell panel -->
-        <div class="space-y-3">
-          <!-- Buy -->
-          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3">
-            <h3 class="text-sm font-medium text-green-400">Acheter</h3>
-            <div class="space-y-2">
-              <select id="buy-symbol"
-                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none">
-                <option value="">Chargement…</option>
-              </select>
-              <input id="buy-amount" type="number" placeholder="Montant USDC" min="1" step="1"
-                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none" />
-              <button onclick="executeBuy()"
-                class="w-full py-2 bg-green-700 hover:bg-green-600 text-sm font-medium rounded-lg transition-colors">
-                Confirmer l'achat
-              </button>
-            </div>
-          </div>
-          <!-- Sell -->
-          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3">
-            <h3 class="text-sm font-medium text-orange-400">Vendre</h3>
-            <div class="space-y-2">
-              <select id="sell-symbol" onchange="_onSellSymbolChange()"
-                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none">
-                <option value="">Chargement…</option>
-              </select>
-              <input id="sell-qty" type="number" placeholder="Quantité" min="0" step="any"
-                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none" />
-              <button onclick="executeSell()"
-                class="w-full py-2 bg-orange-700 hover:bg-orange-600 text-sm font-medium rounded-lg transition-colors">
-                Confirmer la vente
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- AI Analysis -->
-        <div class="lg:col-span-2 space-y-3">
-          <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
-            <div class="flex items-center justify-between mb-3">
-              <div>
-                <h3 class="text-sm font-medium text-slate-200">Analyse IA</h3>
-                <p class="text-xs text-slate-500 mt-0.5">Sentiment et scénarios générés par le LLM</p>
-              </div>
-              <div class="flex items-center gap-2">
-                <span id="analysis-ts" class="text-xs text-slate-500"></span>
-                <button id="analysis-btn" onclick="_startAnalysis()"
-                  class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5">
-                  <span id="analysis-btn-icon">&#9672;</span>
-                  <span id="analysis-btn-label">Analyser</span>
-                </button>
-              </div>
-            </div>
-            <!-- Error -->
-            <div id="analysis-error" class="hidden bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-xs text-red-300 mb-3"></div>
-            <!-- Global sentiment -->
-            <div id="analysis-global" class="hidden mb-3">
-              <div class="flex items-center gap-3 flex-wrap">
-                <div>
-                  <div class="text-xs text-slate-500 mb-0.5">Sentiment</div>
-                  <div id="analysis-global-sentiment" class="text-lg font-bold"></div>
-                </div>
-                <div class="flex-1 text-xs text-slate-300" id="analysis-global-summary"></div>
-              </div>
-            </div>
-          </div>
-          <!-- Per-symbol cards -->
-          <div id="analysis-cards" class="space-y-3"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ─── TAB: PERFORMANCE ─── -->
-    <div id="pane-performance" class="hidden h-full overflow-y-auto p-4 space-y-4">
-
-      <!-- Filters bar -->
-      <div class="flex flex-wrap items-center gap-3">
-        <!-- Session selector (sim only, visibility managed by setMode) -->
-        <select id="perf-session-sel" class="hidden bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none max-w-[200px]">
-          <option value="">Toutes les sessions</option>
-        </select>
-        <!-- Period -->
-        <div class="flex gap-1 bg-slate-700 border border-slate-600 rounded-lg p-0.5 text-xs">
-          <button class="perf-period-btn px-2 py-1 rounded text-slate-400 hover:text-slate-200" data-period="1h"  onclick="setPeriod(this,'1h')">1h</button>
-          <button class="perf-period-btn px-2 py-1 rounded text-slate-400 hover:text-slate-200" data-period="24h" onclick="setPeriod(this,'24h')">24h</button>
-          <button class="perf-period-btn px-2 py-1 rounded text-slate-400 hover:text-slate-200" data-period="7j"  onclick="setPeriod(this,'7j')">7j</button>
-          <button class="perf-period-btn px-2 py-1 rounded text-slate-400 hover:text-slate-200" data-period="30j" onclick="setPeriod(this,'30j')">30j</button>
-          <button class="perf-period-btn px-2 py-1 rounded bg-slate-600 text-white font-medium" data-period="all" onclick="setPeriod(this,'all')">Tout</button>
-        </div>
-        <!-- Session rename/delete (sim only) -->
-        <div id="perf-session-actions" class="hidden flex gap-1">
-          <button onclick="_renameSession()" class="px-2 py-1 text-xs text-slate-400 hover:text-slate-200">Renommer</button>
-          <button onclick="_deleteSession()" class="px-2 py-1 text-xs text-red-400 hover:text-red-300">Supprimer</button>
-        </div>
-      </div>
-
-      <!-- Portfolio KPI cards (total, USDC, PnL, benchmarks) -->
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3" id="perf-kpi-cards">
-        <!-- Filled by JS -->
-      </div>
-      <!-- Trade stats cards (counts, win rate, fees) -->
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3" id="perf-stats-cards">
-        <!-- Filled by JS -->
-      </div>
-
-      <!-- Charts row -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <!-- Equity curve -->
-        <div class="lg:col-span-2 bg-slate-800 border border-slate-700 rounded-xl p-4">
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-sm font-medium text-slate-300">Equity curve</span>
-          </div>
-          <div style="position:relative; height:260px;">
-            <canvas id="perf-chart"></canvas>
-          </div>
-        </div>
-        <!-- P&L by symbol -->
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-sm font-medium text-slate-300">P&L par symbole</span>
-          </div>
-          <div style="position:relative; height:260px;">
-            <canvas id="perf-pnl-chart"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <!-- Trade history table -->
-      <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-        <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-          <span class="text-sm font-medium text-slate-300">Historique des trades</span>
-          <span class="text-xs text-slate-500" id="perf-trade-count"></span>
-        </div>
-        <div class="overflow-x-auto overflow-y-auto" style="max-height:400px">
-          <table class="w-full text-xs">
-            <thead class="sticky top-0 bg-slate-800">
-              <tr class="text-slate-500 border-b border-slate-700">
-                <th class="px-4 py-2 text-left">Date</th>
-                <th class="px-4 py-2 text-left">Action</th>
-                <th class="px-4 py-2 text-left">Symbole</th>
-                <th class="px-4 py-2 text-right">Qté</th>
-                <th class="px-4 py-2 text-right">Montant</th>
-                <th class="px-4 py-2 text-right">Prix</th>
-                <th class="px-4 py-2 text-right text-amber-500">Frais</th>
-                <th class="px-4 py-2 text-right">PnL</th>
-                <th class="px-4 py-2 text-left">Raison</th>
-              </tr>
-            </thead>
-            <tbody id="perf-history-body" class="divide-y divide-slate-700/50">
-              <tr><td colspan="9" class="px-4 py-6 text-center text-slate-600 text-sm">Chargement…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Session detail card (shown when a session is selected) -->
-      <div id="perf-session-detail" class="hidden bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-2"></div>
-
-      <!-- Run logs -->
-      <div id="perf-run-logs" class="hidden bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-        <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
-          <span class="text-sm font-medium text-slate-300">Logs de la session</span>
-          <div class="flex gap-1">
-            <button class="perf-log-filter log-filter-btn active text-xs px-2 py-0.5 rounded" data-cat="all" onclick="_setRunLogFilter(this)">Tout</button>
-            <button class="perf-log-filter log-filter-btn text-xs px-2 py-0.5 rounded" data-cat="market" onclick="_setRunLogFilter(this)">Marché</button>
-            <button class="perf-log-filter log-filter-btn text-xs px-2 py-0.5 rounded" data-cat="trade" onclick="_setRunLogFilter(this)">Trades</button>
-          </div>
-        </div>
-        <div class="overflow-y-auto p-3 space-y-0.5" style="max-height:300px" id="perf-run-logs-body"></div>
-      </div>
-    </div>
-
-    <!-- ─── TAB: BACKTEST ─── -->
-    <div id="pane-backtest" class="hidden h-full overflow-y-auto p-4 space-y-4">
-
-      <!-- Top row: params + progress -->
-      <div class="flex gap-4 items-stretch flex-wrap lg:flex-nowrap">
-        <!-- Config panel -->
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 shrink-0 w-full lg:w-auto">
-          <div class="flex items-start gap-6 flex-wrap">
-            <div class="space-y-3 min-w-[240px]">
-              <h2 class="text-sm font-semibold text-slate-200">Paramètres</h2>
-              <!-- Symbols dropdown -->
-              <div>
-                <div class="flex items-center gap-1.5 mb-1">
-                  <span class="text-xs text-slate-400">Symboles</span>
-                  <span class="tip"><span class="tip-icon">?</span><span class="tip-box">Cryptos à inclure. Données historiques Binance (bougies 1h).</span></span>
-                </div>
-                <div class="relative" id="bt-sym-wrap">
-                  <button onclick="_toggleSymDropdown(event)"
-                    class="w-full flex items-center justify-between bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 hover:bg-slate-600 transition-colors">
-                    <span id="bt-sym-summary" class="truncate">Chargement…</span>
-                    <svg class="w-4 h-4 text-slate-400 shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                  </button>
-                  <div id="bt-sym-dropdown" class="hidden absolute z-30 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl">
-                    <div class="flex items-center justify-between px-3 py-2 border-b border-slate-700">
-                      <span class="text-xs text-slate-500">Sélectionner</span>
-                      <button onclick="_btToggleAll()" class="text-xs text-slate-400 hover:text-slate-200 transition-colors">tout / aucun</button>
-                    </div>
-                    <div id="bt-symbols-list" class="py-1 max-h-48 overflow-y-auto">
-                      <div class="px-3 py-2 text-xs text-slate-500">Chargement…</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <!-- Date -->
-              <div>
-                <label class="text-xs text-slate-400 block mb-1">Date de début</label>
-                <input id="bt-start-date" type="date"
-                  class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none" />
-              </div>
-              <!-- Budget -->
-              <div>
-                <label class="text-xs text-slate-400 block mb-1">Budget (USDC)</label>
-                <input id="bt-budget" type="number" value="1000" min="100" step="100"
-                  class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none" />
-              </div>
-              <!-- Risk -->
-              <div>
-                <label class="text-xs text-slate-400 block mb-1">Risque — <span id="bt-risk-label" class="font-semibold text-slate-200">3 / 10</span></label>
-                <input id="bt-risk" type="range" min="1" max="10" value="3"
-                  oninput="document.getElementById('bt-risk-label').textContent=this.value+' / 10'"
-                  class="w-full accent-purple-500" />
-              </div>
-              <!-- Stops -->
-              <div class="grid grid-cols-2 gap-2">
-                <div>
-                  <label class="text-xs text-slate-400 block mb-1">Stop-loss %</label>
-                  <input id="bt-stop-loss" type="number" value="10" min="1" max="50" step="0.5"
-                    class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none" />
-                </div>
-                <div>
-                  <label class="text-xs text-slate-400 block mb-1">Trailing %</label>
-                  <input id="bt-trailing-stop" type="number" value="5" min="1" max="50" step="0.5"
-                    class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none" />
-                </div>
-              </div>
-              <!-- Cooldown -->
-              <div>
-                <label class="text-xs text-slate-400 block mb-1">Cooldown vente (bougies)</label>
-                <input id="bt-sell-cooldown" type="number" value="3" min="0" max="20"
-                  class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none" />
-              </div>
-              <!-- LLM toggle -->
-              <div class="flex items-center gap-3 py-1">
-                <button id="bt-llm-btn" onclick="_toggleBtLlm()"
-                  class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors border-slate-600 bg-slate-700 text-slate-400">
-                  LLM Off
-                </button>
-                <span class="text-xs text-slate-500" id="bt-llm-hint">Rule-based</span>
-              </div>
-              <!-- Rule-based thresholds -->
-              <div id="bt-rule-params" class="grid grid-cols-2 gap-2">
-                <div>
-                  <label class="text-xs text-slate-400 block mb-1">Seuil achat ≥</label>
-                  <input id="bt-buy-thr" type="number" value="7" min="1" max="10"
-                    class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none" />
-                </div>
-                <div>
-                  <label class="text-xs text-slate-400 block mb-1">Seuil vente ≤</label>
-                  <input id="bt-sell-thr" type="number" value="3" min="1" max="10"
-                    class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none" />
-                </div>
-              </div>
-              <!-- LLM params -->
-              <div id="bt-llm-params" class="hidden">
-                <label class="text-xs text-slate-400 block mb-1">Fréquence LLM — <span id="bt-llm-every-label" class="text-slate-200">toutes les 4 bougies</span></label>
-                <input id="bt-llm-every" type="range" min="1" max="24" value="4"
-                  oninput="_updateLlmEveryLabel()" class="w-full accent-purple-400" />
-              </div>
-            </div>
-            <!-- Speed + buttons -->
-            <div class="flex flex-col gap-3 min-w-[180px] justify-start pt-5">
-              <div>
-                <label class="text-xs text-slate-400 block mb-1">Vitesse — <span id="bt-speed-label" class="text-slate-200">10x</span></label>
-                <input id="bt-speed" type="range" min="1" max="500" value="10"
-                  oninput="_updateBtSpeedLabel()" onchange="_btSpeedChange()"
-                  class="w-full accent-purple-500" />
-              </div>
-              <button id="bt-start-btn" onclick="startBacktest()"
-                class="py-2 px-4 bg-purple-700 hover:bg-purple-600 text-sm font-medium rounded-lg transition-colors">Lancer</button>
-              <button id="bt-stop-btn" onclick="stopBacktest()" disabled
-                class="py-2 px-4 bg-red-700 hover:bg-red-600 disabled:opacity-30 text-sm font-medium rounded-lg transition-colors">Arrêter</button>
-              <div class="space-y-1 mt-1">
-                <div class="flex justify-between text-xs text-slate-400">
-                  <span id="bt-status-label">—</span>
-                  <span id="bt-progress-label"></span>
-                </div>
-                <div class="w-full bg-slate-700 rounded-full h-1.5">
-                  <div id="bt-progress-bar" class="bg-purple-500 h-1.5 rounded-full transition-all" style="width:0%"></div>
-                </div>
-                <div class="text-xs text-slate-500" id="bt-ts-label"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Trade history -->
-        <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden flex-1 min-w-0">
-          <div class="px-4 py-3 border-b border-slate-700 flex items-center justify-between gap-2">
-            <span class="text-sm font-medium text-slate-300">Trades</span>
-            <div class="flex items-center gap-2">
-              <span id="bt-history-count" class="text-xs text-slate-500">—</span>
-              <div class="relative" id="bt-hist-filter-wrap">
-                <button onclick="_toggleBtHistFilter(event)"
-                  class="flex items-center gap-1 px-2 py-1 bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg text-xs text-slate-300 transition-colors">
-                  <span id="bt-hist-filter-summary">Toutes</span>
-                  <span class="text-slate-500">▼</span>
-                </button>
-                <div id="bt-hist-filter-dropdown" class="hidden absolute right-0 z-30 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl" style="min-width:160px">
-                  <div class="flex items-center justify-between px-3 py-2 border-b border-slate-700">
-                    <span class="text-xs text-slate-400">Filtrer</span>
-                    <button onclick="_btHistToggleAll()" class="text-xs text-slate-400 hover:text-slate-200">tout / aucun</button>
-                  </div>
-                  <div id="bt-hist-filter-list" class="py-1 max-h-48 overflow-y-auto"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="overflow-x-auto overflow-y-auto" style="max-height:370px">
-            <table class="w-full text-xs">
-              <thead class="sticky top-0 bg-slate-800">
-                <tr class="text-slate-500 border-b border-slate-700">
-                  <th class="px-3 py-2 text-left">Étape</th>
-                  <th class="px-3 py-2 text-left">Date</th>
-                  <th class="px-3 py-2 text-left">Action</th>
-                  <th class="px-3 py-2 text-left">Symbole</th>
-                  <th class="px-3 py-2 text-right">USDC</th>
-                  <th class="px-3 py-2 text-right">Qty</th>
-                  <th class="px-3 py-2 text-right">Prix</th>
-                  <th class="px-3 py-2 text-right text-amber-500">Frais</th>
-                  <th class="px-3 py-2 text-right">PnL</th>
-                  <th class="px-3 py-2 text-right">Score</th>
-                  <th class="px-3 py-2 text-left">Raison</th>
-                </tr>
-              </thead>
-              <tbody id="bt-history-body" class="divide-y divide-slate-700/50">
-                <tr><td colspan="11" class="px-4 py-6 text-center text-slate-600 text-sm">—</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <!-- KPI cards -->
-      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3" id="bt-kpi-cards">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Valeur totale</div><div class="text-xl font-bold text-slate-600">—</div></div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">PnL net</div><div class="text-xl font-bold text-slate-600">—</div></div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Buy & Hold</div><div class="text-xl font-bold text-slate-600">—</div></div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Alpha</div><div class="text-xl font-bold text-slate-600">—</div></div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Frais</div><div class="text-xl font-bold text-slate-600">—</div></div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Trades</div><div class="text-xl font-bold text-slate-600">—</div></div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Stop-loss</div><div class="text-xl font-bold text-slate-600">—</div></div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><div class="text-xs text-slate-500 mb-1">Win rate</div><div class="text-xl font-bold text-slate-600">—</div></div>
-      </div>
-
-      <!-- Chart -->
-      <div class="bg-slate-800 border border-slate-700 rounded-xl p-4">
-        <div class="flex items-center justify-between mb-3">
-          <span class="text-sm font-medium text-slate-300">Performance</span>
-          <div class="flex gap-1 bg-slate-700 border border-slate-600 rounded-lg p-0.5">
-            <button class="bt-chart-filter active-chart-filter px-2 py-0.5 rounded text-xs font-medium bg-slate-600 text-slate-200" data-hours="24"  onclick="_filterBtChart(this)">1j</button>
-            <button class="bt-chart-filter px-2 py-0.5 rounded text-xs text-slate-400 hover:text-slate-200" data-hours="168" onclick="_filterBtChart(this)">7j</button>
-            <button class="bt-chart-filter px-2 py-0.5 rounded text-xs text-slate-400 hover:text-slate-200" data-hours="720" onclick="_filterBtChart(this)">30j</button>
-            <button class="bt-chart-filter px-2 py-0.5 rounded text-xs text-slate-400 hover:text-slate-200" data-hours="0"   onclick="_filterBtChart(this)">Tout</button>
-          </div>
-        </div>
-        <div style="position:relative; height:260px;">
-          <canvas id="bt-chart"></canvas>
-        </div>
-      </div>
-
-      <!-- Positions -->
-      <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-        <div class="px-4 py-3 border-b border-slate-700">
-          <span class="text-sm font-medium text-slate-300">Positions finales</span>
-        </div>
-        <table class="w-full text-xs">
-          <thead>
-            <tr class="text-slate-500 border-b border-slate-700">
-              <th class="px-4 py-2 text-left">Actif</th>
-              <th class="px-4 py-2 text-right">Quantité</th>
-              <th class="px-4 py-2 text-right">Prix entrée</th>
-              <th class="px-4 py-2 text-right">Prix actuel</th>
-              <th class="px-4 py-2 text-right">Valeur</th>
-              <th class="px-4 py-2 text-right">PnL</th>
-            </tr>
-          </thead>
-          <tbody id="bt-positions-body">
-            <tr><td colspan="6" class="px-4 py-6 text-center text-slate-600 text-sm">—</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-  </main>
-
-  <!-- ═══ LOGS DRAWER (right side) ═══ -->
-  <div id="logs-overlay" class="fixed inset-0 bg-black/40 z-40" onclick="toggleLogs()"></div>
-  <aside id="logs-drawer" class="fixed top-0 right-0 h-full w-full sm:w-[420px] bg-slate-900 border-l border-slate-700 z-50 flex flex-col">
-    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-700 shrink-0">
-      <div class="flex items-center gap-3">
-        <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse-dot" id="log-live-dot"></div>
-        <span class="text-sm font-medium text-slate-300">Logs</span>
-        <span class="text-xs text-slate-500" id="log-count">0</span>
-      </div>
-      <div class="flex items-center gap-2">
-        <div class="flex gap-0.5 text-xs">
-          <button class="log-filter-btn active px-2 py-0.5 rounded" data-cat="all"       onclick="setLogFilter('all',this)">Tout</button>
-          <button class="log-filter-btn px-2 py-0.5 rounded"        data-cat="technical" onclick="setLogFilter('technical',this)">Tech</button>
-          <button class="log-filter-btn px-2 py-0.5 rounded"        data-cat="market"    onclick="setLogFilter('market',this)">Marché</button>
-          <button class="log-filter-btn px-2 py-0.5 rounded"        data-cat="trade"     onclick="setLogFilter('trade',this)">Trade</button>
-        </div>
-        <button onclick="clearLogs()" class="text-xs text-slate-500 hover:text-slate-300">Vider</button>
-        <button onclick="toggleLogs()" class="text-slate-400 hover:text-white text-lg leading-none">&times;</button>
-      </div>
-    </div>
-    <div id="log-container" class="flex-1 overflow-y-auto p-3 space-y-0.5 font-mono text-xs"></div>
-  </aside>
-
-  <!-- ═══ TOAST ═══ -->
-  <div id="toast" class="fixed bottom-5 right-5 hidden px-4 py-3 rounded-xl text-sm font-medium shadow-xl transition-all z-50"></div>
-
-  <!-- ═══ LLM PANEL (fixed) ═══ -->
-  <div id="llm-panel" class="hidden fixed z-[200] bg-slate-800 border border-slate-600 rounded-xl shadow-xl p-4 w-72 space-y-3">
-    <div class="text-xs font-semibold text-slate-300 mb-1">Modèle LLM actif</div>
-    <div class="space-y-1">
-      <label class="text-xs text-slate-400">Provider</label>
-      <select id="llm-provider-sel" onchange="_onLlmProviderChange()"
-        class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none"></select>
-    </div>
-    <div class="space-y-1">
-      <label class="text-xs text-slate-400">Modèle</label>
-      <select id="llm-model-sel"
-        class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none"></select>
-      <input id="llm-model-custom" type="text" placeholder="Ou saisir un nom…"
-        class="hidden w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none mt-1" />
-    </div>
-    <div id="llm-ollama-url-wrap" class="hidden space-y-1">
-      <label class="text-xs text-slate-400">URL Ollama</label>
-      <input id="llm-ollama-url" type="text" value="http://localhost:11434"
-        class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none" />
-      <div id="ollama-status-row" class="flex items-center justify-between pt-1">
-        <span id="ollama-status-badge" class="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-400">Vérification…</span>
-        <button onclick="_startOllama()" id="ollama-start-btn"
-          class="hidden px-2 py-0.5 bg-amber-600 hover:bg-amber-500 text-white text-xs rounded-lg">Démarrer</button>
-      </div>
-      <div id="ollama-models-row" class="hidden">
-        <label class="text-xs text-slate-400">Modèles installés</label>
-        <div id="ollama-models-list" class="text-xs text-slate-300 mt-0.5 space-y-0.5"></div>
-      </div>
-    </div>
-    <div class="space-y-1">
-      <label class="text-xs text-slate-400">Température — <span id="llm-temp-label" class="font-semibold text-slate-200">1.0</span></label>
-      <input id="llm-temperature" type="range" min="0" max="2" step="0.1" value="1.0"
-        oninput="document.getElementById('llm-temp-label').textContent=parseFloat(this.value).toFixed(1)"
-        class="w-full accent-blue-400" />
-    </div>
-    <div class="space-y-1">
-      <label class="text-xs text-slate-400">Max tokens</label>
-      <input id="llm-max-tokens" type="number" min="100" max="8000" step="100"
-        class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none" />
-    </div>
-    <div class="flex gap-2 pt-1">
-      <button onclick="_saveLlmConfig()"
-        class="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium rounded-lg">Appliquer</button>
-      <button onclick="document.getElementById('llm-panel').classList.add('hidden')"
-        class="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-300 text-xs rounded-lg">Annuler</button>
-    </div>
-    <div id="llm-save-status" class="text-xs text-center hidden"></div>
-  </div>
-
-  <script src="/static/js/main.js"></script>
-
-  <!-- ═══ REAL MODE MODAL ═══ -->
-  <div id="real-init-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-    <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 w-96 max-h-[90vh] overflow-y-auto space-y-4 shadow-2xl">
-      <h3 class="text-base font-semibold text-slate-100">Trading réel</h3>
-      <p class="text-xs text-slate-400">Les ordres seront exécutés sur Binance.<br><span class="text-amber-400 font-medium">Trades réels.</span></p>
-      <div>
-        <p class="text-xs font-medium text-slate-300 mb-2">Portefeuille Binance</p>
-        <div id="real-holdings-list" class="space-y-0"></div>
-      </div>
-      <div class="flex items-center gap-2">
-        <input type="checkbox" id="real-auto" class="accent-blue-500" />
-        <label for="real-auto" class="text-xs text-slate-400">Auto — Cloud Scheduler</label>
-      </div>
-      <div class="flex gap-3 pt-1">
-        <button onclick="confirmRealStart()"
-          class="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg text-sm font-medium">Confirmer</button>
-        <button onclick="cancelRealStart()"
-          class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium">Annuler</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══ SIMULATION INIT MODAL ═══ -->
-  <div id="sim-init-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-    <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 w-[480px] max-h-[90vh] overflow-y-auto space-y-4 shadow-2xl">
-      <h3 class="text-base font-semibold text-slate-100">Nouvelle simulation</h3>
-      <p class="text-xs text-slate-400">Données Binance temps réel — aucun ordre réel.</p>
-      <!-- Session name -->
-      <div class="space-y-1">
-        <label class="text-xs font-medium text-slate-300">Nom</label>
-        <input id="sim-name-input" type="text" placeholder="Ma simulation"
-          class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-      </div>
-      <!-- Budget -->
-      <div class="space-y-1">
-        <label class="text-xs font-medium text-slate-300">Budget USDC</label>
-        <input id="sim-budget-input" type="number" min="0" step="1" value="1000"
-          class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-        <p class="text-xs text-slate-500" id="sim-budget-hint"></p>
-      </div>
-      <!-- Holdings -->
+      <!-- History -->
       <div>
         <div class="flex items-center justify-between mb-2">
-          <label class="text-xs font-medium text-slate-300">Avoirs crypto initiaux</label>
-          <span class="text-xs text-slate-500" id="sim-holdings-hint">Chargement…</span>
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Historique</span>
+          <button onclick="loadRunsList()" class="text-[11px] text-slate-500 hover:text-slate-300">⟳</button>
         </div>
-        <div id="sim-holdings-list" class="space-y-1.5"></div>
+        <div id="runs-list" class="space-y-2 text-sm">
+          <p class="text-xs text-slate-500">Chargement…</p>
+        </div>
       </div>
-      <!-- Advanced params -->
-      <details class="text-xs">
-        <summary class="cursor-pointer text-slate-400 hover:text-slate-200 py-1 select-none">Paramètres avancés</summary>
-        <div class="mt-3 space-y-3 border border-slate-700 rounded-lg p-3">
+
+    </aside>
+
+    <!-- Modal: Nouveau run -->
+    <div id="newrun-modal" class="hidden modal-bg" onclick="_closeModalBg(event, 'newrun-modal')">
+      <div class="modal-card space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-bold text-slate-100">Nouveau run</h3>
+          <button onclick="closeNewRunModal()" class="text-slate-500 hover:text-white text-2xl leading-none">×</button>
+        </div>
+
+        <!-- Mode -->
+        <div>
+          <label class="lbl">Mode</label>
+          <div class="seg" id="nr-mode-seg">
+            <button data-val="simulation" onclick="_setNrMode('simulation')">Simulation</button>
+            <button data-val="real" onclick="_setNrMode('real')">Réel</button>
+          </div>
+          <p id="nr-mode-hint" class="text-[11px] text-slate-500 mt-1.5"></p>
+        </div>
+
+        <!-- Name (sim only) -->
+        <div id="nr-name-row">
+          <label class="lbl">Nom du run (optionnel)</label>
+          <input class="fld" type="text" id="nr-name" placeholder="ex: Test stratégie agressive">
+        </div>
+
+        <!-- Budget + Cycle -->
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="lbl">Budget ($)</label><input class="fld" type="number" id="nr-budget" min="10" step="10" value="100"></div>
+          <div><label class="lbl">Cycle (s)</label><input class="fld" type="number" id="nr-cycle" min="60" step="60" value="300"></div>
+        </div>
+
+        <!-- Stops -->
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="lbl">Stop-loss (%)</label><input class="fld" type="number" id="nr-sl" min="1" max="50" value="10"></div>
+          <div><label class="lbl">Trailing (%)</label><input class="fld" type="number" id="nr-ts" min="1" max="50" value="5"></div>
+        </div>
+
+        <!-- Risk -->
+        <div>
+          <label class="lbl">Risque : <span id="nr-risk-val" class="text-blue-400 font-bold">5</span> / 10</label>
+          <input class="w-full accent-blue-500" type="range" id="nr-risk" min="1" max="10" step="1" value="5"
+                 oninput="document.getElementById('nr-risk-val').textContent=this.value">
+        </div>
+
+        <!-- LLM -->
+        <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-xs font-medium text-slate-300 flex items-center justify-between">
-              Niveau de risque <span id="sim-modal-risk-label" class="text-slate-400">Modéré</span>
-            </label>
-            <input id="sim-modal-risk" type="range" min="1" max="10" value="5"
-              oninput="_updateSimModalRiskLabel()" class="w-full accent-blue-500 mt-1" />
+            <label class="lbl">LLM</label>
+            <select class="fld" id="nr-llm-provider" onchange="_onNrLlmProviderChange()">
+              <option value="gemini">Gemini</option>
+              <option value="claude">Claude</option>
+              <option value="ollama">Ollama (local)</option>
+            </select>
           </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="text-xs text-slate-400 block mb-1">Intervalle (sec)</label>
-              <input id="sim-modal-cycle" type="number" value="60" min="5" step="5"
-                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none" />
-            </div>
-            <div>
-              <label class="text-xs text-slate-400 block mb-1">Cooldown vente</label>
-              <input id="sim-modal-cool" type="number" value="3" min="0" max="20"
-                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none" />
-            </div>
-            <div>
-              <label class="text-xs text-slate-400 block mb-1">Stop-loss %</label>
-              <input id="sim-modal-sl" type="number" value="10" min="1" max="50" step="0.5"
-                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none" />
-            </div>
-            <div>
-              <label class="text-xs text-slate-400 block mb-1">Trailing stop %</label>
-              <input id="sim-modal-tr" type="number" value="5" min="1" max="50" step="0.5"
-                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-200 focus:outline-none" />
+          <div><label class="lbl">Modèle</label><select class="fld" id="nr-llm-model"></select></div>
+        </div>
+
+        <!-- Cryptos -->
+        <div>
+          <label class="lbl">Cryptos list</label>
+          <div class="cdrop" id="nr-watchlist-drop">
+            <button type="button" class="cdrop-btn" onclick="toggleCryptoDrop('nr-watchlist-drop')">
+              <span class="cdrop-summary">—</span>
+              <span class="text-slate-500">▾</span>
+            </button>
+            <div class="cdrop-menu">
+              <div class="cdrop-header">
+                <button type="button" class="cdrop-action" onclick="cdropSelectAll('nr-watchlist-drop')">Tout</button>
+                <button type="button" class="cdrop-action" onclick="cdropSelectNone('nr-watchlist-drop')">Aucune</button>
+              </div>
+              <div class="cdrop-items"></div>
             </div>
           </div>
         </div>
-      </details>
-      <!-- Auto / Max cycles -->
-      <div class="flex items-center gap-2">
-        <input type="checkbox" id="sim-auto" class="accent-blue-500"
-          onchange="document.getElementById('sim-maxcycles-wrap').classList.toggle('hidden',this.checked);document.getElementById('sim-liquidate-wrap').classList.toggle('hidden',this.checked)" />
-        <label for="sim-auto" class="text-xs text-slate-400">Auto — indéfiniment</label>
+
+        <!-- Initial state (simulation only) -->
+        <div id="nr-init-row" class="hidden bg-slate-800/40 border border-slate-700 rounded-lg p-3 space-y-2">
+          <p class="text-xs font-semibold text-slate-300 uppercase tracking-wider">État initial</p>
+          <label class="flex items-start gap-2 cursor-pointer text-sm text-slate-200">
+            <input type="radio" name="nr-init" value="fresh" checked class="mt-0.5 accent-blue-500">
+            <span>
+              Partir vierge<br>
+              <span class="text-[11px] text-slate-500">Budget plein en cash, aucune position</span>
+            </span>
+          </label>
+          <label class="flex items-start gap-2 cursor-pointer text-sm text-slate-200">
+            <input type="radio" name="nr-init" value="binance" class="mt-0.5 accent-blue-500">
+            <span>
+              Partir des positions Binance actuelles<br>
+              <span class="text-[11px] text-slate-500">Reprend cash USDC + actifs réels au prix spot</span>
+            </span>
+          </label>
+          <label id="nr-init-resume-row" class="hidden flex items-start gap-2 cursor-pointer text-sm text-slate-200">
+            <input type="radio" name="nr-init" value="resume" class="mt-0.5 accent-blue-500">
+            <span>
+              Reprendre la dernière simu<br>
+              <span id="nr-resume-info" class="text-[11px] text-slate-500"></span>
+            </span>
+          </label>
+        </div>
+
+        <!-- Buttons -->
+        <div class="flex gap-2 pt-2">
+          <button onclick="closeNewRunModal()" class="flex-1 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors font-semibold text-sm">Annuler</button>
+          <button onclick="launchNewRun()" id="nr-launch-btn" class="flex-1 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 transition-colors font-semibold text-sm">Lancer</button>
+        </div>
       </div>
-      <div class="space-y-1" id="sim-maxcycles-wrap">
-        <label class="text-xs font-medium text-slate-300">Max cycles</label>
-        <input id="sim-maxcycles-input" type="number" min="1" step="1" value="1"
-          class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none" />
+    </div>
+
+    <!-- Modal: Rename -->
+    <div id="rename-modal" class="hidden modal-bg" onclick="_closeModalBg(event, 'rename-modal')">
+      <div class="modal-card space-y-4" style="max-width:400px">
+        <h3 class="text-lg font-bold text-slate-100">Renommer le run</h3>
+        <input class="fld" type="text" id="rename-input" placeholder="Nouveau nom">
+        <div class="flex gap-2">
+          <button onclick="closeRenameModal()" class="flex-1 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm">Annuler</button>
+          <button onclick="confirmRename()" class="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-sm font-semibold">Renommer</button>
+        </div>
       </div>
-      <!-- Liquidate at end -->
-      <div class="flex items-center gap-2" id="sim-liquidate-wrap">
-        <input type="checkbox" id="sim-liquidate" class="accent-blue-500" />
-        <label for="sim-liquidate" class="text-xs text-slate-400">Tout convertir en USDC au dernier cycle</label>
+    </div>
+
+    <!-- RIGHT: ACTIVITY -->
+    <main class="flex-1 overflow-y-auto flex flex-col">
+
+      <!-- Right-panel tabs -->
+      <div class="bg-slate-900 border-b border-slate-800 px-4 flex gap-0 shrink-0">
+        <button class="rtab active" data-rtab="cockpit" onclick="switchRTab('cockpit',this)">Cockpit</button>
+        <button class="rtab" data-rtab="charts" onclick="switchRTab('charts',this)">Graphiques</button>
+        <button class="rtab hidden" id="rtab-orders-btn" data-rtab="orders" onclick="switchRTab('orders',this)">Ordres</button>
       </div>
-      <!-- Resume -->
-      <div class="flex items-center gap-2">
-        <input type="checkbox" id="sim-resume" class="accent-blue-500" />
-        <label for="sim-resume" class="text-xs text-slate-400">Reprendre la dernière simulation</label>
+
+      <!-- Tab: Cockpit -->
+      <div id="rtab-cockpit" class="flex-1 overflow-y-auto p-5 space-y-4">
+
+        <!-- Empty state -->
+        <div id="cockpit-empty" class="hidden flex flex-col items-center justify-center text-center py-24 px-6 text-slate-500">
+          <div class="text-5xl mb-4 opacity-30">📊</div>
+          <p class="text-base text-slate-300 font-semibold mb-1">Aucun run sélectionné</p>
+          <p class="text-sm">Sélectionne un run dans l'historique à gauche, ou clique <b>+ Nouveau run</b> pour en démarrer un.</p>
+        </div>
+
+        <!-- Cockpit content (hidden when nothing selected) -->
+        <div id="cockpit-content" class="hidden space-y-4">
+
+        <!-- Hero KPIs (colored) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3" id="kpi-hero-row">
+          <div class="kpi-hero" id="hero-pnl">
+            <div class="kpi-hero-label">PnL net<span id="loading-kpis" class="spinner-mini hidden"></span></div>
+            <div class="kpi-hero-val" id="kpi-pnl">—</div>
+            <div class="kpi-hero-sub" id="kpi-pnl-pct">—</div>
+          </div>
+          <div class="kpi-hero" id="hero-btc">
+            <div class="kpi-hero-label">vs BTC seul</div>
+            <div class="kpi-hero-val" id="kpi-btc-bh">—</div>
+            <div class="kpi-hero-sub">stratégie − BTC</div>
+          </div>
+          <div class="kpi-hero" id="hero-alpha">
+            <div class="kpi-hero-label">vs Buy &amp; Hold</div>
+            <div class="kpi-hero-val" id="kpi-alpha">—</div>
+            <div class="kpi-hero-sub">stratégie − hold</div>
+          </div>
+        </div>
+
+        <!-- Secondary KPIs -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="kpi">
+            <div class="kpi-label">Budget</div>
+            <div class="kpi-val" id="kpi-budget">—</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Total actuel</div>
+            <div class="kpi-val" id="kpi-total">—</div>
+            <div class="kpi-sub" id="kpi-total-sub">cash + positions</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Win rate</div>
+            <div class="kpi-val" id="kpi-winrate">—</div>
+            <div class="kpi-sub" id="kpi-trades">—</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Meilleur / Pire trade</div>
+            <div class="kpi-val" id="kpi-best">—</div>
+            <div class="kpi-sub" id="kpi-worst">—</div>
+          </div>
+        </div>
+
+        <!-- Chart PnL -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              Courbe PnL cumulé<span id="loading-pnl" class="spinner-mini hidden"></span>
+            </h3>
+            <div id="pnl-filters"></div>
+          </div>
+          <canvas id="pnl-chart" height="120"></canvas>
+          <p id="chart-empty" class="text-center text-slate-500 text-xs mt-2 hidden">Aucune donnée de trades</p>
+        </div>
+
+        <!-- Drawdown chart -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              Drawdown — perte depuis le pic<span id="loading-dd" class="spinner-mini hidden"></span>
+            </h3>
+            <span id="dd-max-label" class="text-xs text-slate-500"></span>
+          </div>
+          <canvas id="dd-chart" height="80"></canvas>
+          <p id="dd-empty" class="text-center text-slate-500 text-xs mt-2 hidden">Aucune donnée</p>
+        </div>
+
+        <!-- Simulation status (visible only when running) -->
+        <div id="sim-status-row" class="hidden bg-blue-900/20 border border-blue-800/40 rounded-xl p-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
+              <span class="text-sm font-semibold text-blue-300">Simulation en cours</span>
+            </div>
+            <span id="sim-cycle-badge" class="text-xs text-slate-400">—</span>
+          </div>
+          <div class="mt-2 text-xs text-slate-500">
+            Prochain cycle dans <span id="sim-countdown" class="text-slate-300">—</span>
+          </div>
+        </div>
+
+        <!-- Positions ouvertes -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+            Positions ouvertes<span id="loading-holdings" class="spinner-mini hidden"></span>
+          </h3>
+          <div id="holdings-list" class="text-sm text-slate-500">—</div>
+        </div>
+
+        <!-- Historique des trades -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+              Historique des trades<span id="loading-trades" class="spinner-mini hidden"></span>
+            </h3>
+            <div class="flex items-center gap-3 flex-wrap">
+              <div id="trades-filters"></div>
+              <button onclick="toggleLogs()" class="text-xs text-slate-500 hover:text-blue-300 transition-colors">Logs complets →</button>
+            </div>
+          </div>
+          <div id="trades-header" class="trade-row trade-header hidden">
+            <span>Date</span>
+            <span>Action</span>
+            <span>Crypto</span>
+            <span class="text-right">Prix</span>
+            <span class="text-right">Quantité</span>
+            <span class="text-right">Montant</span>
+            <span class="text-right">PnL</span>
+          </div>
+          <div id="trades-list" class="text-sm text-slate-400 max-h-[28rem] overflow-y-auto">—</div>
+        </div>
+
+        </div><!-- /cockpit-content -->
+      </div><!-- /rtab-cockpit -->
+
+      <!-- Tab: Graphiques -->
+      <div id="rtab-charts" class="hidden flex-1 overflow-y-auto p-5 space-y-4">
+
+        <!-- Empty state -->
+        <div id="charts-empty-state" class="hidden flex flex-col items-center justify-center text-center py-24 px-6 text-slate-500">
+          <div class="text-5xl mb-4 opacity-30">📈</div>
+          <p class="text-base text-slate-300 font-semibold mb-1">Aucun run sélectionné</p>
+          <p class="text-sm">Sélectionne un run dans l'historique à gauche pour voir ses graphiques.</p>
+        </div>
+
+        <div id="charts-content" class="hidden space-y-4">
+
+        <!-- Allocation donut -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+            Répartition du portefeuille<span id="loading-alloc" class="spinner-mini hidden"></span>
+          </h3>
+          <div class="flex items-center gap-6 flex-wrap">
+            <div style="width:180px;height:180px;flex-shrink:0"><canvas id="alloc-chart"></canvas></div>
+            <div id="alloc-legend" class="text-xs space-y-1.5 flex-1 min-w-[140px]"></div>
+          </div>
+          <p id="alloc-empty" class="text-center text-slate-500 text-xs mt-2 hidden">Aucune position ouverte</p>
+        </div>
+
+        <!-- PnL par crypto -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+            Profit / Perte par crypto (réalisé + en cours)<span id="loading-pnlbars" class="spinner-mini hidden"></span>
+          </h3>
+          <canvas id="pnl-bars-chart" height="140"></canvas>
+          <p id="pnl-bars-empty" class="text-center text-slate-500 text-xs mt-2 hidden">Aucun trade sur ce run</p>
+        </div>
+
+        <!-- Volume traité par crypto -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+            Volume traité par crypto ($)<span id="loading-volbars" class="spinner-mini hidden"></span>
+          </h3>
+          <canvas id="vol-bars-chart" height="120"></canvas>
+          <p id="vol-bars-empty" class="text-center text-slate-500 text-xs mt-2 hidden">Aucun trade</p>
+        </div>
+
+        </div><!-- /charts-content -->
       </div>
-      <div class="flex gap-3 pt-1">
-        <button onclick="confirmSimStart()"
-          class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-medium">Démarrer</button>
-        <button onclick="cancelSimStart()"
-          class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium">Annuler</button>
+
+      <!-- Tab: Ordres (real mode only) -->
+      <div id="rtab-orders" class="hidden flex-1 overflow-y-auto p-5 space-y-4">
+
+        <!-- Available USDC bar -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <div class="text-[11px] text-slate-500 uppercase tracking-wider">Solde USDC disponible</div>
+            <div id="orders-cash" class="text-2xl font-bold text-slate-100 mt-0.5">—</div>
+          </div>
+          <div class="text-right">
+            <div class="text-[11px] text-slate-500 uppercase tracking-wider">Valeur portefeuille</div>
+            <div id="orders-total" class="text-base font-semibold text-slate-200 mt-0.5">—</div>
+            <div id="orders-pnl" class="text-xs mt-0.5">—</div>
+          </div>
+          <button onclick="refreshOrdersTab()" class="text-xs text-slate-400 hover:text-slate-200 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center gap-1">
+            <span id="loading-orders" class="spinner-mini hidden"></span>
+            <span>Rafraîchir</span>
+          </button>
+        </div>
+
+        <!-- Sell section (only owned cryptos, sorted by sell urgency desc) -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h3 class="text-xs font-semibold text-orange-400 uppercase tracking-wider flex items-center">
+              À vendre <span class="text-slate-500 ml-2 normal-case font-normal">— positions détenues, triées par urgence</span>
+              <span id="loading-orders-sell" class="spinner-mini hidden"></span>
+            </h3>
+            <span id="sell-count" class="text-xs text-slate-500"></span>
+          </div>
+          <div id="orders-sell-cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>
+        </div>
+
+        <!-- Buy section (all watchlist, sorted by buy importance desc) -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h3 class="text-xs font-semibold text-green-400 uppercase tracking-wider flex items-center">
+              À acheter <span class="text-slate-500 ml-2 normal-case font-normal">— watchlist complète, triée par signal</span>
+              <span id="loading-orders-buy" class="spinner-mini hidden"></span>
+            </h3>
+            <span id="buy-count" class="text-xs text-slate-500"></span>
+          </div>
+          <div id="orders-buy-cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>
+        </div>
+
+        <!-- Recent orders -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Ordres récents</h3>
+          <div id="orders-recent" class="text-sm text-slate-400">—</div>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Modal: Place order -->
+  <div id="order-modal" class="hidden modal-bg" onclick="_closeModalBg(event, 'order-modal')">
+    <div class="modal-card space-y-4" style="max-width:440px">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-slate-100">
+          <span id="order-side-label">—</span>
+          <span id="order-sym-label" class="text-blue-400"></span>
+        </h3>
+        <button onclick="closeOrderModal()" class="text-slate-500 hover:text-white text-2xl leading-none">×</button>
+      </div>
+
+      <div class="bg-slate-800/50 border border-slate-700 rounded-lg p-3 text-sm space-y-1">
+        <div class="flex justify-between"><span class="text-slate-400">Prix actuel</span><span id="order-current-price" class="text-slate-100 font-semibold">—</span></div>
+        <div id="order-pos-row" class="hidden flex justify-between"><span class="text-slate-400">Position détenue</span><span id="order-pos-info" class="text-slate-100 font-semibold">—</span></div>
+        <div id="order-entry-row" class="hidden flex justify-between"><span class="text-slate-400">Prix d'entrée moyen</span><span id="order-entry-price" class="text-slate-100 font-semibold">—</span></div>
+        <div id="order-unrealized-row" class="hidden flex justify-between"><span class="text-slate-400">PnL latent</span><span id="order-unrealized" class="font-semibold">—</span></div>
+      </div>
+
+      <!-- BUY input -->
+      <div id="order-buy-input" class="hidden">
+        <label class="lbl">Montant USDC à investir</label>
+        <input class="fld" type="number" id="order-amount" min="10" step="1" placeholder="10">
+        <div class="flex gap-1 mt-2">
+          <button onclick="_setOrderAmount(0.25)" class="fbtn">25%</button>
+          <button onclick="_setOrderAmount(0.5)" class="fbtn">50%</button>
+          <button onclick="_setOrderAmount(0.75)" class="fbtn">75%</button>
+          <button onclick="_setOrderAmount(1)" class="fbtn">Max</button>
+        </div>
+      </div>
+
+      <!-- SELL input -->
+      <div id="order-sell-input" class="hidden">
+        <label class="lbl">Quantité à vendre</label>
+        <input class="fld" type="number" id="order-qty" min="0" step="any" placeholder="0">
+        <div class="flex gap-1 mt-2">
+          <button onclick="_setOrderQty(0.25)" class="fbtn">25%</button>
+          <button onclick="_setOrderQty(0.5)" class="fbtn">50%</button>
+          <button onclick="_setOrderQty(0.75)" class="fbtn">75%</button>
+          <button onclick="_setOrderQty(1)" class="fbtn">100%</button>
+        </div>
+      </div>
+
+      <!-- Estimation -->
+      <div id="order-estimate" class="text-xs text-slate-400 space-y-0.5 px-1"></div>
+
+      <div class="flex gap-2 pt-2">
+        <button onclick="closeOrderModal()" class="flex-1 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors font-semibold text-sm">Annuler</button>
+        <button onclick="confirmOrder()" id="order-confirm-btn" class="flex-1 py-2.5 rounded-lg font-semibold text-sm transition-colors">Confirmer</button>
       </div>
     </div>
   </div>
 
+  <!-- Logs drawer -->
+  <div id="logs-overlay" onclick="toggleLogs()" class="fixed inset-0 bg-black/50 z-40"></div>
+  <div id="logs-drawer" class="fixed right-0 top-0 bottom-0 w-full md:w-[480px] bg-slate-900 border-l border-slate-800 z-50 flex flex-col">
+    <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+      <span class="font-semibold text-sm text-slate-300">Logs</span>
+      <button onclick="toggleLogs()" class="text-slate-400 hover:text-white text-xl leading-none">×</button>
+    </div>
+    <div class="p-2 border-b border-slate-800 flex gap-1 text-xs">
+      <button class="px-2 py-1 log-filter-btn active" onclick="setLogFilter('all',this)">Tous</button>
+      <button class="px-2 py-1 log-filter-btn" onclick="setLogFilter('trade',this)">Trades</button>
+      <button class="px-2 py-1 log-filter-btn" onclick="setLogFilter('market',this)">Marché</button>
+      <button class="px-2 py-1 log-filter-btn" onclick="setLogFilter('technical',this)">Tech</button>
+      <button class="ml-auto px-2 py-1 text-slate-500 hover:text-slate-300" onclick="clearLogsDisplay()">Effacer</button>
+    </div>
+    <div id="log-container" class="flex-1 overflow-y-auto p-3 space-y-px"></div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-5 right-5 px-4 py-3 rounded-xl text-sm font-medium shadow-xl z-50 hidden"></div>
+
+  <script src="/static/js/analytics.js"></script>
+  <script src="/static/js/orders.js"></script>
+  <script src="/static/js/main.js"></script>
 </body>
 </html>

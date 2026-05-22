@@ -179,20 +179,42 @@ def sim_status():
 
 @bp.get("/api/simulation/saved")
 def sim_saved():
-    state_file = _ROOT / "data" / "simulation_state.json"
-    if not state_file.exists():
+    try:
+        data = sim_engine._load_state()
+    except Exception:
+        data = None
+    if not data or not data.get("cycle"):
         return jsonify({"exists": False})
     try:
-        data = json.loads(state_file.read_text())
+        holdings = data.get("holdings", {})
+        cash     = float(data.get("cash", 0))
+        budget   = float(data.get("budget", 0))
+        portfolio_val = sum(
+            float(h.get("qty", 0)) * float(h.get("avg_price", 0))
+            for h in holdings.values()
+        )
+        params = data.get("params") or {}
         return jsonify({
-            "exists":   True,
-            "cycle":    data.get("cycle", 0),
-            "cash":     data.get("cash", 0),
-            "budget":   data.get("budget", 0),
-            "saved_at": data.get("saved_at", ""),
-            "pnl":      round(data.get("cash", 0) + sum(
-                h["qty"] * h["avg_price"] for h in data.get("holdings", {}).values()
-            ) - data.get("budget", 0), 2),
+            "exists":       True,
+            "cycle":        data.get("cycle", 0),
+            "cash":         round(cash, 6),
+            "budget":       round(budget, 2),
+            "saved_at":     data.get("saved_at", ""),
+            "session_id":   data.get("session_id", ""),
+            "session_name": data.get("session_name", ""),
+            "holdings": {
+                sym: round(float(h.get("qty", 0)), 8)
+                for sym, h in holdings.items()
+                if float(h.get("qty", 0)) > 0
+            },
+            "pnl": round(cash + portfolio_val - budget, 2),
+            "params": {
+                "risk_level":           params.get("risk_level"),
+                "cycle_seconds":        params.get("cycle_seconds"),
+                "stop_loss_pct":        params.get("stop_loss_pct"),
+                "trailing_stop_pct":    params.get("trailing_stop_pct"),
+                "sell_cooldown_cycles": params.get("sell_cooldown_cycles"),
+            },
         })
     except Exception:
         log.warning("Erreur de lecture de l'état de simulation sauvegardé", exc_info=True)
@@ -214,30 +236,43 @@ def sim_start():
     trailing_stop_pct    = float(body.get("trailing_stop_pct", cfg.get("trailing_stop_pct", 5)))
     sell_cooldown_cycles = max(0, int(body.get("sell_cooldown_cycles", cfg.get("sell_cooldown_cycles", 3))))
     resume               = bool(body.get("resume", False))
+    from_binance         = bool(body.get("from_binance", False))
     max_cycles_raw       = body.get("max_cycles")
     max_cycles           = int(max_cycles_raw) if max_cycles_raw and int(max_cycles_raw) > 0 else None
     liquidate_at_end     = bool(body.get("liquidate_at_end", False))
-    raw_holdings     = body.get("initial_holdings") or {}
-    initial_holdings = {k: float(v) for k, v in raw_holdings.items() if float(v) > 0}
+    raw_holdings = body.get("initial_holdings") or {}
+    # Accept either {sym: qty} (legacy) or {sym: {qty, avg_price}} (preferred)
+    initial_holdings: dict = {}
+    for sym, info in raw_holdings.items():
+        if isinstance(info, dict):
+            qty = float(info.get("qty", 0))
+            avg = float(info.get("avg_price", 0)) or None
+            if qty > 0:
+                initial_holdings[sym] = {"qty": qty, "avg_price": avg}
+        else:
+            qty = float(info)
+            if qty > 0:
+                initial_holdings[sym] = {"qty": qty, "avg_price": None}
 
-    # Auto-fetch Binance holdings + USDC balance when not resuming and not provided
-    # This seeds the simulation with the portfolio actually owned at start time
-    if not resume and not initial_holdings:
+    # Fetch Binance holdings + entry prices + USDC balance only when explicitly requested
+    if not resume and not initial_holdings and from_binance:
         try:
             from hellocrypto.api import get_open_positions as _get_pos, get_balance as _get_bal
             watchlist = cfg.get("watchlist", [])
             fetched = _get_pos(watchlist)
-            initial_holdings = {sym: info["qty"] for sym, info in fetched.items() if info["qty"] > 0}
-            # Use actual USDC balance only if budget was not explicitly set in the request
+            initial_holdings = {
+                sym: {"qty": info["qty"], "avg_price": info.get("avg_price")}
+                for sym, info in fetched.items() if info["qty"] > 0
+            }
             if "budget" not in body and initial_holdings:
                 usdc = _get_bal("USDC")
                 if usdc > 0:
                     budget = usdc
             if initial_holdings:
-                log.info("[SIM] Avoirs Binance auto-fetchés: %s + $%.2f USDC",
-                         {k: round(v, 6) for k, v in initial_holdings.items()}, budget)
+                log.info("[SIM] Avoirs Binance auto-fetchés (avec prix d'entrée): %s + $%.2f USDC",
+                         {k: f"{v['qty']:.6f}@${v['avg_price']:.4f}" for k, v in initial_holdings.items()}, budget)
         except Exception as exc:
-            log.info("[SIM] Auto-fetch Binance ignoré (pas de clés API ou erreur): %s", exc)
+            log.warning("[SIM] from_binance demandé mais auto-fetch a échoué: %s", exc)
 
     # If resume requested but no saved state → downgrade silently + flag it
     resume_failed = False
@@ -258,7 +293,15 @@ def sim_start():
     try:
         from db.store import upsert_session
         upsert_session(session_id, session_name, mode="simulation",
-                       initial_state={"budget": budget, "initial_holdings": initial_holdings})
+                       initial_state={
+                           "budget":               budget,
+                           "initial_holdings":     initial_holdings,
+                           "risk_level":           risk_level,
+                           "cycle_seconds":        cycle_sec,
+                           "stop_loss_pct":        stop_loss_pct,
+                           "trailing_stop_pct":    trailing_stop_pct,
+                           "sell_cooldown_cycles": sell_cooldown_cycles,
+                       })
     except Exception:
         log.warning("Impossible de sauvegarder la session dans la base", exc_info=True)
 
@@ -334,9 +377,21 @@ def sim_session_rename(session_id: str):
 
 @bp.delete("/api/simulation/sessions/<session_id>")
 def sim_session_delete(session_id: str):
+    # Protect against deleting the currently running session
+    if _sim_state.running and _sim_state.session_id == session_id:
+        return jsonify({"error": "Impossible de supprimer la session en cours d'exécution. Arrête-la d'abord."}), 409
     try:
-        from db.store import delete_session
+        from db.store import delete_session, set_state
         delete_session(session_id)
+        # Invalidate auto-resume so we don't try to restart a deleted session
+        try:
+            saved = None
+            from db.store import get_state
+            saved = get_state("simulation_state")
+            if isinstance(saved, dict) and saved.get("session_id") == session_id:
+                set_state("simulation_state", None)
+        except Exception:
+            log.warning("Impossible de purger l'état auto-resume", exc_info=True)
         return jsonify({"ok": True})
     except Exception as exc:
         log.exception("Erreur sim_session_delete")

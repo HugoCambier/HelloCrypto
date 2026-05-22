@@ -1,0 +1,47 @@
+name: Trading Runner
+
+on:
+  schedule:
+    # Toutes les 5 minutes — le runner vérifie config.enabled en DB
+    # et exit immédiatement si désactivé (consommation ~0).
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Override config mode"
+        required: false
+        type: choice
+        options: ["", real, simulation]
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install poetry
+          poetry install --extras postgres --extras gemini --no-root
+
+      - name: Run agent cycle
+        env:
+          DATABASE_URL:        ${{ secrets.DATABASE_URL }}
+          BINANCE_API_KEY:     ${{ secrets.BINANCE_API_KEY }}
+          BINANCE_API_SECRET:  ${{ secrets.BINANCE_API_SECRET }}
+          GEMINI_API_KEY:      ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          MODE="${{ github.event.inputs.mode }}"
+          if [ -n "$MODE" ]; then
+            poetry run python runner/main.py --mode "$MODE"
+          else
+            poetry run python runner/main.py
+          fi

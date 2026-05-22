@@ -39,6 +39,14 @@ def create_app() -> Flask:
     def index():
         return render_template("index.html")
 
+    @app.get("/backtest")
+    def backtest_page():
+        return render_template("backtest.html")
+
+    @app.get("/market")
+    def market_page():
+        return render_template("market.html")
+
     return app
 
 

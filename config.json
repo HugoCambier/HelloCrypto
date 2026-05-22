@@ -1,7 +1,8 @@
 {
+  "enabled": false,
+  "mode": "simulation",
   "budget": 100,
-  "stop_loss_pct": 21,
-  "cycle_seconds": 3600,
+  "cycle_seconds": 30,
   "watchlist": [
     "BTCUSDC",
     "ETHUSDC",
@@ -9,34 +10,16 @@
     "XRPUSDC",
     "BNBUSDC",
     "ADAUSDC",
-    "AVAXUSDC"
+    "AVAXUSDC",
+    "DOGEUSDC",
+    "LINKUSDC",
+    "MATICUSDC"
   ],
-  "llm_cooldown_seconds": 300,
-  "price_change_threshold_pct": 0.5,
-  "risk_level": 5,
+  "stop_loss_pct": 21,
   "trailing_stop_pct": 10,
-  "sell_cooldown_cycles": 3,
-  "max_tokens": 1000,
+  "risk_level": 7,
   "llm": {
     "provider": "gemini",
     "model": "gemini-3.1-flash-lite-preview"
-  },
-  "llm_models": {
-    "claude": [
-      "claude-sonnet-4-6",
-      "claude-opus-4-5",
-      "claude-haiku-4-5"
-    ],
-    "gemini": [
-      "gemini-3.1-flash-lite-preview",
-      "gemini-3-flash-live"
-    ],
-    "ollama": [
-      "mistral",
-      "mistral:7b",
-      "qwen2.5:14b",
-      "deepseek-r1",
-      "qwen2.5"
-    ]
   }
 }

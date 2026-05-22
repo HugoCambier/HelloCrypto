@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Analyse de marché — HelloCrypto</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    body { background: #0b1220; }
+    ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #0f172a; } ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    .rtab { padding:8px 14px; font-size:12px; font-weight:600; border-bottom:2px solid transparent; color:#64748b; transition:all .15s; letter-spacing:.3px; text-transform:uppercase; display:inline-block; }
+    .rtab.active { color:#60a5fa; border-bottom-color:#3b82f6; }
+    .rtab:hover:not(.active) { color:#94a3b8; }
+    .badge-up{background:#064e3b;color:#34d399} .badge-down{background:#431407;color:#fb923c} .badge-flat{background:#1e293b;color:#94a3b8}
+    .spin { width:14px; height:14px; border:2px solid #334155; border-top-color:#3b82f6; border-radius:50%; animation:spin .6s linear infinite; display:inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .kanban-card { background:#0f172a; border:1px solid #1e293b; border-radius:10px; padding:10px; cursor:pointer; transition:border-color .15s, transform .15s; }
+    .kanban-card:hover { border-color:#475569; transform:translateY(-1px); }
+    .kanban-card .sym { font-weight:600; font-size:13px; color:#e2e8f0; }
+    .kanban-card .meta { font-size:11px; color:#94a3b8; }
+    .pill { font-size:10px; padding:2px 6px; border-radius:999px; font-weight:600; }
+    .pill-sell { background:#431407; color:#fb923c; }
+    .pill-hold { background:#1e293b; color:#94a3b8; }
+    .pill-buy  { background:#064e3b; color:#34d399; }
+  </style>
+</head>
+<body class="text-slate-100 h-full flex flex-col">
+
+  <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
+    <span class="text-lg font-bold text-blue-400 tracking-tight">HelloCrypto</span>
+    <a href="/logout" class="text-xs text-slate-500 hover:text-red-400 transition-colors">Déconnexion</a>
+  </header>
+
+  <nav class="bg-slate-900 border-b border-slate-700 px-6 flex gap-1 shrink-0">
+    <a href="/" class="rtab">Home</a>
+    <a href="/backtest" class="rtab">Backtest</a>
+    <a href="/market" class="rtab active">Analyse de marché</a>
+  </nav>
+
+  <div class="flex-1 overflow-y-auto p-6 max-w-6xl mx-auto w-full space-y-6">
+
+    <div class="flex items-center justify-between">
+      <h1 class="text-base font-semibold text-slate-200">Analyse de marché</h1>
+      <button onclick="runAnalysis()" id="run-btn"
+              class="px-4 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 transition-colors rounded-lg font-semibold">
+        Analyser maintenant
+      </button>
+    </div>
+
+    <div id="status-bar" class="hidden bg-blue-900/20 border border-blue-800/40 rounded-xl p-3 flex items-center gap-2 text-sm text-blue-300">
+      <span class="spin"></span> Analyse en cours…
+    </div>
+
+    <div id="latest-meta" class="hidden flex items-center gap-3 text-sm flex-wrap">
+      <span id="latest-sentiment" class="px-2 py-0.5 rounded font-semibold text-xs"></span>
+      <span id="latest-ts" class="text-slate-500 text-xs"></span>
+      <span id="latest-summary" class="text-slate-300 flex-1 min-w-[200px]"></span>
+    </div>
+
+    <div id="empty-state" class="text-slate-500 text-sm">Aucune analyse disponible. Lancez une analyse depuis le bouton ci-dessus.</div>
+
+    <div id="content" class="hidden space-y-6">
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+          <h2 class="text-sm font-semibold text-slate-200">Carte d'action — urgence × potentiel</h2>
+          <span class="text-xs text-slate-500">Cliquez une crypto pour les détails</span>
+        </div>
+        <div class="relative" style="height:380px">
+          <canvas id="scatter-chart"></canvas>
+        </div>
+        <div class="flex justify-between text-xs text-slate-500 mt-2 px-2">
+          <span class="text-orange-400">← Vendre rapidement</span>
+          <span>Conserver</span>
+          <span class="text-green-400">Acheter rapidement →</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="bg-slate-900 border border-red-900/40 rounded-xl p-3">
+          <h3 class="text-sm font-semibold text-orange-400 mb-3 flex items-center justify-between">
+            <span>Vendre</span><span id="col-sell-count" class="text-xs text-slate-500">0</span>
+          </h3>
+          <div id="col-sell" class="space-y-2"></div>
+        </div>
+        <div class="bg-slate-900 border border-slate-700 rounded-xl p-3">
+          <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center justify-between">
+            <span>Conserver</span><span id="col-hold-count" class="text-xs text-slate-500">0</span>
+          </h3>
+          <div id="col-hold" class="space-y-2"></div>
+        </div>
+        <div class="bg-slate-900 border border-green-900/40 rounded-xl p-3">
+          <h3 class="text-sm font-semibold text-green-400 mb-3 flex items-center justify-between">
+            <span>Acheter</span><span id="col-buy-count" class="text-xs text-slate-500">0</span>
+          </h3>
+          <div id="col-buy" class="space-y-2"></div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <div id="modal" class="hidden fixed inset-0 bg-black/70 z-40 flex items-center justify-center p-4" onclick="closeModalBg(event)">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-start justify-between gap-2">
+        <div>
+          <h3 id="modal-symbol" class="text-lg font-bold text-slate-100"></h3>
+          <p id="modal-price" class="text-xs text-slate-500"></p>
+        </div>
+        <span id="modal-action" class="px-2 py-1 rounded text-xs font-bold"></span>
+      </div>
+      <p id="modal-reason" class="text-sm text-slate-200 leading-relaxed"></p>
+
+      <div>
+        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Projections moyennes pondérées</h4>
+        <div class="grid grid-cols-3 gap-2 text-center text-xs">
+          <div class="bg-slate-800/60 rounded-lg p-2">
+            <p class="text-slate-500">Court (24h)</p>
+            <p id="modal-e24" class="font-semibold mt-1"></p>
+          </div>
+          <div class="bg-slate-800/60 rounded-lg p-2">
+            <p class="text-slate-500">Moyen (7j)</p>
+            <p id="modal-e7" class="font-semibold mt-1"></p>
+          </div>
+          <div class="bg-slate-800/60 rounded-lg p-2">
+            <p class="text-slate-500">Long (30j)</p>
+            <p id="modal-e30" class="font-semibold mt-1"></p>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Intervalle de confiance (7j)</h4>
+        <p id="modal-ci" class="text-sm text-slate-300"></p>
+      </div>
+
+      <div id="modal-scenarios-wrap" class="hidden">
+        <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Scénarios</h4>
+        <div id="modal-scenarios" class="space-y-2"></div>
+      </div>
+
+      <button onclick="closeModal()" class="w-full mt-2 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm">Fermer</button>
+    </div>
+  </div>
+
+  <div id="toast" class="fixed bottom-5 right-5 px-4 py-3 rounded-xl text-sm font-medium shadow-xl z-50 hidden"></div>
+
+  <script src="/static/js/market.js"></script>
+</body>
+</html>

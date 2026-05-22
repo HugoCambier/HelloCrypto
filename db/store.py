@@ -1,6 +1,7 @@
-"""Data store — SQLite (local) or Firestore (GCP Cloud Run).
+"""Data store — SQLite (local), PostgreSQL (Supabase/Render) or Firestore (GCP Cloud Run).
 
 Auto-detected:
+  - DATABASE_URL starts with postgresql:// or postgres:// → PostgreSQL
   - GOOGLE_CLOUD_PROJECT set (and no DATABASE_URL) → Firestore
   - Otherwise → SQLite (default path: data/hellocrypto.db)
 """
@@ -13,8 +14,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+_DATABASE_URL  = os.getenv("DATABASE_URL", "")
 _CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
-_USE_FIRESTORE = bool(_CLOUD_PROJECT) and not os.getenv("DATABASE_URL")
+_USE_POSTGRES  = _DATABASE_URL.startswith(("postgresql://", "postgres://"))
+_USE_FIRESTORE = bool(_CLOUD_PROJECT) and not _DATABASE_URL and not _USE_POSTGRES
 
 
 # ── SQLite ─────────────────────────────────────────────────────────────────────
@@ -104,6 +107,92 @@ def _migrate_sqlite() -> None:
                 pass  # Column already exists
 
 
+# ── PostgreSQL ─────────────────────────────────────────────────────────────────
+
+@contextmanager
+def _postgres():
+    """Yield a psycopg2 DictCursor (supports both row[0] and row['col'])."""
+    import psycopg2  # type: ignore
+    import psycopg2.extras  # type: ignore
+    conn = psycopg2.connect(_DATABASE_URL)
+    cur  = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    try:
+        yield cur
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _init_postgres() -> None:
+    with _postgres() as c:
+        c.execute("""CREATE TABLE IF NOT EXISTS trades (
+            id           SERIAL PRIMARY KEY,
+            timestamp    TEXT             NOT NULL,
+            action       TEXT             NOT NULL,
+            symbol       TEXT,
+            amount       DOUBLE PRECISION,
+            qty          DOUBLE PRECISION,
+            price        DOUBLE PRECISION,
+            pnl          DOUBLE PRECISION,
+            fee          DOUBLE PRECISION,
+            fee_asset    TEXT             DEFAULT 'USDC',
+            reason       TEXT,
+            mode         TEXT             DEFAULT 'real',
+            session_id   TEXT,
+            session_name TEXT
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS agent_state (
+            key        TEXT PRIMARY KEY,
+            value      TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS logs (
+            id         SERIAL PRIMARY KEY,
+            timestamp  TEXT    NOT NULL,
+            level      TEXT    NOT NULL DEFAULT 'info',
+            category   TEXT    NOT NULL DEFAULT 'technical',
+            message    TEXT    NOT NULL,
+            mode       TEXT    DEFAULT 'real',
+            cycle      INTEGER,
+            session_id TEXT
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS sessions (
+            id            TEXT PRIMARY KEY,
+            name          TEXT,
+            mode          TEXT NOT NULL DEFAULT 'simulation',
+            created_at    TEXT NOT NULL,
+            initial_state TEXT
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS market_analyses (
+            id         SERIAL PRIMARY KEY,
+            timestamp  TEXT    NOT NULL,
+            cycle      INTEGER,
+            mode       TEXT    DEFAULT 'real',
+            session_id TEXT,
+            sentiment  TEXT,
+            summary    TEXT,
+            analyses   TEXT
+        )""")
+
+
+def _migrate_postgres() -> None:
+    """Add missing columns to existing tables (idempotent)."""
+    with _postgres() as c:
+        for table, col, definition in [
+            ("trades",   "session_id",    "TEXT"),
+            ("trades",   "session_name",  "TEXT"),
+            ("logs",     "session_id",    "TEXT"),
+            ("sessions", "initial_state", "TEXT"),
+        ]:
+            c.execute(
+                f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {definition}"
+            )
+
+
 # ── Firestore ──────────────────────────────────────────────────────────────────
 
 def _fs():
@@ -114,8 +203,11 @@ def _fs():
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 def init_db() -> None:
-    """Create tables (SQLite) or no-op (Firestore)."""
-    if not _USE_FIRESTORE:
+    """Create tables (SQLite / PostgreSQL) or no-op (Firestore)."""
+    if _USE_POSTGRES:
+        _init_postgres()
+        _migrate_postgres()
+    elif not _USE_FIRESTORE:
         _init_sqlite()
         _migrate_sqlite()
 
@@ -142,6 +234,13 @@ def save_trade(
             fee_asset=fee_asset, reason=reason, mode=mode,
             session_id=session_id, session_name=session_name,
         ))
+    elif _USE_POSTGRES:
+        with _postgres() as c:
+            c.execute(
+                "INSERT INTO trades (timestamp,action,symbol,amount,qty,price,pnl,fee,fee_asset,reason,mode,session_id,session_name)"
+                " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                (ts, action, symbol, amount, qty, price, pnl, fee, fee_asset, reason, mode, session_id, session_name),
+            )
     else:
         with _sqlite() as c:
             c.execute(
@@ -177,6 +276,15 @@ def list_simulation_sessions() -> list[dict]:
                 g["end_ts"] = ts
             g["trade_count"] += 1
         return sorted(groups.values(), key=lambda x: x["start_ts"], reverse=True)
+    elif _USE_POSTGRES:
+        with _postgres() as c:
+            c.execute(
+                "SELECT session_id, session_name, MIN(timestamp) as start_ts,"
+                " MAX(timestamp) as end_ts, COUNT(*) as trade_count"
+                " FROM trades WHERE mode='simulation' AND session_id IS NOT NULL"
+                " GROUP BY session_id, session_name ORDER BY start_ts DESC"
+            )
+            return [dict(r) for r in c.fetchall()]
     else:
         with _sqlite() as c:
             rows = c.execute(
@@ -198,6 +306,19 @@ def load_history(mode: str | None = None, limit: int = 500) -> list[dict]:
         if mode:
             docs = [d for d in docs if d.get("mode") == mode]
         return docs[:limit]
+    elif _USE_POSTGRES:
+        with _postgres() as c:
+            if mode:
+                c.execute(
+                    "SELECT * FROM trades WHERE mode=%s ORDER BY timestamp DESC LIMIT %s",
+                    (mode, limit),
+                )
+            else:
+                c.execute(
+                    "SELECT * FROM trades ORDER BY timestamp DESC LIMIT %s",
+                    (limit,),
+                )
+            return [dict(r) for r in c.fetchall()]
     else:
         with _sqlite() as c:
             if mode:
@@ -217,6 +338,11 @@ def get_state(key: str) -> Any | None:
     if _USE_FIRESTORE:
         doc = _fs().collection("agent_state").document(key).get()
         return doc.to_dict() if doc.exists else None
+    elif _USE_POSTGRES:
+        with _postgres() as c:
+            c.execute("SELECT value FROM agent_state WHERE key=%s", (key,))
+            row = c.fetchone()
+        return json.loads(row[0]) if row else None
     else:
         with _sqlite() as c:
             row = c.execute(
@@ -229,6 +355,13 @@ def set_state(key: str, value: Any) -> None:
     ts = datetime.utcnow().isoformat()
     if _USE_FIRESTORE:
         _fs().collection("agent_state").document(key).set(value)
+    elif _USE_POSTGRES:
+        with _postgres() as c:
+            c.execute(
+                "INSERT INTO agent_state (key,value,updated_at) VALUES (%s,%s,%s)"
+                " ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value, updated_at=EXCLUDED.updated_at",
+                (key, json.dumps(value), ts),
+            )
     else:
         with _sqlite() as c:
             c.execute(
@@ -252,6 +385,13 @@ def save_log(
             timestamp=ts, level=level, category=category,
             message=message, mode=mode, cycle=cycle, session_id=session_id,
         ))
+    elif _USE_POSTGRES:
+        with _postgres() as c:
+            c.execute(
+                "INSERT INTO logs (timestamp,level,category,message,mode,cycle,session_id)"
+                " VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                (ts, level, category, message, mode, cycle, session_id),
+            )
     else:
         with _sqlite() as c:
             c.execute(
@@ -280,6 +420,22 @@ def load_logs(
         if session_id:
             docs = [d for d in docs if d.get("session_id") == session_id]
         return docs[:limit]
+    elif _USE_POSTGRES:
+        conditions, params = [], []
+        if category:
+            conditions.append("category=%s")
+            params.append(category)
+        if mode:
+            conditions.append("mode=%s")
+            params.append(mode)
+        if session_id:
+            conditions.append("session_id=%s")
+            params.append(session_id)
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        params.append(limit)
+        with _postgres() as c:
+            c.execute(f"SELECT * FROM logs {where} ORDER BY timestamp DESC LIMIT %s", params)
+            return [dict(r) for r in c.fetchall()]
     else:
         with _sqlite() as c:
             conditions, params = [], []
@@ -394,6 +550,14 @@ def upsert_session(
              "initial_state": initial_state_json},
             merge=True,
         )
+    elif _USE_POSTGRES:
+        with _postgres() as c:
+            c.execute(
+                "INSERT INTO sessions (id, name, mode, created_at, initial_state) VALUES (%s,%s,%s,%s,%s)"
+                " ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,"
+                " initial_state=COALESCE(EXCLUDED.initial_state, sessions.initial_state)",
+                (session_id, name, mode, ts, initial_state_json),
+            )
     else:
         with _sqlite() as c:
             c.execute(
@@ -407,6 +571,9 @@ def upsert_session(
 def rename_session(session_id: str, new_name: str) -> None:
     if _USE_FIRESTORE:
         _fs().collection("sessions").document(session_id).update({"name": new_name})
+    elif _USE_POSTGRES:
+        with _postgres() as c:
+            c.execute("UPDATE sessions SET name=%s WHERE id=%s", (new_name, session_id))
     else:
         with _sqlite() as c:
             c.execute("UPDATE sessions SET name=? WHERE id=?", (new_name, session_id))
@@ -418,6 +585,14 @@ def find_session_by_name(name: str) -> list[dict]:
         docs = _fs().collection("sessions").where("mode", "==", "simulation").stream()
         return [{"id": d.id, **d.to_dict()} for d in docs
                 if d.to_dict().get("name", "").lower() == name.lower()]
+    elif _USE_POSTGRES:
+        with _postgres() as c:
+            c.execute(
+                "SELECT id, name, mode, created_at FROM sessions"
+                " WHERE mode='simulation' AND LOWER(name)=LOWER(%s)",
+                (name,),
+            )
+            return [dict(r) for r in c.fetchall()]
     else:
         with _sqlite() as c:
             rows = c.execute(
@@ -438,6 +613,12 @@ def delete_session(session_id: str) -> None:
             doc.reference.delete()
         for doc in _fs().collection("market_analyses").where("session_id", "==", session_id).stream():
             doc.reference.delete()
+    elif _USE_POSTGRES:
+        with _postgres() as c:
+            c.execute("DELETE FROM sessions WHERE id=%s", (session_id,))
+            c.execute("DELETE FROM trades WHERE session_id=%s", (session_id,))
+            c.execute("DELETE FROM logs WHERE session_id=%s", (session_id,))
+            c.execute("DELETE FROM market_analyses WHERE session_id=%s", (session_id,))
     else:
         with _sqlite() as c:
             c.execute("DELETE FROM sessions WHERE id=?", (session_id,))
@@ -452,6 +633,18 @@ def list_simulation_sessions_v2() -> list[dict]:
         docs = [{"id": doc.id, **doc.to_dict()} for doc in
                 _fs().collection("sessions").where("mode", "==", "simulation").stream()]
         return sorted(docs, key=lambda x: x.get("created_at", ""), reverse=True)
+    elif _USE_POSTGRES:
+        with _postgres() as c:
+            c.execute(
+                "SELECT s.id, s.name, s.mode, s.created_at,"
+                " COUNT(t.id) as trade_count,"
+                " MIN(t.timestamp) as start_ts, MAX(t.timestamp) as end_ts"
+                " FROM sessions s"
+                " LEFT JOIN trades t ON t.session_id = s.id AND t.mode = 'simulation'"
+                " WHERE s.mode = 'simulation'"
+                " GROUP BY s.id, s.name, s.mode, s.created_at ORDER BY s.created_at DESC"
+            )
+            return [dict(r) for r in c.fetchall()]
     else:
         with _sqlite() as c:
             rows = c.execute(
@@ -473,6 +666,11 @@ def get_session(session_id: str) -> dict | None:
         if not doc.exists:
             return None
         return {"id": doc.id, **doc.to_dict()}
+    elif _USE_POSTGRES:
+        with _postgres() as c:
+            c.execute("SELECT * FROM sessions WHERE id=%s", (session_id,))
+            row = c.fetchone()
+        return dict(row) if row else None
     else:
         with _sqlite() as c:
             row = c.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
@@ -496,6 +694,13 @@ def save_market_analysis(
             timestamp=ts, cycle=cycle, mode=mode, session_id=session_id,
             sentiment=sentiment, summary=summary, analyses=analyses_json,
         ))
+    elif _USE_POSTGRES:
+        with _postgres() as c:
+            c.execute(
+                "INSERT INTO market_analyses (timestamp,cycle,mode,session_id,sentiment,summary,analyses)"
+                " VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                (ts, cycle, mode, session_id, sentiment, summary, analyses_json),
+            )
     else:
         with _sqlite() as c:
             c.execute(
@@ -521,6 +726,31 @@ def load_market_analyses(
         if session_id:
             docs = [d for d in docs if d.get("session_id") == session_id]
         return docs[:limit]
+    elif _USE_POSTGRES:
+        conditions, params = [], []
+        if mode:
+            conditions.append("mode=%s")
+            params.append(mode)
+        if session_id:
+            conditions.append("session_id=%s")
+            params.append(session_id)
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        params.append(limit)
+        with _postgres() as c:
+            c.execute(
+                f"SELECT * FROM market_analyses {where} ORDER BY timestamp DESC LIMIT %s",
+                params,
+            )
+            rows = c.fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["analyses"] = json.loads(d.get("analyses") or "[]")
+            except Exception:
+                d["analyses"] = []
+            result.append(d)
+        return result
     else:
         with _sqlite() as c:
             conditions, params = [], []
@@ -564,33 +794,43 @@ def clean_logs(
     if _USE_FIRESTORE:
         return 0  # Not implemented for Firestore
 
-    with _sqlite() as c:
+    from datetime import timedelta
+
+    ph = "%s" if _USE_POSTGRES else "?"  # placeholder style
+    ctx = _postgres if _USE_POSTGRES else _sqlite
+
+    with ctx() as c:
         if keep_last is not None:
-            row = c.execute("SELECT COUNT(*) FROM logs").fetchone()
-            total = row[0]
+            if _USE_POSTGRES:
+                c.execute("SELECT COUNT(*) FROM logs")
+                total = c.fetchone()[0]
+            else:
+                total = c.execute("SELECT COUNT(*) FROM logs").fetchone()[0]
             to_delete = max(0, total - keep_last)
             if to_delete == 0:
                 return 0
             c.execute(
-                "DELETE FROM logs WHERE id IN "
-                "(SELECT id FROM logs ORDER BY timestamp ASC LIMIT ?)",
+                f"DELETE FROM logs WHERE id IN "
+                f"(SELECT id FROM logs ORDER BY timestamp ASC LIMIT {ph})",
                 (to_delete,),
             )
             return to_delete
 
         conditions, params = [], []
-        from datetime import timedelta
         cutoff = (datetime.utcnow() - timedelta(days=older_than_days)).isoformat()
-        conditions.append("timestamp < ?")
+        conditions.append(f"timestamp < {ph}")
         params.append(cutoff)
         if mode:
-            conditions.append("mode=?")
+            conditions.append(f"mode={ph}")
             params.append(mode)
         if session_id:
-            conditions.append("session_id=?")
+            conditions.append(f"session_id={ph}")
             params.append(session_id)
         where = "WHERE " + " AND ".join(conditions)
-        row = c.execute(f"SELECT COUNT(*) FROM logs {where}", params).fetchone()
-        count = row[0]
+        if _USE_POSTGRES:
+            c.execute(f"SELECT COUNT(*) FROM logs {where}", params)
+            count = c.fetchone()[0]
+        else:
+            count = c.execute(f"SELECT COUNT(*) FROM logs {where}", params).fetchone()[0]
         c.execute(f"DELETE FROM logs {where}", params)
         return count

@@ -145,47 +145,55 @@ def _make_snapshot(current_step, total_steps, ts_ms, cash, budget, holdings,
     total  = cash + portfolio_val
     pnl    = total - budget
 
-    bh_pnl = bh_pct = alpha = None
-    btc_bh_pnl = btc_bh_pct = None
+    bh_pnl = bh_pct = alpha = bh_total = None
+    btc_bh_pnl = btc_bh_pct = btc_total = None
     if initial_prices:
         valid  = [(s, p0) for s, p0 in initial_prices.items() if p0 and prices.get(s)]
         if valid:
-            w_net  = (budget / len(valid)) * (1 - FEE_RATE)
-            bh_val = sum(w_net * prices[s] / p0 for s, p0 in valid)
-            bh_pnl = round(bh_val - budget, 2)
-            bh_pct = round((bh_val - budget) / budget * 100, 2)
-            alpha  = round(pnl - (bh_val - budget), 2)
+            w_net    = (budget / len(valid)) * (1 - FEE_RATE)
+            bh_total = sum(w_net * prices[s] / p0 for s, p0 in valid)
+            bh_pnl   = round(bh_total - budget, 2)
+            bh_pct   = round((bh_total - budget) / budget * 100, 2)
+            alpha    = round(pnl - (bh_total - budget), 2)
 
         btc_sym = next((s for s in initial_prices if "BTC" in s and initial_prices[s] and prices.get(s)), None)
         if btc_sym:
-            btc_val    = budget * (1 - FEE_RATE) * prices[btc_sym] / initial_prices[btc_sym]
-            btc_bh_pnl = round(btc_val - budget, 2)
-            btc_bh_pct = round((btc_val - budget) / budget * 100, 2)
+            btc_total  = budget * (1 - FEE_RATE) * prices[btc_sym] / initial_prices[btc_sym]
+            btc_bh_pnl = round(btc_total - budget, 2)
+            btc_bh_pct = round((btc_total - budget) / budget * 100, 2)
 
     sells_only = [t for t in history if "SELL" in t.get("action","") and "stop" not in t.get("action","")]
     profitable = [t for t in sells_only if t.get("pnl", 0) > 0]
 
+    trades_count = len([t for t in history if t.get("action") != "ANALYSE"])
+
     return {
         "loading":           False,
         "cycle":             current_step,
+        "current_step":      current_step,
         "total_steps":       total_steps,
         "current_ts":        datetime.utcfromtimestamp(ts_ms / 1000).strftime("%Y-%m-%d %H:%M"),
         "cash":              round(cash, 2),
+        "budget":            round(budget, 2),
         "portfolio_value":   round(portfolio_val, 2),
         "total_value":       round(total, 2),
+        "total":             round(total, 2),
         "pnl":               round(pnl, 2),
         "pnl_pct":           round(pnl / budget * 100, 2),
         "total_fees":        round(total_fees, 4),
-        "trades":            len([t for t in history if t.get("action") != "ANALYSE"]),
+        "trades":            trades_count,
+        "trades_count":      trades_count,
         "buys":              len([t for t in history if t.get("action") == "BUY"]),
         "sells":             len(sells_only),
         "stop_losses":       len([t for t in history if "stop" in t.get("action", "")]),
         "win_rate":          round(len(profitable) / len(sells_only) * 100, 1) if sells_only else None,
         "benchmark_pnl":     bh_pnl,
         "benchmark_pnl_pct": bh_pct,
+        "bh_total":          round(bh_total, 2) if bh_total is not None else None,
         "alpha":             alpha,
         "btc_bh_pnl":        btc_bh_pnl,
         "btc_bh_pct":        btc_bh_pct,
+        "btc_total":         round(btc_total, 2) if btc_total is not None else None,
         "positions": [
             {
                 "symbol":        sym,
@@ -267,11 +275,26 @@ def run_live(
         if on_step:
             on_step({"loading": True,
                      "message": f"Chargement {sym} ({idx + 1}/{len(symbols)})…"})
-        all_klines[sym] = _fetch_klines(sym, "1h", start_ms, end_ms)
+        try:
+            all_klines[sym] = _fetch_klines(sym, "1h", start_ms, end_ms)
+        except Exception as exc:
+            log.warning("[BACKTEST] %s: échec fetch (%s) — exclu", sym, exc)
+            all_klines[sym] = []
 
-    min_len = min(len(v) for v in all_klines.values()) if all_klines else 0
-    if min_len <= warmup:
-        return {"error": "Pas assez de données historiques (minimum ~50 bougies)"}
+    # Drop symbols with insufficient history so one bad pair doesn't abort the run
+    skipped = [s for s, k in all_klines.items() if len(k) <= warmup]
+    for s in skipped:
+        log.warning("[BACKTEST] %s: %d bougies (< %d), exclu du run", s, len(all_klines[s]), warmup)
+        del all_klines[s]
+    symbols = [s for s in symbols if s in all_klines]
+
+    if not symbols:
+        return {"error": "Aucun symbole avec suffisamment de données (min ~50 bougies)"}
+
+    min_len = min(len(v) for v in all_klines.values())
+    skipped_msg = f" — {len(skipped)} crypto(s) exclue(s): {', '.join(skipped)}" if skipped else ""
+    if skipped_msg:
+        log.info("[BACKTEST] Run sur %d symbole(s)%s", len(symbols), skipped_msg)
 
     total_steps   = min_len - warmup
     cash          = budget
@@ -284,6 +307,10 @@ def run_live(
     prices: dict  = {}
     last_snap: dict = {}
     recent_decisions: list = []
+    timeseries: list = []
+    start_ts_iso = datetime.utcfromtimestamp(
+        int(all_klines[symbols[0]][warmup][0]) / 1000
+    ).strftime("%Y-%m-%d %H:%M") if all_klines else None
 
     # Pre-fetch global context once (cached, doesn't change during replay)
     fear_greed    = get_fear_and_greed()
@@ -487,6 +514,21 @@ def run_live(
             current_step, total_steps, ts,
             cash, budget, holdings, prices, history, total_fees, initial_prices,
         )
+        timeseries.append({
+            "ts":  last_snap["current_ts"],
+            "v":   last_snap["total_value"],
+            "bh":  last_snap.get("bh_total"),
+            "btc": last_snap.get("btc_total"),
+        })
+        # Downsample to keep snapshot lightweight while preserving shape
+        if len(timeseries) > 250:
+            step = max(1, len(timeseries) // 200)
+            last_snap["timeseries"] = timeseries[::step] + [timeseries[-1]]
+        else:
+            last_snap["timeseries"] = list(timeseries)
+        last_snap["start_ts"] = start_ts_iso
+        if skipped:
+            last_snap["skipped_symbols"] = skipped
         if llm_mode:
             last_snap["llm_calls"] = llm_call_count
             if llm_last_error:
@@ -534,6 +576,20 @@ def run_live(
             total_steps, total_steps, final_ts,
             cash, budget, holdings, prices, history, total_fees, initial_prices,
         )
+        timeseries.append({
+            "ts":  last_snap["current_ts"],
+            "v":   last_snap["total_value"],
+            "bh":  last_snap.get("bh_total"),
+            "btc": last_snap.get("btc_total"),
+        })
+        if len(timeseries) > 250:
+            step = max(1, len(timeseries) // 200)
+            last_snap["timeseries"] = timeseries[::step] + [timeseries[-1]]
+        else:
+            last_snap["timeseries"] = list(timeseries)
+        last_snap["start_ts"] = start_ts_iso
+        if skipped:
+            last_snap["skipped_symbols"] = skipped
         if on_step:
             on_step(last_snap)
 
