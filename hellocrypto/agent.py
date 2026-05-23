@@ -33,8 +33,10 @@ from .api import (
     save_trade,
 )
 from .llm import call as llm_call
+from .llm import last_usage as llm_last_usage
 from .prompts import SYSTEM, build_analysis
-from .trading import check_stops as _trading_check_stops, compute_position_size
+from .trading import check_stops as _trading_check_stops
+from .trading import compute_position_size
 
 load_dotenv()
 
@@ -111,7 +113,11 @@ def _performance_report(prices: dict, positions: dict, cash: float,
     )
     total = cash + portfolio_val
     pnl = total - initial_total_value
-    total_fees = sum(t.get("fee", 0) for t in history)
+    try:
+        from db.store import sum_fees
+        total_fees = sum_fees(mode="real")
+    except Exception:
+        total_fees = sum(t.get("fee", 0) for t in history)
     lines = [
         "═══ RAPPORT DE PERFORMANCE ═══",
         f"Valeur initiale: ${initial_total_value:.2f}",
@@ -234,6 +240,7 @@ def _execute_cycle(
                 analyses=decision.get("actions", []),
                 mode="real",
                 cycle=cycle,
+                usage=llm_last_usage(),
             )
         except Exception:
             pass

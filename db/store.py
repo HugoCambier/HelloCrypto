@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import sqlite3
+import threading
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -88,18 +89,32 @@ def _init_sqlite() -> None:
             session_id TEXT,
             sentiment  TEXT,
             summary    TEXT,
-            analyses   TEXT
+            analyses   TEXT,
+            usage      TEXT
         )""")
+        for sql in (
+            "CREATE INDEX IF NOT EXISTS idx_logs_ts          ON logs(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_logs_mode_ts     ON logs(mode, timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_logs_session     ON logs(session_id)",
+            "CREATE INDEX IF NOT EXISTS idx_logs_category    ON logs(category)",
+            "CREATE INDEX IF NOT EXISTS idx_trades_ts        ON trades(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_trades_mode_ts   ON trades(mode, timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_trades_session   ON trades(session_id)",
+            "CREATE INDEX IF NOT EXISTS idx_analyses_ts      ON market_analyses(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_analyses_session ON market_analyses(session_id)",
+        ):
+            c.execute(sql)
 
 
 def _migrate_sqlite() -> None:
     """Add new columns to existing tables (migration for older DBs)."""
     with _sqlite() as c:
         for table, col, definition in [
-            ("trades",   "session_id",    "TEXT"),
-            ("trades",   "session_name",  "TEXT"),
-            ("logs",     "session_id",    "TEXT"),
-            ("sessions", "initial_state", "TEXT"),
+            ("trades",          "session_id",    "TEXT"),
+            ("trades",          "session_name",  "TEXT"),
+            ("logs",            "session_id",    "TEXT"),
+            ("sessions",        "initial_state", "TEXT"),
+            ("market_analyses", "usage",         "TEXT"),
         ]:
             try:
                 c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition}")
@@ -109,12 +124,35 @@ def _migrate_sqlite() -> None:
 
 # ── PostgreSQL ─────────────────────────────────────────────────────────────────
 
+# Pool partagé pour éviter d'ouvrir/fermer une connexion psycopg2 à chaque
+# save_log/save_trade (saturait les 60 slots du free tier Supabase + latence
+# handshake à chaque appel). Initialisé paresseusement à la première utilisation.
+_PG_POOL = None
+_PG_POOL_LOCK = threading.Lock()
+
+
+def _pg_pool():
+    global _PG_POOL
+    if _PG_POOL is not None:
+        return _PG_POOL
+    with _PG_POOL_LOCK:
+        if _PG_POOL is None:
+            import psycopg2.pool  # type: ignore
+            # minconn=1 pour ne pas saturer au cold start serverless.
+            # maxconn=5 reste large pour un dashboard solo + cron.
+            _PG_POOL = psycopg2.pool.ThreadedConnectionPool(
+                minconn=1, maxconn=int(os.getenv("PG_POOL_MAX", "5")),
+                dsn=_DATABASE_URL,
+            )
+    return _PG_POOL
+
+
 @contextmanager
 def _postgres():
-    """Yield a psycopg2 DictCursor (supports both row[0] and row['col'])."""
-    import psycopg2  # type: ignore
+    """Yield a psycopg2 DictCursor backed by the shared pool."""
     import psycopg2.extras  # type: ignore
-    conn = psycopg2.connect(_DATABASE_URL)
+    pool = _pg_pool()
+    conn = pool.getconn()
     cur  = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     try:
         yield cur
@@ -124,7 +162,7 @@ def _postgres():
         raise
     finally:
         cur.close()
-        conn.close()
+        pool.putconn(conn)
 
 
 def _init_postgres() -> None:
@@ -175,18 +213,32 @@ def _init_postgres() -> None:
             session_id TEXT,
             sentiment  TEXT,
             summary    TEXT,
-            analyses   TEXT
+            analyses   TEXT,
+            usage      TEXT
         )""")
+        for sql in (
+            "CREATE INDEX IF NOT EXISTS idx_logs_ts          ON logs(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_logs_mode_ts     ON logs(mode, timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_logs_session     ON logs(session_id)",
+            "CREATE INDEX IF NOT EXISTS idx_logs_category    ON logs(category)",
+            "CREATE INDEX IF NOT EXISTS idx_trades_ts        ON trades(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_trades_mode_ts   ON trades(mode, timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_trades_session   ON trades(session_id)",
+            "CREATE INDEX IF NOT EXISTS idx_analyses_ts      ON market_analyses(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_analyses_session ON market_analyses(session_id)",
+        ):
+            c.execute(sql)
 
 
 def _migrate_postgres() -> None:
     """Add missing columns to existing tables (idempotent)."""
     with _postgres() as c:
         for table, col, definition in [
-            ("trades",   "session_id",    "TEXT"),
-            ("trades",   "session_name",  "TEXT"),
-            ("logs",     "session_id",    "TEXT"),
-            ("sessions", "initial_state", "TEXT"),
+            ("trades",          "session_id",    "TEXT"),
+            ("trades",          "session_name",  "TEXT"),
+            ("logs",            "session_id",    "TEXT"),
+            ("sessions",        "initial_state", "TEXT"),
+            ("market_analyses", "usage",         "TEXT"),
         ]:
             c.execute(
                 f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {definition}"
@@ -253,7 +305,6 @@ def save_trade(
 def list_simulation_sessions() -> list[dict]:
     """Return distinct simulation sessions ordered by most recent first."""
     if _USE_FIRESTORE:
-        from google.cloud import firestore as _firestore  # type: ignore
         docs = [doc.to_dict() for doc in
                 _fs().collection("trades").stream()]
         sim_docs = [d for d in docs if d.get("mode") == "simulation" and d.get("session_id")]
@@ -294,6 +345,33 @@ def list_simulation_sessions() -> list[dict]:
                 " GROUP BY session_id ORDER BY start_ts DESC"
             ).fetchall()
         return [dict(r) for r in rows]
+
+
+def sum_fees(mode: str | None = None) -> float:
+    """Total fees across all trades, computed server-side.
+
+    Avoids loading the whole trade history just to sum a column.
+    """
+    if _USE_FIRESTORE:
+        q = _fs().collection("trades")
+        if mode:
+            q = q.where("mode", "==", mode)
+        return float(sum(float(d.to_dict().get("fee") or 0) for d in q.stream()))
+    if _USE_POSTGRES:
+        with _postgres() as c:
+            if mode:
+                c.execute("SELECT COALESCE(SUM(fee),0) FROM trades WHERE mode=%s", (mode,))
+            else:
+                c.execute("SELECT COALESCE(SUM(fee),0) FROM trades")
+            return float(c.fetchone()[0] or 0)
+    with _sqlite() as c:
+        if mode:
+            row = c.execute(
+                "SELECT COALESCE(SUM(fee),0) FROM trades WHERE mode=?", (mode,)
+            ).fetchone()
+        else:
+            row = c.execute("SELECT COALESCE(SUM(fee),0) FROM trades").fetchone()
+    return float(row[0] or 0)
 
 
 def load_history(mode: str | None = None, limit: int = 500) -> list[dict]:
@@ -686,27 +764,30 @@ def save_market_analysis(
     mode: str = "real",
     cycle: int | None = None,
     session_id: str | None = None,
+    usage: dict | None = None,
 ) -> None:
     ts = datetime.utcnow().isoformat()
     analyses_json = json.dumps(analyses)
+    usage_json = json.dumps(usage) if usage else None
     if _USE_FIRESTORE:
         _fs().collection("market_analyses").add(dict(
             timestamp=ts, cycle=cycle, mode=mode, session_id=session_id,
             sentiment=sentiment, summary=summary, analyses=analyses_json,
+            usage=usage_json,
         ))
     elif _USE_POSTGRES:
         with _postgres() as c:
             c.execute(
-                "INSERT INTO market_analyses (timestamp,cycle,mode,session_id,sentiment,summary,analyses)"
-                " VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                (ts, cycle, mode, session_id, sentiment, summary, analyses_json),
+                "INSERT INTO market_analyses (timestamp,cycle,mode,session_id,sentiment,summary,analyses,usage)"
+                " VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                (ts, cycle, mode, session_id, sentiment, summary, analyses_json, usage_json),
             )
     else:
         with _sqlite() as c:
             c.execute(
-                "INSERT INTO market_analyses (timestamp,cycle,mode,session_id,sentiment,summary,analyses)"
-                " VALUES (?,?,?,?,?,?,?)",
-                (ts, cycle, mode, session_id, sentiment, summary, analyses_json),
+                "INSERT INTO market_analyses (timestamp,cycle,mode,session_id,sentiment,summary,analyses,usage)"
+                " VALUES (?,?,?,?,?,?,?,?)",
+                (ts, cycle, mode, session_id, sentiment, summary, analyses_json, usage_json),
             )
 
 
@@ -784,12 +865,14 @@ def clean_logs(
     mode: str | None = None,
     session_id: str | None = None,
     keep_last: int | None = None,
+    category: str | None = None,
 ) -> int:
     """Delete log entries. Returns the number of rows deleted.
 
     Options (mutually exclusive priority):
     - keep_last: keep only the N most recent log entries (ignores other filters)
-    - older_than_days + mode + session_id: delete entries older than N days
+    - older_than_days + mode + session_id + category: delete matching entries
+      older than N days. Pass older_than_days=0 to ignore the age filter.
     """
     if _USE_FIRESTORE:
         return 0  # Not implemented for Firestore
@@ -817,15 +900,21 @@ def clean_logs(
             return to_delete
 
         conditions, params = [], []
-        cutoff = (datetime.utcnow() - timedelta(days=older_than_days)).isoformat()
-        conditions.append(f"timestamp < {ph}")
-        params.append(cutoff)
+        if older_than_days > 0:
+            cutoff = (datetime.utcnow() - timedelta(days=older_than_days)).isoformat()
+            conditions.append(f"timestamp < {ph}")
+            params.append(cutoff)
         if mode:
             conditions.append(f"mode={ph}")
             params.append(mode)
         if session_id:
             conditions.append(f"session_id={ph}")
             params.append(session_id)
+        if category:
+            conditions.append(f"category={ph}")
+            params.append(category)
+        if not conditions:
+            return 0  # refuse to delete everything by accident
         where = "WHERE " + " AND ".join(conditions)
         if _USE_POSTGRES:
             c.execute(f"SELECT COUNT(*) FROM logs {where}", params)

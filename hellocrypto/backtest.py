@@ -14,7 +14,7 @@ import argparse
 import json
 import logging
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import requests
@@ -64,9 +64,9 @@ def _fetch_klines(symbol: str, interval: str, start_ms: int, end_ms: int) -> lis
 def _start_ms_from(start_date: str | None, days: int) -> int:
     """Return epoch-ms for start of backtest window."""
     if start_date:
-        dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
         return int(dt.timestamp() * 1000)
-    return int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
+    return int((datetime.now(UTC) - timedelta(days=days)).timestamp() * 1000)
 
 
 # ── Rule-based signal score ───────────────────────────────────────────────────
@@ -262,7 +262,7 @@ def run_live(
     max_pct    = (5 + risk_level * 4) / 100
     warmup     = 50   # enough for RSI-14, SMA-25, plus buffer
 
-    end_ms   = int(datetime.now(timezone.utc).timestamp() * 1000)
+    end_ms   = int(datetime.now(UTC).timestamp() * 1000)
     start_ms = _start_ms_from(start_date, days)
 
     cfg = load_config()
@@ -549,7 +549,7 @@ def run_live(
     # ── Final liquidation: sell all remaining positions at last price ─────────
     if holdings and prices:
         final_ts = int(all_klines[symbols[0]][min_len - 1][0])
-        dt_str   = datetime.fromtimestamp(final_ts / 1000, tz=timezone.utc).replace(tzinfo=None).isoformat()
+        dt_str   = datetime.fromtimestamp(final_ts / 1000, tz=UTC).replace(tzinfo=None).isoformat()
         for sym in list(holdings):
             if sym not in prices:
                 continue

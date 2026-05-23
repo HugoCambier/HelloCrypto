@@ -17,11 +17,30 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
+# ── Sentry (optionnel : activé uniquement si SENTRY_DSN défini) ──────────────
+_SENTRY_DSN = os.getenv("SENTRY_DSN")
+if _SENTRY_DSN:
+    try:
+        import sentry_sdk  # type: ignore
+        from sentry_sdk.integrations.flask import FlaskIntegration  # type: ignore
+        sentry_sdk.init(
+            dsn=_SENTRY_DSN,
+            integrations=[FlaskIntegration()],
+            traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0")),
+            environment=os.getenv("VERCEL_ENV") or ("prod" if os.getenv("VERCEL") else "dev"),
+        )
+    except ImportError:
+        # sentry-sdk pas installé — on log discrètement, pas d'erreur fatale
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "SENTRY_DSN défini mais sentry-sdk absent — `pip install sentry-sdk[flask]`")
+
 # ── import existing Flask app ─────────────────────────────────────────────────
-from hellocrypto.dashboard import app, log  # noqa: E402  (must be after sys.path)
 from db.store import init_db, is_user_allowed, sync_users_from_env  # noqa: E402
+from hellocrypto.dashboard import app, log  # noqa: E402  (must be after sys.path)
 
 # Ensure DB schema exists at module import (Vercel doesn't call main()).
 _INIT_DB_ERROR: str | None = None
@@ -43,7 +62,10 @@ app.jinja_loader = ChoiceLoader([
 
 # ── Session secret ────────────────────────────────────────────────────────────
 _session_secret = os.getenv("SESSION_SECRET_KEY")
-_is_production  = bool(os.getenv("K_SERVICE") or os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("RENDER"))
+_is_production  = bool(
+    os.getenv("K_SERVICE") or os.getenv("GOOGLE_CLOUD_PROJECT")
+    or os.getenv("RENDER") or os.getenv("VERCEL")
+)
 if not _session_secret:
     if _is_production:
         raise RuntimeError(
@@ -53,9 +75,11 @@ if not _session_secret:
     log.warning("SESSION_SECRET_KEY non défini — utilisation d'une clé de dev (NON SÉCURISÉ)")
     _session_secret = "dev-secret-change-me-in-prod"
 app.secret_key = _session_secret
+# Lax: cookie envoyé sur navigations top-level (suffisant pour OAuth callback) mais
+# pas sur POST cross-site → protection CSRF de base.
 app.config.update(
-    SESSION_COOKIE_SAMESITE="None",
-    SESSION_COOKIE_SECURE=True,   # requis avec SameSite=None (HTTPS uniquement)
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=_is_production,
     SESSION_COOKIE_HTTPONLY=True,
 )
 
@@ -64,6 +88,11 @@ _CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
 _CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 _AUTH_ENABLED  = bool(_CLIENT_ID and _CLIENT_SECRET)
 
+if _is_production and not _AUTH_ENABLED:
+    raise RuntimeError(
+        "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET requis en production. "
+        "Refus de démarrer sans authentification."
+    )
 if not _AUTH_ENABLED:
     log.warning("GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET manquants — auth désactivée (mode local)")
 
@@ -107,7 +136,7 @@ def require_login(f):
 def _auth_gate():
     if not _AUTH_ENABLED:
         return  # Auth disabled locally
-    public = ("/login", "/auth/", "/callback", "/healthz", "/debug/",
+    public = ("/login", "/auth/", "/callback", "/healthz",
                "/api/simulation/keepalive", "/api/cron/")
     if request.path.startswith(public):
         return
@@ -135,8 +164,8 @@ def auth_start():
 
 @app.get("/callback")
 def callback():
-    from google.oauth2 import id_token  # type: ignore
     from google.auth.transport import requests as google_requests  # type: ignore
+    from google.oauth2 import id_token  # type: ignore
     if not request.args.get("code"):
         return redirect(url_for("login"))
     try:
@@ -175,11 +204,11 @@ def healthz():
 
 
 @app.get("/debug/health")
+@require_login
 def debug_health():
-    """Public diagnostics — no secrets exposed, only presence of env vars."""
+    """Authenticated diagnostics — never exposes secret values or financial data."""
     from flask import jsonify
     db_status: str
-    db_error: str | None = None
     try:
         from db.store import _USE_POSTGRES, _postgres  # type: ignore
         if _USE_POSTGRES:
@@ -189,52 +218,18 @@ def debug_health():
         else:
             db_status = "ok (sqlite)"
     except Exception as exc:
-        db_status = "error"
-        db_error = f"{type(exc).__name__}: {exc}"
-    binance_status: str
-    binance_error: str | None = None
+        db_status = f"error: {type(exc).__name__}"
     try:
         from hellocrypto.api import get_balance  # type: ignore
-        usdc = get_balance("USDC")
-        binance_status = f"ok (USDC balance read: {usdc:.4f})"
+        get_balance("USDC")
+        binance_status = "ok"
     except Exception as exc:
-        binance_status = "error"
-        binance_error = f"{type(exc).__name__}: {exc}"
+        binance_status = f"error: {type(exc).__name__}"
     return jsonify({
         "init_db_error_at_boot": _INIT_DB_ERROR,
         "db_runtime_check": db_status,
-        "db_runtime_error": db_error,
         "binance_check": binance_status,
-        "binance_error": binance_error,
         "auth_enabled": _AUTH_ENABLED,
-        "client_id_set": bool(_CLIENT_ID),
-        "client_secret_set": bool(_CLIENT_SECRET),
-        "session_secret_set": bool(_session_secret) and _session_secret != "dev-secret-change-me-in-prod",
-        "database_url_set": bool(os.getenv("DATABASE_URL")),
-        "allowed_emails_set": bool(os.getenv("ALLOWED_EMAILS")),
-        "binance_api_key_set": bool(os.getenv("BINANCE_API_KEY")),
-        "binance_api_secret_set": bool(os.getenv("BINANCE_API_SECRET")),
-        "gemini_api_key_set": bool(os.getenv("GEMINI_API_KEY")),
-        "anthropic_api_key_set": bool(os.getenv("ANTHROPIC_API_KEY")),
-        "redirect_uri_would_be": request.url_root.rstrip("/") + "/callback",
-        "request_scheme": request.scheme,
-        "request_host": request.host,
-        "vercel_region": os.getenv("VERCEL_REGION"),
-    })
-
-
-@app.get("/debug/auth")
-@require_login
-def debug_auth():
-    """Check auth config — for troubleshooting (admin only)."""
-    from flask import jsonify
-    if _AUTH_ENABLED and session.get("user", {}).get("role") != "admin":
-        return jsonify({"error": "Accès refusé"}), 403
-    return jsonify({
-        "auth_enabled": _AUTH_ENABLED,
-        "client_id_set": bool(_CLIENT_ID),
-        "client_secret_set": bool(_CLIENT_SECRET),
-        "redirect_uri_would_be": request.url_root.rstrip("/") + "/callback",
     })
 
 
@@ -242,6 +237,7 @@ def debug_auth():
 
 def main() -> None:
     import logging as _logging
+
     import db.store as store
     # Ensure INFO-level logs from the simulation/agent threads reach DBLogHandler
     _logging.basicConfig(level=_logging.INFO,

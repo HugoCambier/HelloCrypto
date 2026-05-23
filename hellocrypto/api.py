@@ -376,7 +376,10 @@ def get_enriched_market_data(watchlist: list[str], cycle_seconds: int = 60) -> d
     for sym in watchlist:
         try:
             stats  = get_ticker_stats(sym)
-            klines = get_klines(sym, interval="1h", limit=26)
+            # On fetch 50 bougies 1h en un seul appel et on dérive le reste
+            # localement (économise un /api/v3/klines par symbole/cycle).
+            klines_ext = get_klines(sym, interval="1h", limit=50)
+            klines     = klines_ext[-26:] if len(klines_ext) >= 26 else klines_ext
             closes = [float(k[4]) for k in klines]
 
             rsi14  = _compute_rsi(closes)
@@ -430,12 +433,11 @@ def get_enriched_market_data(watchlist: list[str], cycle_seconds: int = 60) -> d
             except Exception:
                 pass
 
-            # MACD, Bollinger, ATR — need more candles
+            # MACD, Bollinger, ATR — réutilise les bougies déjà fetched
             macd_data = None
             bollinger = None
             atr_val   = None
             try:
-                klines_ext = get_klines(sym, interval="1h", limit=50)
                 closes_ext = [float(k[4]) for k in klines_ext]
                 highs_ext  = [float(k[2]) for k in klines_ext]
                 lows_ext   = [float(k[3]) for k in klines_ext]
@@ -478,11 +480,31 @@ def get_balance(asset: str = "USDC") -> float:
 def get_open_positions(watchlist: list[str]) -> dict:
     """Compute open spot positions from Binance trade history.
 
-    Uses a running FIFO cost-basis to derive average entry price.
-    Returns ``{symbol: {qty, avg_price}}``.
+    Pré-filtre via /api/v3/account (un seul appel) pour ne demander
+    /myTrades QUE des assets avec une qty libre/locked > 0. Pour une
+    watchlist de 20 cryptos dont 2 détenues, ça passe de 20 appels
+    signés à 3.
     """
     positions: dict = {}
+
+    # Set des bases détenues (free + locked > 0). Si /account échoue,
+    # on retombe sur le comportement précédent (interroge tous les symboles).
+    held_bases: set[str] | None = None
+    try:
+        balances = api_get("/api/v3/account", signed=True).get("balances", [])
+        held_bases = {
+            b["asset"]
+            for b in balances
+            if (float(b.get("free", 0) or 0) + float(b.get("locked", 0) or 0)) > 0
+        }
+    except Exception:
+        log.warning("/account indisponible, fallback sur scan complet", exc_info=True)
+
     for symbol in watchlist:
+        if held_bases is not None:
+            base = symbol.replace("USDC", "").replace("BUSD", "")
+            if base not in held_bases:
+                continue
         try:
             trades = api_get(
                 "/api/v3/myTrades",

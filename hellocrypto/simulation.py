@@ -18,8 +18,11 @@ from .api import (
     load_config,
 )
 from .llm import call as llm_call
+from .llm import last_usage as llm_last_usage
 from .prompts import SYSTEM, build_analysis
-from .trading import FEE_RATE as SIM_FEE_RATE, check_stops, compute_position_size, paper_buy, paper_sell
+from .trading import FEE_RATE as SIM_FEE_RATE
+from .trading import check_stops, compute_position_size, paper_buy, paper_sell
+
 log = logging.getLogger(__name__)
 
 SIM_STATE_FILE = Path("data/simulation_state.json")
@@ -466,6 +469,7 @@ def run(
                 mode="simulation",
                 cycle=cycle,
                 session_id=session_id,
+                usage=llm_last_usage(),
             )
         except Exception:
             pass

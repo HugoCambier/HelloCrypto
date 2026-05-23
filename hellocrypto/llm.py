@@ -16,9 +16,34 @@ import logging
 import os
 import random
 import re
+import threading
 import time
 
 log = logging.getLogger(__name__)
+
+# Token usage of the most recent successful call, per thread.
+# Callers (agent/sim/analysis) read this via `last_usage()` right after `call()`
+# returns and persist it alongside the decision in `market_analyses`.
+_last_usage: threading.local = threading.local()
+
+
+def last_usage() -> dict | None:
+    """Return the most recent LLM call's token usage on this thread (or None)."""
+    return getattr(_last_usage, "value", None)
+
+
+def _set_usage(provider: str, model: str, prompt_tokens: int | None,
+               completion_tokens: int | None) -> None:
+    pt = int(prompt_tokens or 0)
+    ct = int(completion_tokens or 0)
+    _last_usage.value = {
+        "provider": provider,
+        "model":    model,
+        "in":       pt,
+        "out":      ct,
+        "total":    pt + ct,
+    }
+    log.info("[LLM] tokens in=%d out=%d (%s/%s)", pt, ct, provider, model)
 
 # Transient HTTP status codes that warrant a retry
 _TRANSIENT_STATUS = {429, 500, 502, 503, 504}
@@ -83,6 +108,13 @@ def _claude_request(model: str, prompt: str, system: str, llm_cfg: dict) -> dict
                 system=system,
                 messages=[{"role": "user", "content": prompt}],
             )
+            usage = getattr(resp, "usage", None)
+            _set_usage(
+                provider="claude",
+                model=model,
+                prompt_tokens=getattr(usage, "input_tokens", None) if usage else None,
+                completion_tokens=getattr(usage, "output_tokens", None) if usage else None,
+            )
             return _parse(resp.content[0].text)
         except APIStatusError as exc:
             if exc.status_code not in _TRANSIENT_STATUS or attempt == _MAX_RETRIES:
@@ -143,6 +175,13 @@ def _gemini_request(model: str, prompt: str, system: str, llm_cfg: dict) -> dict
                     temperature=temperature,
                 ),
                 contents=prompt,
+            )
+            usage = getattr(resp, "usage_metadata", None)
+            _set_usage(
+                provider="gemini",
+                model=model,
+                prompt_tokens=getattr(usage, "prompt_token_count", None) if usage else None,
+                completion_tokens=getattr(usage, "candidates_token_count", None) if usage else None,
             )
             return _parse(resp.text)
         except Exception as exc:

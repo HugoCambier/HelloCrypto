@@ -21,12 +21,17 @@ def tick(stop_event: threading.Event | None = None) -> dict:
       1. Active simulation in DB → run one cycle (time-gated by cycle_seconds)
       2. Else config.enabled and mode=real → run one real agent cycle
       3. Else no-op
+
+    Also runs an idempotent daily log purge (logs >14 days) so the Supabase
+    free tier doesn't fill up.
     """
     import db.store as store
     from hellocrypto.api import load_config
 
     if stop_event is None:
         stop_event = threading.Event()
+
+    _maybe_purge_old_logs()
 
     active_sim = store.get_state("active_sim")
     if active_sim:
@@ -45,10 +50,31 @@ def tick(stop_event: threading.Event | None = None) -> dict:
     return {"action": "skip", "reason": f"mode={mode}"}
 
 
+def _maybe_purge_old_logs() -> None:
+    """Purge logs older than 14 days, at most once per 24h.
+
+    Cheap (one indexed delete) but skipped on most ticks via a sentinel in
+    agent_state. Failures are logged and swallowed — never block the tick.
+    """
+    import db.store as store
+    try:
+        last = store.get_state("last_log_purge_at")
+        if last:
+            elapsed = (datetime.utcnow() - datetime.fromisoformat(last)).total_seconds()
+            if elapsed < 86400:
+                return
+        deleted = store.clean_logs(older_than_days=14)
+        store.set_state("last_log_purge_at", datetime.utcnow().isoformat())
+        if deleted:
+            log.info("[CRON] Purge logs >14j: %d lignes supprimées", deleted)
+    except Exception:
+        log.warning("[CRON] Purge logs échouée", exc_info=True)
+
+
 def _run_sim_cycle(active_sim: dict, stop_event: threading.Event) -> dict:
     import db.store as store
-    from hellocrypto.api import load_config
     from hellocrypto import simulation as sim
+    from hellocrypto.api import load_config
 
     params         = active_sim.get("params") or {}
     cycle_seconds  = int(params.get("cycle_seconds") or 300)

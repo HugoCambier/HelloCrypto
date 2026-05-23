@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 from flask import Flask, render_template
-from pathlib import Path
 
 log = logging.getLogger(__name__)
 
@@ -24,9 +25,15 @@ def create_app() -> Flask:
     )
 
     from .routes import (
-        bp_logs, bp_performance, bp_portfolio,
-        bp_simulation, bp_backtest, bp_agent,
-        bp_config, bp_analysis, bp_cron,
+        bp_agent,
+        bp_analysis,
+        bp_backtest,
+        bp_config,
+        bp_cron,
+        bp_logs,
+        bp_performance,
+        bp_portfolio,
+        bp_simulation,
     )
     for bp in (
         bp_logs, bp_performance, bp_portfolio,

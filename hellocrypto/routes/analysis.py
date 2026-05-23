@@ -8,15 +8,17 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request
 
 from ..api import (
-    load_config,
-    get_enriched_market_data,
     compute_scores,
     format_market_data,
-    get_fear_and_greed,
     get_btc_dominance,
+    get_enriched_market_data,
+    get_fear_and_greed,
+    load_config,
 )
-from ..prompts import SYSTEM_ANALYSIS, build_market_analysis, build_market_analysis_single
 from ..llm import call as llm_call
+from ..llm import last_usage as llm_last_usage
+from ..prompts import SYSTEM_ANALYSIS, build_market_analysis, build_market_analysis_single
+from ..ratelimit import rate_limit
 
 bp  = Blueprint("analysis", __name__)
 log = logging.getLogger(__name__)
@@ -32,6 +34,7 @@ def analysis_status():
 
 
 @bp.post("/api/analysis/start")
+@rate_limit(max_calls=3, per_seconds=300)  # 3 analyses / 5 min — chaque appel = O(milliers de tokens LLM)
 def analysis_start():
     """Run market analysis synchronously and persist to DB.
 
@@ -142,13 +145,14 @@ def analysis_start():
                     summary=result.get("market_summary") or result.get("summary", ""),
                     analyses=result.get("analyses", []),
                     mode="real",
+                    usage=llm_last_usage(),
                 )
             except Exception:
                 log.warning("Impossible de sauvegarder l'analyse en base", exc_info=True)
 
             with _analysis_lock:
                 _analysis_state = {"running": False, "result": result, "error": None}
-        except Exception as exc:
+        except Exception:
             log.exception("Erreur lors de l'analyse de marché")
             with _analysis_lock:
                 _analysis_state = {"running": False, "result": None, "error": "Erreur lors de l'analyse"}
@@ -171,7 +175,7 @@ def api_analyses():
         return jsonify(load_market_analyses(
             mode=mode or None, session_id=session_id or None, limit=limit,
         ))
-    except Exception as exc:
+    except Exception:
         log.exception("Erreur api_analyses")
         return jsonify({"error": "Erreur lors du chargement des analyses"}), 500
 
@@ -192,6 +196,6 @@ def admin_clean_logs():
             keep_last=int(keep_last) if keep_last is not None else None,
         )
         return jsonify({"ok": True, "deleted": deleted})
-    except Exception as exc:
+    except Exception:
         log.exception("Erreur admin_clean_logs")
         return jsonify({"error": "Erreur lors du nettoyage des logs"}), 500

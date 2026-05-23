@@ -1,13 +1,13 @@
 """Flask Blueprints — one per functional domain."""
-from .logs        import bp as bp_logs
+from .agent import bp as bp_agent
+from .analysis import bp as bp_analysis
+from .backtest import bp as bp_backtest
+from .config import bp as bp_config
+from .cron import bp as bp_cron
+from .logs import bp as bp_logs
 from .performance import bp as bp_performance
-from .portfolio   import bp as bp_portfolio
-from .simulation  import bp as bp_simulation
-from .backtest    import bp as bp_backtest
-from .agent       import bp as bp_agent
-from .config      import bp as bp_config
-from .analysis    import bp as bp_analysis
-from .cron        import bp as bp_cron
+from .portfolio import bp as bp_portfolio
+from .simulation import bp as bp_simulation
 
 __all__ = [
     "bp_logs", "bp_performance", "bp_portfolio",

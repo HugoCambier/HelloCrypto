@@ -7,8 +7,7 @@ the two execution modes stay in sync without code duplication.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
 log = logging.getLogger(__name__)
 
@@ -254,7 +253,7 @@ def compute_position_size(
     usdc_requested: float,
     cash: float,
     risk_level: int,
-    rsi: Optional[float] = None,
+    rsi: float | None = None,
 ) -> float:
     """Return the USDC amount to allocate for a BUY order.
 

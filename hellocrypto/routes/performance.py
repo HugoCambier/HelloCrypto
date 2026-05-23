@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from flask import Blueprint, jsonify, request
 
-from ..api import load_config, load_history, get_enriched_market_data, compute_scores
+from ..api import compute_scores, get_enriched_market_data, load_config, load_history
 from ..backtest import _fetch_klines
 from .shared import PERIODS
 
@@ -35,9 +35,9 @@ def _compute_benchmarks(start_iso: str, watchlist: list[str], budget: float) -> 
     try:
         start_dt = datetime.fromisoformat(start_iso)
         if start_dt.tzinfo is None:
-            start_dt = start_dt.replace(tzinfo=timezone.utc)
+            start_dt = start_dt.replace(tzinfo=UTC)
         start_ms = int(start_dt.timestamp() * 1000)
-        end_ms   = int(datetime.now(timezone.utc).timestamp() * 1000)
+        end_ms   = int(datetime.now(UTC).timestamp() * 1000)
     except Exception:
         return {"bh": [], "btc": []}
 

@@ -8,13 +8,11 @@ import os
 import threading
 import uuid
 from datetime import datetime
-from pathlib import Path
 
 from flask import Blueprint, jsonify, request
 
-from ..api import load_config
 from .. import simulation as sim_engine
-from .shared import _ROOT
+from ..api import load_config
 
 log = Blueprint("simulation", __name__)
 bp  = log  # alias — exported as `bp`
@@ -356,7 +354,8 @@ def sim_start():
     # Fetch Binance holdings + entry prices + USDC balance only when explicitly requested
     if not resume and not initial_holdings and from_binance:
         try:
-            from hellocrypto.api import get_open_positions as _get_pos, get_balance as _get_bal
+            from hellocrypto.api import get_balance as _get_bal
+            from hellocrypto.api import get_open_positions as _get_pos
             watchlist = cfg.get("watchlist", [])
             fetched = _get_pos(watchlist)
             initial_holdings = {
@@ -474,6 +473,7 @@ def _liquidate_session(session_id: str, params: dict, session_name: str) -> dict
     Skips if no holdings.
     """
     from db.store import get_state
+
     from .. import simulation as sim_engine
 
     last_state = get_state("simulation") or {}
@@ -512,13 +512,15 @@ def _liquidate_session(session_id: str, params: dict, session_name: str) -> dict
 def sim_stop():
     global _sim_stop_event
     liquidation_result = None
+    cleaned_logs: int | None = None
 
     if _IS_SERVERLESS:
         active = _read_active_sim()
+        sid_to_clean = active.get("session_id", "") if active else ""
         if active:
             try:
                 liquidation_result = _liquidate_session(
-                    session_id=active.get("session_id", ""),
+                    session_id=sid_to_clean,
                     params=active.get("params") or {},
                     session_name=active.get("session_name", ""),
                 )
@@ -526,7 +528,9 @@ def sim_stop():
                 log.exception("Liquidation finale échouée")
                 liquidation_result = {"error": "liquidation failed"}
         _write_active_sim(None)
-        return jsonify({"ok": True, "liquidation": liquidation_result})
+        cleaned_logs = _cleanup_sim_technical_logs(sid_to_clean)
+        return jsonify({"ok": True, "liquidation": liquidation_result,
+                        "cleaned_technical_logs": cleaned_logs})
 
     # Local / threaded mode: stop the background loop, wait for it to exit,
     # then liquidate synchronously using the saved state.
@@ -555,19 +559,45 @@ def sim_stop():
             log.exception("Liquidation finale échouée")
             liquidation_result = {"error": "liquidation failed"}
 
-    return jsonify({"ok": True, "liquidation": liquidation_result})
+    cleaned_logs = _cleanup_sim_technical_logs(sid)
+    return jsonify({"ok": True, "liquidation": liquidation_result,
+                    "cleaned_technical_logs": cleaned_logs})
+
+
+def _cleanup_sim_technical_logs(session_id: str) -> int | None:
+    """Une fois la simulation arrêtée, purger ses logs techniques.
+
+    On garde les catégories `trade` et `market` (utiles pour le post-mortem
+    et l'optimisation du modèle) et on supprime la catégorie `technical`
+    (bootstrap de cycle, cash/positions, dumps internes).
+    """
+    if not session_id:
+        return None
+    try:
+        from db.store import clean_logs
+        deleted = clean_logs(
+            older_than_days=0,
+            mode="simulation",
+            session_id=session_id,
+            category="technical",
+        )
+        log.info("[SIM] Logs techniques purgés pour session %s: %d", session_id, deleted)
+        return deleted
+    except Exception:
+        log.warning("Impossible de purger les logs techniques", exc_info=True)
+        return None
 
 
 @bp.get("/api/simulation/sessions")
 def sim_sessions():
     try:
-        from db.store import list_simulation_sessions_v2, list_simulation_sessions
+        from db.store import list_simulation_sessions, list_simulation_sessions_v2
         try:
             return jsonify(list_simulation_sessions_v2())
         except Exception:
             log.warning("list_simulation_sessions_v2 a échoué, repli sur v1", exc_info=True)
             return jsonify(list_simulation_sessions())
-    except Exception as exc:
+    except Exception:
         log.exception("Erreur sim_sessions")
         return jsonify({"error": "Erreur lors du chargement des sessions"}), 500
 
@@ -582,7 +612,7 @@ def sim_session_rename(session_id: str):
         from db.store import rename_session
         rename_session(session_id, name)
         return jsonify({"ok": True})
-    except Exception as exc:
+    except Exception:
         log.exception("Erreur sim_session_rename")
         return jsonify({"error": "Erreur lors du renommage de la session"}), 500
 
@@ -605,7 +635,7 @@ def sim_session_delete(session_id: str):
         except Exception:
             log.warning("Impossible de purger l'état auto-resume", exc_info=True)
         return jsonify({"ok": True})
-    except Exception as exc:
+    except Exception:
         log.exception("Erreur sim_session_delete")
         return jsonify({"error": "Erreur lors de la suppression de la session"}), 500
 

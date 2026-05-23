@@ -7,8 +7,8 @@ import threading
 
 from flask import Blueprint, jsonify, request
 
-from ..api import load_config
 from .. import backtest as bt_engine
+from ..api import load_config
 
 bp  = Blueprint("backtest", __name__)
 log = logging.getLogger(__name__)

@@ -17,6 +17,7 @@ from ..api import (
     market_sell,
     save_trade,
 )
+from ..ratelimit import rate_limit
 
 bp = Blueprint("portfolio", __name__)
 
@@ -45,7 +46,11 @@ def api_portfolio():
         total      = cash + portfolio_val
         budget     = float(config.get("budget", 100))
         gain       = total - budget
-        total_fees = sum(t.get("fee", 0) for t in load_history())
+        try:
+            from db.store import sum_fees
+            total_fees = sum_fees(mode="real")
+        except Exception:
+            total_fees = sum(t.get("fee", 0) for t in load_history())
 
         return jsonify({
             "cash":          round(cash, 2),
@@ -73,7 +78,7 @@ def api_portfolio():
                 if prices[sym] is not None
             ],
         })
-    except Exception as exc:
+    except Exception:
         log.exception("Erreur api_portfolio")
         return jsonify({"error": "Erreur lors de la récupération du portefeuille"}), 500
 
@@ -94,12 +99,13 @@ def api_binance_balance():
                 qty = 0.0
             coins[sym] = {"coin": coin, "qty": round(qty, 8)}
         return jsonify({"usdc": round(usdc, 2), "coins": coins})
-    except Exception as exc:
+    except Exception:
         log.exception("Erreur api_binance_balance")
         return jsonify({"error": "Erreur Binance", "usdc": None, "coins": {}}), 200
 
 
 @bp.post("/api/trade/buy")
+@rate_limit(max_calls=10, per_seconds=60)  # garde-fou anti-spam ordres manuels
 def api_buy():
     body   = request.json or {}
     symbol = body.get("symbol", "").strip().upper()
@@ -111,12 +117,13 @@ def api_buy():
         price = get_ticker(symbol)
         save_trade("BUY", symbol, amount, price, "Ordre manuel — dashboard", fee, fee_asset)
         return jsonify({"ok": True, "price": price, "fee": fee, "fee_asset": fee_asset})
-    except Exception as exc:
+    except Exception:
         log.exception("Erreur api_buy")
         return jsonify({"error": "Erreur lors de l'exécution de l'ordre d'achat"}), 500
 
 
 @bp.post("/api/trade/sell")
+@rate_limit(max_calls=10, per_seconds=60)
 def api_sell():
     body   = request.json or {}
     symbol = body.get("symbol", "").strip().upper()
@@ -128,12 +135,13 @@ def api_sell():
         price = get_ticker(symbol)
         save_trade("SELL", symbol, qty, price, "Ordre manuel — dashboard", fee, fee_asset)
         return jsonify({"ok": True, "price": price, "fee": fee, "fee_asset": fee_asset})
-    except Exception as exc:
+    except Exception:
         log.exception("Erreur api_sell")
         return jsonify({"error": "Erreur lors de l'exécution de l'ordre de vente"}), 500
 
 
 @bp.post("/api/trade/liquidate")
+@rate_limit(max_calls=2, per_seconds=300)  # liquidation totale — limiter strictement
 def api_liquidate():
     """Market-sell every open position on Binance to USDC.
 

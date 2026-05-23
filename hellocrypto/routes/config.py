@@ -131,6 +131,6 @@ def ollama_start():
         except subprocess.TimeoutExpired:
             pass  # Process still running — normal for a server
         return jsonify({"ok": True, "already_running": False})
-    except Exception as exc:
+    except Exception:
         log.exception("Erreur lancement Ollama")
         return jsonify({"ok": False, "error": "Impossible de lancer Ollama"}), 500
