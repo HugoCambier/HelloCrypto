@@ -364,9 +364,13 @@ function _renderCurrentRunBox() {
   if (!box) return;
   if (!_simRunning || !_simSnap) {
     box.classList.add('hidden');
+    if (typeof updateSidebarRail === 'function') updateSidebarRail({ live: false });
     return;
   }
   box.classList.remove('hidden');
+  if (typeof updateSidebarRail === 'function') {
+    updateSidebarRail({ live: true, tag: 'SIM', mode: 'simulation' });
+  }
   const matched = _runs.find(r => r.id === _simSessionId);
   document.getElementById('current-run-name').textContent =
     matched?.name || _simSnap?.session_name || `Cycle ${_simSnap?.cycle ?? '…'}`;

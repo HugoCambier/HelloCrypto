@@ -24,7 +24,7 @@
 
     .progress { height: 6px; background: #1e293b; border-radius: 3px; overflow: hidden; }
     .progress > div { height: 100%; background: #3b82f6; transition: width .3s; }
-    .progress-strip { background:#0d1424; border-bottom:1px solid #1f2937; padding:10px 24px; display:flex; align-items:center; gap:18px; }
+    .progress-strip { background:#0d1424; border-top:1px solid #1f2937; padding:10px 24px; display:flex; align-items:center; gap:18px; }
     .progress-strip .bar { flex:1; height:6px; background:#1e293b; border-radius:3px; overflow:hidden; }
     .progress-strip .bar > div { height:100%; background:#3b82f6; transition:width .3s; }
 
@@ -51,13 +51,51 @@
     .fbtn { padding:3px 9px; border-radius:5px; font-size:11px; color:#94a3b8; background:transparent; cursor:pointer; border:1px solid transparent; transition:all .15s; font-weight:500; }
     .fbtn:hover { color:#cbd5e1; background:#1e293b; }
     .fbtn.on { background:#1d4ed8; color:white; border-color:#1d4ed8; }
+
+    /* ============ Sidebar collapsible (scoped to the sub-tab) ============ */
+    .sidebar { width:320px; transition: width .25s ease; position:relative; flex-shrink:0; }
+    .sidebar.collapsed { width:36px; }
+
+    .sidebar-scroll { height:100%; overflow-y:auto; overflow-x:hidden; }
+    .sidebar-content { transition: opacity .15s ease; padding:1rem; }
+    .sidebar-content > * + * { margin-top:1rem; }
+    .sidebar.collapsed .sidebar-content { opacity:0; pointer-events:none; visibility:hidden; }
+
+    .sidebar-toggle {
+      position:absolute; bottom:18px; right:-18px; z-index:20;
+      width:18px; height:38px;
+      display:flex; align-items:center; justify-content:center;
+      background:#1e293b; color:#cbd5e1;
+      border:1px solid #334155; border-left:none;
+      border-radius:0 8px 8px 0;
+      cursor:pointer; transition:all .15s;
+      font-size:13px; font-weight:700; line-height:1;
+      font-family:ui-monospace,monospace;
+      box-shadow:2px 0 6px rgba(0,0,0,.25);
+    }
+    .sidebar-toggle:hover { background:#334155; color:#fff; border-color:#475569; }
+    .sidebar-toggle:active { transform:translateX(1px); }
+
+    .sidebar-rail { display:none; position:absolute; left:0; right:0; top:62px; flex-direction:column; align-items:center; gap:10px; padding-top:6px; pointer-events:none; }
+    .sidebar.collapsed .sidebar-rail { display:flex; }
+    .rail-tag { font-size:9px; font-weight:700; letter-spacing:.5px; color:#94a3b8; writing-mode:vertical-rl; transform:rotate(180deg); padding:3px 0; border-radius:3px; background:#1e293b; border:1px solid #334155; }
+
+    @media (max-width: 767px) {
+      .sidebar { width:280px; }
+      .sidebar.collapsed { width:32px; }
+      nav.shrink-0 { overflow-x:auto; }
+      #rtab-cockpit, #rtab-charts { padding:1rem !important; }
+      .progress-strip { padding:8px 12px; flex-wrap:wrap; gap:8px; }
+      .trade-row { grid-template-columns: 1fr 1fr; gap:4px 10px; padding:8px 6px; }
+      .trade-row.trade-header { display:none !important; }
+    }
   </style>
 </head>
 <body class="text-slate-100 h-full flex flex-col">
 
-  <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
-    <span class="text-lg font-bold text-blue-400 tracking-tight">HelloCrypto</span>
-    <a href="/logout" class="text-xs text-slate-500 hover:text-red-400 transition-colors">Déconnexion</a>
+  <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0 gap-3">
+    <span class="text-lg font-bold text-blue-400 tracking-tight truncate">HelloCrypto</span>
+    <a href="/logout" class="text-xs text-slate-500 hover:text-red-400 transition-colors shrink-0">Déconnexion</a>
   </header>
   <nav class="bg-slate-900 border-b border-slate-700 px-6 flex gap-1 shrink-0">
     <a href="/" class="rtab">Home</a>
@@ -65,23 +103,18 @@
     <a href="/market" class="rtab">Analyse de marché</a>
   </nav>
 
-  <!-- Progress strip (full width) -->
-  <div id="bt-progress-strip" class="progress-strip shrink-0">
-    <div class="text-xs text-slate-500 whitespace-nowrap">
-      <span class="uppercase tracking-wider mr-1.5">Début :</span>
-      <span id="bt-start-ts" class="text-slate-200 font-semibold">—</span>
-    </div>
-    <div class="bar"><div id="bt-progress" style="width:0%"></div></div>
-    <div class="text-xs text-slate-400 whitespace-nowrap">
-      <span id="bt-step" class="font-semibold">—</span>
-      <span id="bt-status" class="text-slate-500 ml-2">En attente…</span>
-    </div>
-  </div>
-
   <div class="flex-1 flex overflow-hidden">
 
     <!-- LEFT: PARAMS -->
-    <aside class="w-[320px] shrink-0 bg-slate-900 border-r border-slate-800 overflow-y-auto p-4 space-y-4">
+    <aside id="left-sidebar" class="sidebar bg-slate-900 border-r border-slate-800">
+      <button type="button" class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Réduire le panneau" title="Réduire / agrandir">
+        <span id="sidebar-toggle-icon">&lt;</span>
+      </button>
+      <div class="sidebar-rail">
+        <span class="rail-tag">PARAMÈTRES</span>
+      </div>
+      <div class="sidebar-scroll">
+      <div class="sidebar-content">
       <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Paramètres</h2>
 
       <div>
@@ -137,6 +170,8 @@
       </div>
 
       <p id="bt-skipped" class="hidden text-[11px] text-amber-400 leading-snug"></p>
+      </div><!-- /sidebar-content -->
+      </div><!-- /sidebar-scroll -->
     </aside>
 
     <!-- RIGHT: RESULTS -->
@@ -257,8 +292,46 @@
     </main>
   </div>
 
+  <!-- Progress strip (footer, full width) -->
+  <div id="bt-progress-strip" class="progress-strip shrink-0">
+    <div class="text-xs text-slate-500 whitespace-nowrap">
+      <span class="uppercase tracking-wider mr-1.5">Début :</span>
+      <span id="bt-start-ts" class="text-slate-200 font-semibold">—</span>
+    </div>
+    <div class="bar"><div id="bt-progress" style="width:0%"></div></div>
+    <div class="text-xs text-slate-400 whitespace-nowrap">
+      <span id="bt-step" class="font-semibold">—</span>
+      <span id="bt-status" class="text-slate-500 ml-2">En attente…</span>
+    </div>
+  </div>
+
   <div id="toast" class="fixed bottom-5 right-5 px-4 py-3 rounded-xl text-sm font-medium shadow-xl z-50 hidden"></div>
 
+  <script>
+    // Sidebar collapse — scoped to the sub-tab (Backtest params panel)
+    (function () {
+      const KEY = 'hc.sidebar.collapsed.bt';
+      const sidebar = () => document.getElementById('left-sidebar');
+      const icon = () => document.getElementById('sidebar-toggle-icon');
+
+      function apply() {
+        const el = sidebar();
+        if (!el) return;
+        const collapsed = localStorage.getItem(KEY) === '1';
+        el.classList.toggle('collapsed', collapsed);
+        if (icon()) icon().textContent = collapsed ? '>' : '<';
+      }
+
+      window.toggleSidebar = function () {
+        const collapsed = !sidebar().classList.contains('collapsed');
+        localStorage.setItem(KEY, collapsed ? '1' : '0');
+        apply();
+      };
+
+      document.addEventListener('DOMContentLoaded', apply);
+      if (document.readyState !== 'loading') apply();
+    })();
+  </script>
   <script src="/static/js/analytics.js"></script>
   <script src="/static/js/backtest.js"></script>
 </body>
