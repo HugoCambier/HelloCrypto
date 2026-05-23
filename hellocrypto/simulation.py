@@ -9,9 +9,10 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
+from . import strategy
 from .api import (
     compute_scores,
-    format_market_data,
+    format_market_data_compact,
     get_btc_dominance,
     get_enriched_market_data,
     get_fear_and_greed,
@@ -19,9 +20,9 @@ from .api import (
 )
 from .llm import call as llm_call
 from .llm import last_usage as llm_last_usage
-from .prompts import SYSTEM, build_analysis
+from .prompts import DECISION_SCHEMA, SYSTEM, build_analysis
 from .trading import FEE_RATE as SIM_FEE_RATE
-from .trading import check_stops, compute_position_size, paper_buy, paper_sell
+from .trading import paper_sell
 
 log = logging.getLogger(__name__)
 
@@ -316,48 +317,26 @@ def run(
             except Exception:
                 pass
 
-        # ── Update peak prices ─────────────────────────────────────────────────
-        for sym in holdings:
-            if sym in prices:
-                peak_prices[sym] = max(peak_prices.get(sym, prices[sym]), prices[sym])
+        strategy.update_peak_prices(holdings, prices, peak_prices)
 
         # ── Stop-loss (hard + trailing) ────────────────────────────────────────
-        for sig in check_stops(holdings, prices, peak_prices, stop_loss, trail_stop):
-            sym          = sig.symbol
-            entry        = holdings[sym]["avg_price"] if sym in holdings else sig.price
-            action_label = f"SELL ({sig.kind})"
-            reason_str   = (
-                f"Stop-loss fixe {stop_loss*100:.0f}% déclenché"
-                if sig.kind == "stop-loss"
-                else f"Trailing stop {trail_stop*100:.0f}% depuis pic ${peak_prices.get(sym, sig.price):,.4f}"
-            )
-            result = paper_sell(sym, sig.qty, sig.price, holdings)
-            cash         += result.received
-            total_fees   += result.fee
-            peak_prices.pop(sym, None)
-            cooldown_map[sym] = cycle
-            history.append({
-                "cycle":     cycle,
-                "timestamp": datetime.utcnow().isoformat(),
-                "action":    action_label,
-                "symbol":    sym,
-                "qty":       result.qty,
-                "price":     sig.price,
-                "pnl":       round((sig.price - entry) * result.qty - result.fee, 4),
-                "fee":       round(result.fee, 6),
-                "reason":    reason_str,
-            })
+        recv, fees, stop_trades = strategy.apply_paper_stops(
+            holdings, prices, peak_prices, cooldown_map,
+            stop_loss, trail_stop, cycle,
+        )
+        cash       += recv
+        total_fees += fees
+        for t in stop_trades:
+            history.append(t.to_history())
             try:
                 from db.store import save_trade as _db_save
                 _db_save(
-                    action=action_label, symbol=sym, amount=None, price=sig.price,
-                    reason=reason_str, fee=result.fee, qty=result.qty,
-                    pnl=round((sig.price - entry) * result.qty - result.fee, 4),
+                    action=t.action, symbol=t.symbol, amount=None, price=t.price,
+                    reason=t.reason, fee=t.fee, qty=t.qty, pnl=t.pnl,
                     mode="simulation", session_id=session_id, session_name=session_name,
                 )
             except Exception:
                 pass
-            log.info("[SIM] %s %s: %.1f%%", action_label, sym, sig.loss_pct * 100)
 
         # ── Liquidation cycle: force-sell everything ─────────────────────────
         if is_liquidation_cycle:
@@ -405,7 +384,7 @@ def run(
         scores        = compute_scores(market_raw)
 
         # ── LLM decision ──────────────────────────────────────────────────────
-        market_data = format_market_data(market_raw, watchlist)
+        market_data = format_market_data_compact(market_raw, watchlist, scores)
         try:
             decision = llm_call(
                 prompt=build_analysis(
@@ -416,7 +395,7 @@ def run(
                     cycle=cycle,
                 ),
                 system=SYSTEM,
-                config=cfg,
+                config={**cfg, "llm": {**cfg.get("llm", {}), "schema": DECISION_SCHEMA}},
             )
         except Exception as exc:
             log.error("[SIM] Erreur LLM cycle %d: %s", cycle, exc)
@@ -470,94 +449,36 @@ def run(
                 cycle=cycle,
                 session_id=session_id,
                 usage=llm_last_usage(),
+                reasoning=decision.get("reasoning"),
             )
         except Exception:
             pass
 
         # ── Execute paper trades ───────────────────────────────────────────────
-        for action in decision.get("actions", []):
-            atype  = action.get("type", "")
-            sym    = action.get("symbol", "")
-            if not atype or not sym:
-                continue
-            reason = action.get("reason", "")
-
-            if atype == "buy" and cash > 10 and sym in prices:
-                # Cooldown check — only applies if the symbol was actually sold
-                # in a previous cycle. Without the `in cooldown_map` guard,
-                # `.get(sym, 0)` treats a never-sold symbol as sold at cycle 0
-                # and blocks every buy during the first sell_cooldown_cycles
-                # cycles of a fresh sim.
-                if sym in cooldown_map:
-                    last_sell = cooldown_map[sym]
-                    if cycle - last_sell < sell_cooldown_cycles:
-                        log.info("[SIM] COOLDOWN %s (%d cycles restants)", sym,
-                                 sell_cooldown_cycles - (cycle - last_sell))
-                        continue
-
-                rsi         = market_raw.get(sym, {}).get("rsi14")
-                horizon     = action.get("horizon", "").upper()
-                full_reason = f"[{horizon}] {reason}" if horizon in ("SHORT", "MEDIUM", "LONG") else reason
-                amount      = compute_position_size(action.get("usdc_amount", 0), cash, risk_level, rsi)
-
-                if amount >= 10:
-                    result = paper_buy(sym, amount, prices[sym], holdings)
-                    total_fees += result.fee
-                    cash       -= amount
-                    peak_prices[sym] = prices[sym]
-                    history.append({
-                        "cycle":     cycle,
-                        "timestamp": datetime.utcnow().isoformat(),
-                        "action":    "BUY",
-                        "symbol":    sym,
-                        "qty":       round(result.qty, 6),
-                        "amount":    amount,
-                        "price":     prices[sym],
-                        "fee":       round(result.fee, 6),
-                        "reason":    full_reason,
-                    })
-                    try:
-                        from db.store import save_trade as _db_save
-                        _db_save(
-                            action="BUY", symbol=sym, amount=amount, price=prices[sym],
-                            reason=full_reason, fee=result.fee, qty=round(result.qty, 6), pnl=None,
-                            mode="simulation", session_id=session_id, session_name=session_name,
-                        )
-                    except Exception:
-                        pass
-                    rsi_factor = max(0.5, min(1.5, 1.5 - (rsi - 20) / 60)) if rsi is not None else 1.0
-                    log.info("[SIM] BUY  $%.2f %s @ $%.4f (RSI=%.0f ×%.2f) [%s]",
-                             amount, sym, prices[sym], rsi or 0, rsi_factor, horizon or "?")
-
-            elif atype == "sell" and sym in holdings and sym in prices:
-                qty    = min(action.get("qty", holdings[sym]["qty"]), holdings[sym]["qty"])
-                entry  = holdings[sym]["avg_price"]
-                result = paper_sell(sym, qty, prices[sym], holdings)
-                total_fees += result.fee
-                cash       += result.received
-                peak_prices.pop(sym, None)
-                cooldown_map[sym] = cycle
-                history.append({
-                    "cycle":     cycle,
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "action":    "SELL",
-                    "symbol":    sym,
-                    "qty":       result.qty,
-                    "price":     prices[sym],
-                    "pnl":       round((prices[sym] - entry) * result.qty - result.fee, 4),
-                    "fee":       round(result.fee, 6),
-                    "reason":    reason,
-                })
-                try:
-                    from db.store import save_trade as _db_save
-                    _db_save(
-                        action="SELL", symbol=sym, amount=None, price=prices[sym],
-                        reason=reason, fee=result.fee, qty=result.qty,
-                        pnl=round((prices[sym] - entry) * result.qty - result.fee, 4),
-                        mode="simulation", session_id=session_id, session_name=session_name,
-                    )
-                except Exception:
-                    pass
+        min_conf = float(cfg.get("min_confidence", 0.0) or 0.0)
+        new_cash, fees, action_trades = strategy.apply_paper_actions(
+            actions=decision.get("actions", []),
+            holdings=holdings, cash=cash, prices=prices,
+            peak_prices=peak_prices, cooldown_map=cooldown_map,
+            market_raw=market_raw, cycle=cycle,
+            risk_level=risk_level,
+            sell_cooldown_cycles=sell_cooldown_cycles,
+            min_confidence=min_conf,
+        )
+        cash = new_cash
+        total_fees += fees
+        for t in action_trades:
+            history.append(t.to_history())
+            try:
+                from db.store import save_trade as _db_save
+                _db_save(
+                    action=t.action, symbol=t.symbol,
+                    amount=t.amount, price=t.price, reason=t.reason,
+                    fee=t.fee, qty=t.qty, pnl=t.pnl,
+                    mode="simulation", session_id=session_id, session_name=session_name,
+                )
+            except Exception:
+                pass
 
         # ── Emit snapshot & persist state ─────────────────────────────────────
         snap = _snapshot(cycle, cash, holdings, prices, history, total_fees, initial_total_value, initial_prices, cycle_sec)

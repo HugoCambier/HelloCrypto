@@ -6,14 +6,49 @@ never requires touching business logic.
 
 from __future__ import annotations
 
+# JSON schema for a trading decision — used by structured-output adapters
+# (Gemini response_schema, Claude tool calling). Keeping it here lets the
+# prompt text and the schema stay in sync.
+DECISION_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "market_sentiment": {
+            "type": "string", "enum": ["bullish", "neutral", "bearish"],
+        },
+        "summary":   {"type": "string"},
+        "reasoning": {
+            "type": "array", "items": {"type": "string"},
+            "description": "3 to 5 short bullets describing aligned/diverging signals.",
+        },
+        "actions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "type":        {"type": "string", "enum": ["buy", "sell", "hold"]},
+                    "symbol":      {"type": "string"},
+                    "usdc_amount": {"type": "number"},
+                    "qty":         {"type": "number"},
+                    "score":       {"type": "integer"},
+                    "confidence":  {"type": "number"},
+                    "horizon":     {"type": "string", "enum": ["short", "medium", "long"]},
+                    "reason":      {"type": "string"},
+                },
+                "required": ["type", "symbol", "confidence", "reason"],
+            },
+        },
+    },
+    "required": ["market_sentiment", "summary", "actions"],
+}
+
 # System prompt: defines the model's persona and output contract.
 SYSTEM = (
-    "Tu es un agent de trading crypto quantitatif expérimenté sur Binance. "
-    "Tu combines analyse technique multi-timeframe (RSI, MACD, Bollinger, ATR, SMA) "
-    "et analyse de sentiment (Fear & Greed, dominance BTC). "
-    "Tu recherches la CONFLUENCE de signaux avant d'agir. "
-    "Tu gères le risque en priorité : preservation du capital > rendement. "
-    "Tu réponds UNIQUEMENT en JSON valide, sans markdown, sans commentaire."
+    "Tu es un agent de trading crypto quantitatif sur Binance spot, "
+    "spécialisé dans la confluence de signaux techniques et de sentiment. "
+    "Règles : (1) préservation du capital > performance, (2) un signal isolé "
+    "ne déclenche jamais un trade — exiger ≥2 indicateurs alignés, (3) chaque "
+    "frais (0.1%) doit être justifié par un edge attendu > 0.3%. "
+    "Tu réponds UNIQUEMENT en JSON valide, sans markdown ni commentaire."
 )
 
 
@@ -35,24 +70,11 @@ def build_analysis(
 ) -> str:
     """Return the user-turn prompt for a market analysis cycle.
 
-    Args:
-        market_data:       Formatted string of current prices per symbol.
-        positions:         Open positions {symbol: {qty, avg_price}}.
-        cash:              Available USDC balance.
-        budget:            Total initial budget (risk reference).
-        risk_level:        Integer 1-10 controlling aggressiveness.
-        recent_decisions:  Last N LLM decisions [{sentiment, summary, actions}].
-        fear_greed:        Fear & Greed index dict {value, label} or None.
-        btc_dominance:     BTC dominance % or None.
-        scores:            Pre-computed signal scores {symbol: int} or None.
-        prices:            Current market prices {symbol: float} or None.
-        peak_prices:       Highest price since entry per symbol or None.
-        cooldown_map:      {symbol: last_sell_cycle} or None.
-        total_fees:        Cumulative trading fees.
-        cycle:             Current cycle number.
-
-    Returns:
-        Prompt string ready to be sent as the ``user`` message.
+    The prompt is intentionally dense:
+    - No indicator tutorials — the model already knows RSI/MACD/Bollinger.
+    - Compact market-data table when callers pass the compact format.
+    - Profile descriptions and rules condensed to the discriminant bits.
+    - The decision schema is the JSON contract — must include confidence.
     """
     prices = prices or {}
     peak_prices = peak_prices or {}
@@ -117,55 +139,34 @@ def build_analysis(
     else:
         cooldown_section = ""
 
-    # ── Risk profile ─────────────────────────────────────────────────────────
+    # ── Risk profile (concis) ───────────────────────────────────────────────
     if risk_level <= 3:
         profile_name = "PRUDENT"
         profile_desc = (
-            "Tu opères en mode PRUDENT.\n"
-            "- Univers : concentre-toi sur les grandes capitalisations stables (BTC, ETH, BNB). "
-            "Ignore les altcoins à faible capitalisation ou à forte volatilité.\n"
-            "- Horizon : privilégie exclusivement les positions LONG (plusieurs jours/semaines). "
-            "N'ouvre pas de trade si tu ne peux pas imaginer le tenir au moins 3-5 jours.\n"
-            "- Entrée : n'achète QUE sur signal technique très solide (score >= 8/10, "
-            "tendance daily haussière confirmée, RSI entre 35 et 55, MACD haussier).\n"
-            "- Confluence requise : au moins 3 indicateurs alignés (RSI + tendance + MACD ou Bollinger).\n"
-            "- Taille : petites positions (max {max_pct}% du cash). Préfère rester en cash plutôt "
-            "que de forcer un trade incertain.\n"
-            "- Vente : ne vends que si stop-loss atteint ou si le signal se retourne clairement "
-            "(MACD cross baissier + RSI > 70)."
+            f"- Univers : BTC/ETH/BNB uniquement. Pas d'altcoin volatil.\n"
+            f"- Horizon : LONG (≥3-5j). Ne pas ouvrir si tu ne tiendrais pas.\n"
+            f"- Entrée : score≥8 + tendance daily haussière + ≥3 signaux alignés (RSI+trend+MACD/BB).\n"
+            f"- Sizing : max {max_pct}% cash/trade ; cash > 60% par défaut.\n"
+            f"- Sortie : stop déclenché OU retournement clair (MACD↓ + RSI>70)."
         )
     elif risk_level <= 6:
         profile_name = "MODÉRÉ"
         profile_desc = (
-            "Tu opères en mode MODÉRÉ.\n"
-            "- Univers : mix de grandes caps (BTC, ETH) et d'altcoins de mid-cap avec un historique "
-            "de liquidité correct. Évite les micro-caps.\n"
-            "- Horizon : priorité aux positions MEDIUM (1-3 jours), quelques SHORT acceptés si le "
-            "signal est clairement à court terme (RSI micro-tendance fort).\n"
-            "- Entrée : achat sur signal convaincant (score >= 7/10). Vérifie la confluence : "
-            "au moins 2 indicateurs alignés.\n"
-            "- Taille : positions raisonnables (max {max_pct}% du cash). Diversifie sur 2-{max_assets} actifs.\n"
-            "- MACD : utilise le croisement MACD/Signal pour confirmer timing d'entrée.\n"
-            "- Bollinger : achat près de la bande basse si tendance haussière, vente près de la bande haute.\n"
-            "- Sur-trading : évite d'enchaîner les trades. Chaque transaction coûte des frais."
+            f"- Univers : large caps + altcoins mid-cap liquides.\n"
+            f"- Horizon : MEDIUM (1-3j) prioritaire ; SHORT si signal court fort.\n"
+            f"- Entrée : score≥7 + ≥2 signaux alignés.\n"
+            f"- Sizing : max {max_pct}% cash/trade ; diversifier 2-{max_assets} actifs.\n"
+            f"- Sortie : évite le sur-trading, chaque round-trip coûte 0.2% de frais."
         )
     else:
         profile_name = "AGRESSIF"
         profile_desc = (
-            "Tu opères en mode AGRESSIF.\n"
-            "- Univers : toutes les cryptos du portefeuille sont éligibles, y compris les altcoins "
-            "volatils à fort momentum.\n"
-            "- Horizon : priorité aux positions SHORT (scalping intraday, quelques heures) et MEDIUM. "
-            "Réagis vite aux signaux RSI micro-tendance et aux retournements de tendance court terme.\n"
-            "- Entrée : achat dès que le score >= 6/10 avec un momentum clair.\n"
-            "- MACD : entre quand histogramme passe positif, sors quand il repasse négatif.\n"
-            "- Bollinger : joue les squeeze (largeur < 3%) pour anticiper les breakouts.\n"
-            "- ATR : utilise l'ATR pour calibrer tes objectifs — TP à 1.5x ATR, SL à 1x ATR.\n"
-            "- Taille : positions larges (jusqu'à {max_pct}% du cash).\n"
-            "- Vente : prends tes profits rapidement dès que RSI micro-tendance > 75 "
-            "ou histogramme MACD se retourne."
+            f"- Univers : toutes les cryptos de la watchlist.\n"
+            f"- Horizon : SHORT (scalping) et MEDIUM ; réagir vite aux retournements.\n"
+            f"- Entrée : score≥6 + momentum clair (MACD hist > 0, RSI court ascendant).\n"
+            f"- Sizing : max {max_pct}% cash/trade.\n"
+            f"- Sortie : TP rapide dès RSI>75 ou MACD hist se retourne ; SL serré (≈1×ATR)."
         )
-    profile_desc = profile_desc.format(max_pct=max_pct, max_assets=max_assets)
 
     # ── Recent decisions history (enriched) ──────────────────────────────────
     if recent_decisions:
@@ -242,86 +243,41 @@ def build_analysis(
         sell_thr = 3
 
     return f"""\
-Analyse les données de marché suivantes et décide des actions à effectuer.
+Analyse le marché et décide.
 
-DONNÉES MARCHÉ ACTUELLES :
+DONNÉES (trend = trend1h/short/d, BB-pos = position du prix dans les Bollinger) :
 {market_data}
-{ctx_section}{cooldown_section}
-GUIDE D'INTERPRÉTATION DES INDICATEURS :
-
-RSI (Relative Strength Index) :
-- RSI(1h) < 30 : zone de survente — signal d'achat potentiel SI confirmé par d'autres indicateurs
-- RSI(1h) 30-45 : zone de faiblesse — surveiller rebond
-- RSI(1h) 45-55 : neutre
-- RSI(1h) 55-70 : zone de force — tendance haussière en cours
-- RSI(1h) > 70 : surachat — signal de vente potentiel, attention au retournement
-- RSI(court terme) : réactif, prioritaire pour le timing d'entrée/sortie
-
-MACD (Moving Average Convergence Divergence) :
-- MACD > Signal (histogramme > 0) : momentum haussier — confirme les achats
-- MACD < Signal (histogramme < 0) : momentum baissier — confirme les ventes
-- Croisement MACD/Signal haussier = signal d'achat | baissier = signal de vente
-- Histogramme qui s'amplifie = momentum qui accélère | qui diminue = momentum qui faiblit
-
-Bandes de Bollinger [lower | middle | upper] :
-- Prix près de la bande basse + tendance haussière = rebond probable → achat
-- Prix près de la bande haute + RSI > 70 = excès → vente
-- Largeur < 3% = squeeze (compression de volatilité) → breakout imminent, prépare-toi
-- Largeur > 8% = forte volatilité → élargis tes stops
-- La bande du milieu (SMA20) sert de support/résistance dynamique
-
-ATR (Average True Range) :
-- ATR élevé = forte volatilité intraday → adapte la taille de position (réduis si trop élevé)
-- ATR faible = marché calme → bon pour du range trading
-
-SMA (Simple Moving Averages) :
-- SMA7 > SMA25 = tendance haussière | SMA7 < SMA25 = tendance baissière
-- Prix au-dessus de SMA25 = support haussier | en-dessous = résistance baissière
-- TendanceJ (daily) est plus fiable que la tendance 1h pour la direction générale
-
-Spread et Volume :
-- Spread > 0.05% = liquidité faible, réduit le rendement net — évite les gros ordres
-- Volume élevé confirme les mouvements de prix | volume faible = mouvement suspect
-
-CONFLUENCE (CRUCIAL) :
-Un signal isolé ne suffit JAMAIS. Cherche la confluence :
-- ACHAT FORT : RSI < 40 + MACD croisement haussier + prix sur support Bollinger + tendanceJ haussière
-- ACHAT MODÉRÉ : score >= {buy_thr} + au moins 2 signaux alignés
-- VENTE FORTE : RSI > 70 + MACD croisement baissier + prix sur résistance + tendanceJ baissière
-- HOLD : signaux contradictoires → ne fais rien, le meilleur trade est parfois de ne pas trader
-{scores_section}
-GRILLE DE DÉCISION :
-- Score >= {buy_thr}/10 → candidat à l'achat | Score <= {sell_thr}/10 → candidat à la vente | Sinon HOLD
-- Composantes du score : RSI (±3 pts) + tendance 1h (±1) + tendance daily (±2) + volatilité (±1)
+{ctx_section}{cooldown_section}{scores_section}
+GRILLE :
+- score≥{buy_thr} → candidat BUY | score≤{sell_thr} → candidat SELL | sinon HOLD
+- Confluence requise : ≥2 signaux alignés (RSI, MACD hist, BB-pos, trend, score).
+- Frais round-trip 0.2 % → ne trade que si l'edge attendu > 0.3 %.
 
 POSITIONS OUVERTES :
 {pos_str}
 {portfolio_section}{decisions_section}
-PROFIL DE TRADING ({profile_name} — {risk_level}/10) :
+PROFIL {profile_name} (risk_level {risk_level}/10) :
 {profile_desc}
 
-RÈGLES :
-- Max {max_pct}% du cash par trade (ajusté par RSI)
-- Max {max_assets} actifs en portefeuille simultanément
-- Chaque transaction coûte 0.1% de frais — calcule si le gain potentiel justifie les frais
-- Justifie chaque décision en mentionnant les indicateurs convergents (pas un seul)
-- Pour les positions existantes : évalue si la thèse d'entrée est toujours valide
+CONFIDENCE : flottant [0–1] — ton degré de certitude. Sera utilisé pour gater
+les trades (seuil applicatif côté serveur, < 0.5 ignoré par défaut) et pour
+moduler la taille (×confidence). Sois honnête : 0.9 = setup textbook avec ≥3
+signaux convergents ; 0.5 = signal moyen ; <0.5 = doute → préfère HOLD.
 
-Réponds UNIQUEMENT en JSON valide (structure exacte ci-dessous) :
+Réponds UNIQUEMENT en JSON (structure exacte) :
 {{
-  "actions": [
-    {{"type": "buy",  "symbol": "BTCUSDC", "usdc_amount": 20, "score": 8, "horizon": "short|medium|long", "reason": "RSI survente + MACD croisement haussier + support Bollinger"}},
-    {{"type": "sell", "symbol": "SOLUSDC", "qty": 0.5,        "score": 2, "reason": "RSI surachat + histogramme MACD négatif + bande haute atteinte"}},
-    {{"type": "hold", "symbol": "ETHUSDC",                    "score": 5, "reason": "Signaux contradictoires, RSI neutre, MACD plat"}}
-  ],
   "market_sentiment": "bullish|neutral|bearish",
-  "summary": "Résumé de la situation en une phrase"
+  "summary": "1 phrase",
+  "reasoning": ["3-5 bullets décrivant les signaux convergents/divergents"],
+  "actions": [
+    {{"type":"buy",  "symbol":"BTCUSDC","usdc_amount":20,"score":8,"confidence":0.82,"horizon":"short|medium|long","reason":"RSI 33 + MACD hist+ + BB↓lo + trend H/H/H"}},
+    {{"type":"sell", "symbol":"SOLUSDC","qty":0.5,"score":2,"confidence":0.74,"reason":"RSI 78 + MACD hist- + BB↑hi"}},
+    {{"type":"hold", "symbol":"ETHUSDC","score":5,"confidence":0.4,"reason":"signaux divergents"}}
+  ]
 }}
 
-Pour les actions "buy", le champ "horizon" est obligatoire :
-- "short"  : trade de quelques heures (scalping, signal RSI micro-tendance)
-- "medium" : trade de 1-3 jours (tendance daily + momentum MACD)
-- "long"   : position de plusieurs jours/semaines (tendance forte + fondamentaux macro)"""
+Pour les BUY, "horizon" est obligatoire :
+  short=heures (scalping/RSI court), medium=1-3j (trend+MACD), long=>1sem (fondamentaux+trend daily)."""
 
 
 SYSTEM_ANALYSIS = (

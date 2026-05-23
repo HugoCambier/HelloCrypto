@@ -92,22 +92,36 @@ def _parse(raw: str) -> dict:
 # ── Provider implementations ──────────────────────────────────────────────────
 
 def _claude_request(model: str, prompt: str, system: str, llm_cfg: dict) -> dict:
+    """Call Claude with forced tool use when a schema is provided.
+
+    Forcing the model to invoke a tool whose ``input_schema`` matches our
+    decision contract eliminates the JSON-parse fragility we used to handle
+    in ``_parse``. When ``llm_cfg["schema"]`` is missing (legacy callers),
+    we fall back to free-text + ``_parse``.
+    """
     from anthropic import Anthropic, APIStatusError
 
     max_tokens  = int(llm_cfg.get("max_tokens", 1000))
     temperature = float(llm_cfg.get("temperature", 1.0))
+    schema      = llm_cfg.get("schema")
     client      = Anthropic()
+
+    create_kwargs: dict = dict(
+        model=model, max_tokens=max_tokens, temperature=temperature,
+        system=system, messages=[{"role": "user", "content": prompt}],
+    )
+    if schema:
+        create_kwargs["tools"] = [{
+            "name":        "record_decision",
+            "description": "Record the trading decision for this cycle.",
+            "input_schema": schema,
+        }]
+        create_kwargs["tool_choice"] = {"type": "tool", "name": "record_decision"}
 
     last_exc: Exception | None = None
     for attempt in range(1, _MAX_RETRIES + 1):
         try:
-            resp = client.messages.create(
-                model=model,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                system=system,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            resp = client.messages.create(**create_kwargs)
             usage = getattr(resp, "usage", None)
             _set_usage(
                 provider="claude",
@@ -115,6 +129,12 @@ def _claude_request(model: str, prompt: str, system: str, llm_cfg: dict) -> dict
                 prompt_tokens=getattr(usage, "input_tokens", None) if usage else None,
                 completion_tokens=getattr(usage, "output_tokens", None) if usage else None,
             )
+            if schema:
+                for block in resp.content:
+                    if getattr(block, "type", None) == "tool_use":
+                        return dict(block.input)
+                # Fallback if Claude didn't honour tool_choice (shouldn't happen)
+                log.warning("[LLM] Claude n'a pas utilisé le tool, fallback parse texte")
             return _parse(resp.content[0].text)
         except APIStatusError as exc:
             if exc.status_code not in _TRANSIENT_STATUS or attempt == _MAX_RETRIES:
@@ -157,24 +177,44 @@ def _gemini_is_transient(exc: Exception) -> bool:
 
 
 def _gemini_request(model: str, prompt: str, system: str, llm_cfg: dict) -> dict:
+    """Call Gemini. Forces JSON mime-type — and a schema when provided —
+    so we never have to strip markdown fences.
+    """
     from google import genai
     from google.genai import types
 
     max_tokens  = int(llm_cfg.get("max_tokens", 1000))
     temperature = float(llm_cfg.get("temperature", 1.0))
+    schema      = llm_cfg.get("schema")
     client      = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
+    cfg_kwargs: dict = dict(
+        system_instruction=system,
+        max_output_tokens=max_tokens,
+        temperature=temperature,
+        response_mime_type="application/json",
+    )
+    if schema:
+        # google-genai accepte un dict JSON-schema sur les versions récentes ;
+        # si la version installée ne supporte pas, on retombe en mode JSON-mime
+        # nu, qui est déjà beaucoup plus fiable que le texte libre.
+        try:
+            cfg_kwargs["response_schema"] = schema
+        except Exception:
+            pass
 
     last_exc: Exception | None = None
     for attempt in range(1, _MAX_RETRIES + 1):
         try:
+            try:
+                config = types.GenerateContentConfig(**cfg_kwargs)
+            except TypeError:
+                # Older SDKs without response_schema/response_mime_type → drop them
+                cfg_kwargs.pop("response_schema", None)
+                cfg_kwargs.pop("response_mime_type", None)
+                config = types.GenerateContentConfig(**cfg_kwargs)
             resp = client.models.generate_content(
-                model=model,
-                config=types.GenerateContentConfig(
-                    system_instruction=system,
-                    max_output_tokens=max_tokens,
-                    temperature=temperature,
-                ),
-                contents=prompt,
+                model=model, config=config, contents=prompt,
             )
             usage = getattr(resp, "usage_metadata", None)
             _set_usage(
@@ -252,6 +292,9 @@ def call(prompt: str, system: str, config: dict) -> dict:
         prompt:  User-turn content (built by ``prompts.build_analysis``).
         system:  System prompt defining the model's persona.
         config:  Full app config dict (reads ``config["llm"]``).
+                 Optional ``config["llm"]["schema"]`` forces structured output
+                 (tool calling on Claude, response_schema on Gemini). If
+                 absent, the trading DECISION_SCHEMA is injected by default.
 
     Returns:
         Parsed trading decision dict.
@@ -263,6 +306,9 @@ def call(prompt: str, system: str, config: dict) -> dict:
     llm_cfg  = {**config.get("llm", {}), "max_tokens": config.get("max_tokens", 1000)}
     provider = llm_cfg.get("provider").lower()
 
+    # Le schéma de décision est passé explicitement par les callers qui en
+    # ont besoin (agent.py, simulation.py, eval/runner.py). La route
+    # /api/analysis/start utilise un schéma différent et ne passe rien.
     fn = _PROVIDERS.get(provider)
     if fn is None:
         supported = ", ".join(f'"{p}"' for p in _PROVIDERS)

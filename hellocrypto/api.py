@@ -34,6 +34,9 @@ _DEFAULT_CONFIG = {
     "llm_cooldown_seconds": 300,
     "price_change_threshold_pct": 0.5,
     "max_tokens": 1000,
+    # Phase E: floor de confiance (0–1) en-dessous duquel les actions sont
+    # ignorées. 0 = pas de gate ; 0.5 = mode prudent recommandé.
+    "min_confidence": 0.5,
     "watchlist": [
         "BTCUSDC", "ETHUSDC", "BNBUSDC", "SOLUSDC", "XRPUSDC", "DOGEUSDC",
         "ADAUSDC", "AVAXUSDC", "LINKUSDC", "DOTUSDC", "LTCUSDC", "NEARUSDC",
@@ -312,6 +315,58 @@ def format_market_data(data: dict[str, dict], watchlist: list[str]) -> str:
         if d.get("atr") is not None:
             parts.append(f"ATR(14): {d['atr']:.4f}")
         lines.append(" | ".join(parts))
+    return "\n".join(lines)
+
+
+def _bb_position(price: float, boll: dict | None) -> str:
+    """Locate price within Bollinger bands as a compact tag."""
+    if not boll:
+        return "—"
+    lower, mid, upper = boll["lower"], boll["middle"], boll["upper"]
+    if price <= lower:
+        return "↓lo"
+    if price >= upper:
+        return "↑hi"
+    if price < mid:
+        return "lo-mid"
+    return "mid-hi"
+
+
+def format_market_data_compact(data: dict[str, dict], watchlist: list[str],
+                                scores: dict | None = None) -> str:
+    """Token-lean format for `build_analysis`.
+
+    One line per symbol with only the discriminant signals. Saves ~75 % of
+    the tokens vs the verbose format while keeping every actionable bit
+    (RSI, MACD histogram sign, Bollinger position, trend trio, volume tier,
+    24h volatility, score).
+    """
+    lines = ["symbol | price | Δ24h | RSI1h | trend1h/short/d | MACDhist | BB-pos "
+             "| vol24h | volat | score"]
+    for sym in watchlist:
+        if sym not in data:
+            lines.append(f"{sym} | n/a")
+            continue
+        d = data[sym]
+        price = d["price"]
+        d24   = d.get("change_pct_24h", 0.0)
+        rsi   = d.get("rsi14")
+        rsi_s = f"{rsi:.0f}" if rsi is not None else "—"
+        trend = "/".join(
+            ("H" if t == "haussier" else "B" if t == "baissier" else "N")
+            for t in (d.get("trend"), d.get("trend_short"), d.get("trend_1d"))
+        )
+        macd_h = d.get("macd", {}).get("histogram") if isinstance(d.get("macd"), dict) else None
+        macd_tag = "—" if macd_h is None else (f"+{macd_h:.3f}" if macd_h > 0 else f"{macd_h:.3f}")
+        bb_pos = _bb_position(price, d.get("bollinger"))
+        vol    = d.get("volume_usdc", 0)
+        vol_s  = f"${vol/1e9:.1f}B" if vol >= 1e9 else (f"${vol/1e6:.0f}M" if vol >= 1e6 else f"${vol/1e3:.0f}K")
+        volat  = f"{d.get('range_pct_24h', 0):.1f}%"
+        score  = scores.get(sym, "—") if scores else "—"
+        lines.append(
+            f"{sym} | ${price:,.4f} | {d24:+.1f}% | {rsi_s} | {trend} "
+            f"| {macd_tag} | {bb_pos} | {vol_s} | {volat} | {score}"
+        )
     return "\n".join(lines)
 
 

@@ -90,7 +90,8 @@ def _init_sqlite() -> None:
             sentiment  TEXT,
             summary    TEXT,
             analyses   TEXT,
-            usage      TEXT
+            usage      TEXT,
+            reasoning  TEXT
         )""")
         for sql in (
             "CREATE INDEX IF NOT EXISTS idx_logs_ts          ON logs(timestamp)",
@@ -115,6 +116,7 @@ def _migrate_sqlite() -> None:
             ("logs",            "session_id",    "TEXT"),
             ("sessions",        "initial_state", "TEXT"),
             ("market_analyses", "usage",         "TEXT"),
+            ("market_analyses", "reasoning",     "TEXT"),
         ]:
             try:
                 c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition}")
@@ -214,7 +216,8 @@ def _init_postgres() -> None:
             sentiment  TEXT,
             summary    TEXT,
             analyses   TEXT,
-            usage      TEXT
+            usage      TEXT,
+            reasoning  TEXT
         )""")
         for sql in (
             "CREATE INDEX IF NOT EXISTS idx_logs_ts          ON logs(timestamp)",
@@ -239,6 +242,7 @@ def _migrate_postgres() -> None:
             ("logs",            "session_id",    "TEXT"),
             ("sessions",        "initial_state", "TEXT"),
             ("market_analyses", "usage",         "TEXT"),
+            ("market_analyses", "reasoning",     "TEXT"),
         ]:
             c.execute(
                 f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {definition}"
@@ -765,29 +769,31 @@ def save_market_analysis(
     cycle: int | None = None,
     session_id: str | None = None,
     usage: dict | None = None,
+    reasoning: list | None = None,
 ) -> None:
     ts = datetime.utcnow().isoformat()
-    analyses_json = json.dumps(analyses)
-    usage_json = json.dumps(usage) if usage else None
+    analyses_json  = json.dumps(analyses)
+    usage_json     = json.dumps(usage) if usage else None
+    reasoning_json = json.dumps(reasoning) if reasoning else None
     if _USE_FIRESTORE:
         _fs().collection("market_analyses").add(dict(
             timestamp=ts, cycle=cycle, mode=mode, session_id=session_id,
             sentiment=sentiment, summary=summary, analyses=analyses_json,
-            usage=usage_json,
+            usage=usage_json, reasoning=reasoning_json,
         ))
     elif _USE_POSTGRES:
         with _postgres() as c:
             c.execute(
-                "INSERT INTO market_analyses (timestamp,cycle,mode,session_id,sentiment,summary,analyses,usage)"
-                " VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
-                (ts, cycle, mode, session_id, sentiment, summary, analyses_json, usage_json),
+                "INSERT INTO market_analyses (timestamp,cycle,mode,session_id,sentiment,summary,analyses,usage,reasoning)"
+                " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                (ts, cycle, mode, session_id, sentiment, summary, analyses_json, usage_json, reasoning_json),
             )
     else:
         with _sqlite() as c:
             c.execute(
-                "INSERT INTO market_analyses (timestamp,cycle,mode,session_id,sentiment,summary,analyses,usage)"
-                " VALUES (?,?,?,?,?,?,?,?)",
-                (ts, cycle, mode, session_id, sentiment, summary, analyses_json, usage_json),
+                "INSERT INTO market_analyses (timestamp,cycle,mode,session_id,sentiment,summary,analyses,usage,reasoning)"
+                " VALUES (?,?,?,?,?,?,?,?,?)",
+                (ts, cycle, mode, session_id, sentiment, summary, analyses_json, usage_json, reasoning_json),
             )
 
 

@@ -17,9 +17,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from . import strategy
 from .api import (
     compute_scores,
-    format_market_data,
+    format_market_data_compact,
     get_balance,
     get_btc_dominance,
     get_enriched_market_data,
@@ -34,7 +35,7 @@ from .api import (
 )
 from .llm import call as llm_call
 from .llm import last_usage as llm_last_usage
-from .prompts import SYSTEM, build_analysis
+from .prompts import DECISION_SCHEMA, SYSTEM, build_analysis
 from .trading import check_stops as _trading_check_stops
 from .trading import compute_position_size
 
@@ -183,9 +184,7 @@ def _execute_cycle(
     log.info("Cash: $%.2f USDC | Positions: %s", cash, list(positions.keys()))
 
     # ── Update peak prices ────────────────────────────────────────────────
-    for sym in positions:
-        if sym in prices:
-            peak_prices[sym] = max(peak_prices.get(sym, prices[sym]), prices[sym])
+    strategy.update_peak_prices(positions, prices, peak_prices)
 
     # ── Stop-loss + trailing stop ─────────────────────────────────────────
     for sym, qty, price, reason_tag, _ in _check_stops(positions, prices, peak_prices, stop_loss, trail_stop):
@@ -212,7 +211,7 @@ def _execute_cycle(
         fear_greed = get_fear_and_greed()
         btc_dominance = get_btc_dominance()
         scores = compute_scores(market_data_raw)
-        market_data = format_market_data(market_data_raw, watchlist)
+        market_data = format_market_data_compact(market_data_raw, watchlist, scores)
 
         decision = llm_call(
             prompt=build_analysis(
@@ -221,7 +220,8 @@ def _execute_cycle(
                 prices=prices, peak_prices=peak_prices,
                 cooldown_map=cooldown_map, cycle=cycle,
             ),
-            system=SYSTEM, config=cfg,
+            system=SYSTEM,
+            config={**cfg, "llm": {**cfg.get("llm", {}), "schema": DECISION_SCHEMA}},
         )
 
         last_llm_call = time.time()
@@ -241,34 +241,40 @@ def _execute_cycle(
                 mode="real",
                 cycle=cycle,
                 usage=llm_last_usage(),
+                reasoning=decision.get("reasoning"),
             )
         except Exception:
             pass
 
+        min_conf = float(cfg.get("min_confidence", 0.5) or 0.0)
         for action in decision.get("actions", []):
             atype = action.get("type", "")
             sym = action.get("symbol", "")
             if not atype or not sym:
                 continue
-            reason = action.get("reason", "")
             horizon = action.get("horizon", "").upper() if atype == "buy" else ""
-            if horizon in ("SHORT", "MEDIUM", "LONG"):
-                reason = f"[{horizon}] {reason}"
+            reason  = strategy.format_buy_reason(action) if atype == "buy" else action.get("reason", "")
+
+            # Phase E: gate par confidence — applique uniquement quand le
+            # modèle a renvoyé une confidence. Sinon, comportement legacy.
+            conf = action.get("confidence")
+            if conf is not None and atype != "hold" and float(conf) < min_conf:
+                log.info("Skip %s %s — confidence %.2f < %.2f",
+                         atype.upper(), sym, float(conf), min_conf)
+                continue
 
             if atype == "buy" and cash > 10:
-                # Only apply cooldown if the symbol was actually sold before
-                # (without this guard, .get(sym, 0) treats never-sold symbols
-                # as sold at cycle 0 and blocks the first sell_cooldown_cyc
-                # cycles of any fresh start).
-                if sym in cooldown_map:
-                    last_sell = cooldown_map[sym]
-                    if cycle - last_sell < sell_cooldown_cyc:
-                        log.info("COOLDOWN %s — %d cycles restants",
-                                 sym, sell_cooldown_cyc - (cycle - last_sell))
-                        continue
+                if strategy.in_cooldown(sym, cycle, cooldown_map, sell_cooldown_cyc):
+                    log.info("COOLDOWN %s — %d cycles restants",
+                             sym, sell_cooldown_cyc - (cycle - cooldown_map[sym]))
+                    continue
 
                 rsi = market_data_raw.get(sym, {}).get("rsi14")
-                amount = compute_position_size(action.get("usdc_amount", 0), cash, risk_level, rsi)
+                base_amt = float(action.get("usdc_amount", 0))
+                if conf is not None:
+                    # Phase E: réduit la taille quand le modèle hésite (×0.5–1.0)
+                    base_amt *= max(0.5, min(1.0, float(conf)))
+                amount = compute_position_size(base_amt, cash, risk_level, rsi)
                 if amount >= 10:
                     _, fee, fee_asset = market_buy(sym, amount)
                     price = prices.get(sym) or get_ticker(sym)
