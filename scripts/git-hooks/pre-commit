@@ -4,6 +4,10 @@ set -euo pipefail
 staged=$(git diff --cached --name-only)
 if echo "$staged" | grep -qE '^(pyproject\.toml|poetry\.lock)$'; then
     echo "[pre-commit] poetry deps changed → regenerating requirements.txt"
-    poetry export -f requirements.txt --output requirements.txt --without-hashes --quiet
+    # Vercel runs Python deps from requirements.txt and needs the extras:
+    #   gemini   → google-genai (LLM provider used in prod)
+    #   postgres → psycopg2-binary (Supabase DB driver)
+    poetry export -f requirements.txt --output requirements.txt --without-hashes --quiet \
+        --extras gemini --extras postgres
     git add requirements.txt
 fi
