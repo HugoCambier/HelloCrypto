@@ -42,6 +42,19 @@ def create_app() -> Flask:
     ):
         app.register_blueprint(bp)
 
+    # Single source of truth for the coin universe: the runtime watchlist
+    # from config.json. Templates inject it as ``window.COIN_UNIVERSE`` so
+    # no JS file needs a hardcoded list. Failures fall back to [] — the UI
+    # then degrades gracefully (no symbols selectable) rather than crashing.
+    @app.context_processor
+    def _inject_coin_universe() -> dict:
+        try:
+            from .api import load_config
+            return {"coin_universe": load_config().get("watchlist", [])}
+        except Exception:
+            log.exception("Failed to load watchlist for template context")
+            return {"coin_universe": []}
+
     @app.get("/")
     def index():
         return render_template("index.html")

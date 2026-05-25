@@ -2,7 +2,10 @@
 // HelloCrypto Cockpit — main.js (run management; analytics in analytics.js)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const COIN_UNIVERSE = ["BTCUSDC","ETHUSDC","SOLUSDC","XRPUSDC","BNBUSDC","ADAUSDC","AVAXUSDC","DOGEUSDC","LINKUSDC","POLUSDC"];
+// Watchlist injected server-side from config.json (see dashboard.py
+// context_processor). Empty-array fallback keeps the UI from crashing if
+// the template render somehow misses the injection.
+const COIN_UNIVERSE = window.COIN_UNIVERSE || [];
 
 let _cfg          = null;            // last loaded config (from /api/config)
 let _llmModels    = {};
