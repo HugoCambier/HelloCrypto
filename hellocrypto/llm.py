@@ -198,7 +198,18 @@ def _call_claude(prompt: str, system: str, llm_cfg: dict) -> dict:
 
 
 def _gemini_is_transient(exc: Exception) -> bool:
-    """Detect transient Gemini errors (503/UNAVAILABLE, 429/RESOURCE_EXHAUSTED, etc)."""
+    """Detect transient Gemini errors that warrant a retry.
+
+    Covers three layers:
+      1. Google API exceptions with UNAVAILABLE / RESOURCE_EXHAUSTED grpc codes
+         or 429/5xx HTTP codes.
+      2. Network-level errors from httpx (server disconnects, read timeouts,
+         connection errors) — these surface as ``httpx.RemoteProtocolError``,
+         ``httpx.ReadTimeout``, etc. when the underlying TCP connection is
+         flaky during long bench runs.
+      3. Substring fallback for SDK versions where the typed exceptions
+         change between releases.
+    """
     try:
         from google.api_core.exceptions import GoogleAPICallError  # type: ignore
     except ImportError:
@@ -210,8 +221,26 @@ def _gemini_is_transient(exc: Exception) -> bool:
             return True
         if http_status in _TRANSIENT_STATUS:
             return True
+    # Network-level transients (httpx). Import lazily to keep the typing
+    # cheap when httpx isn't on the path (e.g. Ollama-only deployments).
+    try:
+        import httpx  # type: ignore
+        _NETWORK_TRANSIENT = (
+            httpx.RemoteProtocolError, httpx.ReadTimeout, httpx.ConnectTimeout,
+            httpx.ReadError, httpx.WriteError, httpx.ConnectError,
+            httpx.PoolTimeout,
+        )
+        if isinstance(exc, _NETWORK_TRANSIENT):
+            return True
+    except ImportError:
+        pass
+    if isinstance(exc, (ConnectionError, TimeoutError)):
+        return True
     s = str(exc)
-    return any(k in s for k in ("503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "500", "502", "504"))
+    return any(k in s for k in (
+        "503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "500", "502", "504",
+        "Server disconnected", "RemoteProtocolError", "ReadTimeout", "ConnectError",
+    ))
 
 
 def _gemini_request(model: str, prompt: str, system: str, llm_cfg: dict) -> dict:
