@@ -134,6 +134,32 @@ def api_performance():
     with_bench     = request.args.get("with_benchmarks", "1") not in ("0", "false", "no")
     config         = load_config()
 
+    # Resolve the actual budget / watchlist / start anchor for the selected session.
+    # Falls back to the current config when no session is selected (real mode or fresh view).
+    sess_budget: float | None    = None
+    sess_watchlist: list | None  = None
+    sess_started_at: str | None  = None
+    if session_id:
+        try:
+            from db.store import get_session as _get_session
+            sess = _get_session(session_id)
+        except ImportError:
+            sess = None
+        if sess:
+            import json as _json
+            init_st = sess.get("initial_state")
+            if isinstance(init_st, str):
+                try:
+                    init_st = _json.loads(init_st)
+                except Exception:
+                    init_st = None
+            if isinstance(init_st, dict):
+                # Prefer initial_total_value (= cash + seeded positions at entry) over raw budget,
+                # since that's what the strategy PnL is measured against.
+                sess_budget    = init_st.get("initial_total_value") or init_st.get("budget")
+                sess_watchlist = init_st.get("watchlist")
+            sess_started_at = sess.get("created_at")
+
     try:
         from db.store import load_history as _db_load
         history = _db_load(mode=mode, limit=2000)
@@ -185,14 +211,17 @@ def api_performance():
             prev_ts = t["timestamp"]
         sessions.append({"start": session_start, "end": prev_ts})
 
-    # Benchmark timeseries (BH + BTC) — compute since first trade
+    # Benchmark timeseries (BH + BTC) — anchor on the session start when known,
+    # else on the first trade. Use the session's own budget + watchlist so the
+    # curves are measured against the same capital as the strategy.
     bh_ts: list = []
     btc_ts: list = []
-    if with_bench and sorted_trades:
-        start_iso = sorted_trades[0]["timestamp"]
-        budget = float(config.get("budget", 100))
+    effective_budget    = float(sess_budget if sess_budget is not None else config.get("budget", 100))
+    effective_watchlist = sess_watchlist if sess_watchlist else config.get("watchlist", [])
+    if with_bench and (sorted_trades or sess_started_at):
+        start_iso = sess_started_at or sorted_trades[0]["timestamp"]
         try:
-            bench = _compute_benchmarks(start_iso, config.get("watchlist", []), budget)
+            bench = _compute_benchmarks(start_iso, effective_watchlist, effective_budget)
             bh_ts  = bench.get("bh", [])
             btc_ts = bench.get("btc", [])
         except Exception:
@@ -217,5 +246,5 @@ def api_performance():
         "bh_timeseries":  bh_ts,
         "btc_timeseries": btc_ts,
         "sessions":       sessions,
-        "budget":         config.get("budget", 100),
+        "budget":         round(effective_budget, 2),
     })

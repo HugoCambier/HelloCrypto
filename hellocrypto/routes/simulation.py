@@ -393,6 +393,7 @@ def sim_start():
         upsert_session(session_id, session_name, mode="simulation",
                        initial_state={
                            "budget":               budget,
+                           "watchlist":            run_cfg.get("watchlist", []),
                            "initial_holdings":     initial_holdings,
                            "risk_level":           risk_level,
                            "cycle_seconds":        cycle_sec,
