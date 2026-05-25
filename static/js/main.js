@@ -2,7 +2,7 @@
 // HelloCrypto Cockpit — main.js (run management; analytics in analytics.js)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const COIN_UNIVERSE = ["BTCUSDC","ETHUSDC","SOLUSDC","XRPUSDC","BNBUSDC","ADAUSDC","AVAXUSDC","DOGEUSDC","LINKUSDC","MATICUSDC"];
+const COIN_UNIVERSE = ["BTCUSDC","ETHUSDC","SOLUSDC","XRPUSDC","BNBUSDC","ADAUSDC","AVAXUSDC","DOGEUSDC","LINKUSDC","POLUSDC"];
 
 let _cfg          = null;            // last loaded config (from /api/config)
 let _llmModels    = {};

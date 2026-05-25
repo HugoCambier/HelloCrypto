@@ -67,6 +67,8 @@ def build_analysis(
     cooldown_map: dict | None = None,
     total_fees: float = 0.0,
     cycle: int = 0,
+    playbook_section: str | None = None,
+    behavior_section: str | None = None,
 ) -> str:
     """Return the user-turn prompt for a market analysis cycle.
 
@@ -231,6 +233,13 @@ def build_analysis(
         ctx_parts.append(f"Dominance BTC: {btc_dominance:.1f}% {dom_hint}")
     ctx_section = ("\nCONTEXTE MARCHÉ GLOBAL :\n" + "\n".join(f"- {p}" for p in ctx_parts) + "\n") if ctx_parts else ""
 
+    # ── Playbook lessons (from past 12mo, regime-conditional) ────────────────
+    # Injected right after the regime-defining context so the LLM reads the
+    # rules of *this* regime before evaluating the per-symbol signals below.
+    playbook_block = f"\n{playbook_section}\n" if playbook_section else ""
+    # Behavior lessons (from the agent's own past trades in this regime)
+    behavior_block = f"\n{behavior_section}\n" if behavior_section else ""
+
     # ── Pre-computed scores ──────────────────────────────────────────────────
     if scores:
         score_lines = [f"  {sym}: {s}/10" for sym, s in scores.items()]
@@ -247,7 +256,7 @@ Analyse le marché et décide.
 
 DONNÉES (trend = trend1h/short/d, BB-pos = position du prix dans les Bollinger) :
 {market_data}
-{ctx_section}{cooldown_section}{scores_section}
+{ctx_section}{playbook_block}{behavior_block}{cooldown_section}{scores_section}
 GRILLE :
 - score≥{buy_thr} → candidat BUY | score≤{sell_thr} → candidat SELL | sinon HOLD
 - Confluence requise : ≥2 signaux alignés (RSI, MACD hist, BB-pos, trend, score).

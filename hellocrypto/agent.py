@@ -35,6 +35,9 @@ from .api import (
 )
 from .llm import call as llm_call
 from .llm import last_usage as llm_last_usage
+from .eval.behavior import section_for_cycle as _behavior_section
+from .eval.capture import capture_snapshots as _capture_snapshots
+from .eval.playbook import section_for_cycle as _playbook_section
 from .prompts import DECISION_SCHEMA, SYSTEM, build_analysis
 from .trading import check_stops as _trading_check_stops
 from .trading import compute_position_size
@@ -172,6 +175,14 @@ def _execute_cycle(
     market_data_raw = _fetch_market_data(watchlist, cycle_sec)
     prices = _prices_from_data(market_data_raw)
 
+    # ── Macro context (cached 5min) + live snapshot persistence ───────────
+    # Captured every cycle (even when LLM is skipped) so the dataset feeding
+    # the playbook keeps growing. Snapshot save is best-effort: a DB failure
+    # does NOT abort the trading cycle.
+    fear_greed    = get_fear_and_greed()
+    btc_dominance = get_btc_dominance()
+    _capture_snapshots(market_data_raw, fear_greed, btc_dominance, cycle=cycle)
+
     # ── Capture initial portfolio value on first cycle ────────────────────
     if initial_total_value == 0.0:
         portfolio_val = sum(
@@ -208,10 +219,11 @@ def _execute_cycle(
     elif not price_change_ok:
         log.info("Skip LLM — Δmax %.2f%% < seuil %.1f%%", delta * 100, price_threshold * 100)
     else:
-        fear_greed = get_fear_and_greed()
-        btc_dominance = get_btc_dominance()
+        # fear_greed + btc_dominance already fetched above for snapshot capture
         scores = compute_scores(market_data_raw)
         market_data = format_market_data_compact(market_data_raw, watchlist, scores)
+        playbook_section = _playbook_section(fear_greed, market_data_raw)
+        behavior_section = _behavior_section(fear_greed, market_data_raw)
 
         decision = llm_call(
             prompt=build_analysis(
@@ -219,6 +231,8 @@ def _execute_cycle(
                 recent_decisions, fear_greed, btc_dominance, scores,
                 prices=prices, peak_prices=peak_prices,
                 cooldown_map=cooldown_map, cycle=cycle,
+                playbook_section=playbook_section,
+                behavior_section=behavior_section,
             ),
             system=SYSTEM,
             config={**cfg, "llm": {**cfg.get("llm", {}), "schema": DECISION_SCHEMA}},

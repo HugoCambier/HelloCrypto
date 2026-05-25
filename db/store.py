@@ -266,6 +266,10 @@ def init_db() -> None:
     elif not _USE_FIRESTORE:
         _init_sqlite()
         _migrate_sqlite()
+    # Price snapshots table — used by the journal/playbook system. Lives in
+    # its own module to keep that feature cohesive but shares the same backend.
+    from db.snapshots import init_snapshots
+    init_snapshots()
 
 
 def save_trade(

@@ -32,6 +32,8 @@ def tick(stop_event: threading.Event | None = None) -> dict:
         stop_event = threading.Event()
 
     _maybe_purge_old_logs()
+    _maybe_rebuild_playbook()
+    _maybe_rebuild_behavior()
 
     active_sim = store.get_state("active_sim")
     if active_sim:
@@ -69,6 +71,64 @@ def _maybe_purge_old_logs() -> None:
             log.info("[CRON] Purge logs >14j: %d lignes supprimées", deleted)
     except Exception:
         log.warning("[CRON] Purge logs échouée", exc_info=True)
+
+
+def _maybe_rebuild_playbook() -> None:
+    """Regenerate the trading playbook from price_snapshots, at most once per 24h.
+
+    Distills 12+ months of OHLCV+regime data into the favored/avoid lists
+    consumed by the decision prompt. Runs after the log purge, before any
+    trading work — if it fails, the previous playbook stays in DB and is
+    used unchanged. Cost: ~5s on 87k rows; fits easily in the Vercel
+    function budget.
+    """
+    import db.store as store
+    try:
+        last = store.get_state("last_playbook_rebuild_at")
+        if last:
+            elapsed = (datetime.utcnow() - datetime.fromisoformat(last)).total_seconds()
+            if elapsed < 86400:
+                return
+        from hellocrypto.eval.journal import run_full_analysis
+        from hellocrypto.eval.playbook import build_playbook, save_playbook
+        # source=None pools backfill + live so the playbook reflects the
+        # full accumulated dataset (initial backfill + everything captured
+        # since by the live agent).
+        journal  = run_full_analysis(source=None, min_samples=50)
+        playbook = build_playbook(journal)
+        save_playbook(playbook)
+        store.set_state("last_playbook_rebuild_at", datetime.utcnow().isoformat())
+        n_regimes = len(playbook.get("by_regime", {}))
+        log.info("[CRON] Playbook rebuilt: %d régimes, %d patterns matched",
+                 n_regimes, playbook.get("n_pattern_matches_total", 0))
+    except Exception:
+        log.warning("[CRON] Rebuild playbook échoué", exc_info=True)
+
+
+def _maybe_rebuild_behavior() -> None:
+    """Refresh the behavior report (agent's past trades vs realised outcomes).
+
+    Lighter than the playbook (only joins ``trades`` + ``price_snapshots``),
+    so we rebuild every 6h to keep the agent's track record reasonably fresh
+    in the decision prompt without spamming the cron path.
+    """
+    import db.store as store
+    try:
+        last = store.get_state("last_behavior_rebuild_at")
+        if last:
+            elapsed = (datetime.utcnow() - datetime.fromisoformat(last)).total_seconds()
+            if elapsed < 6 * 3600:
+                return
+        from hellocrypto.eval.behavior import compute_behavior, save_behavior
+        # Pool simulation + real trades for now (the agent learns from both).
+        report = compute_behavior(mode=None)
+        save_behavior(report)
+        store.set_state("last_behavior_rebuild_at", datetime.utcnow().isoformat())
+        n_regimes = len(report.get("by_regime", {}))
+        log.info("[CRON] Behavior rebuilt: %d régimes couverts sur %d trades",
+                 n_regimes, report.get("n_trades", 0))
+    except Exception:
+        log.warning("[CRON] Rebuild behavior échoué", exc_info=True)
 
 
 def _run_sim_cycle(active_sim: dict, stop_event: threading.Event) -> dict:

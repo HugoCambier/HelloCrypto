@@ -13,7 +13,7 @@
     "AVAXUSDC",
     "DOGEUSDC",
     "LINKUSDC",
-    "MATICUSDC"
+    "POLUSDC"
   ],
   "stop_loss_pct": 21,
   "trailing_stop_pct": 10,

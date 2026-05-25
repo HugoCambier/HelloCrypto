@@ -20,6 +20,9 @@ from .api import (
 )
 from .llm import call as llm_call
 from .llm import last_usage as llm_last_usage
+from .eval.behavior import section_for_cycle as _behavior_section
+from .eval.capture import capture_snapshots as _capture_snapshots
+from .eval.playbook import section_for_cycle as _playbook_section
 from .prompts import DECISION_SCHEMA, SYSTEM, build_analysis
 from .trading import FEE_RATE as SIM_FEE_RATE
 from .trading import paper_sell
@@ -378,10 +381,17 @@ def run(
                 on_cycle(cycle, snap)
             break
 
-        # ── Fetch global market context ────────────────────────────────────────
+        # ── Fetch global market context + persist live snapshot ────────────────
+        # Snapshot capture is per-cycle (not gated by LLM cadence) so the
+        # playbook training set grows continuously. Best-effort: a DB miss
+        # never blocks the simulation.
         fear_greed    = get_fear_and_greed()
         btc_dominance = get_btc_dominance()
+        _capture_snapshots(market_raw, fear_greed, btc_dominance,
+                           cycle=cycle, session_id=session_id)
         scores        = compute_scores(market_raw)
+        playbook_section = _playbook_section(fear_greed, market_raw)
+        behavior_section = _behavior_section(fear_greed, market_raw)
 
         # ── LLM decision ──────────────────────────────────────────────────────
         market_data = format_market_data_compact(market_raw, watchlist, scores)
@@ -393,6 +403,8 @@ def run(
                     prices=prices, peak_prices=peak_prices,
                     cooldown_map=cooldown_map, total_fees=total_fees,
                     cycle=cycle,
+                    playbook_section=playbook_section,
+                    behavior_section=behavior_section,
                 ),
                 system=SYSTEM,
                 config={**cfg, "llm": {**cfg.get("llm", {}), "schema": DECISION_SCHEMA}},

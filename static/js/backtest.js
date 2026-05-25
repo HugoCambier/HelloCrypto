@@ -1,6 +1,6 @@
 // HelloCrypto — Backtest page (orchestrator; uses shared analytics.js)
 
-const COIN_UNIVERSE = ["BTCUSDC","ETHUSDC","SOLUSDC","XRPUSDC","BNBUSDC","ADAUSDC","AVAXUSDC","DOGEUSDC","LINKUSDC","MATICUSDC"];
+const COIN_UNIVERSE = ["BTCUSDC","ETHUSDC","SOLUSDC","XRPUSDC","BNBUSDC","ADAUSDC","AVAXUSDC","DOGEUSDC","LINKUSDC","POLUSDC"];
 
 let _btPollIv  = null;
 let _latestSnap = null;
