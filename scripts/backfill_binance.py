@@ -20,7 +20,7 @@ import json
 import logging
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Allow `python scripts/backfill_binance.py` from repo root
@@ -82,7 +82,7 @@ def fetch_fng_history(days: int) -> dict[str, dict]:
     r.raise_for_status()
     out: dict[str, dict] = {}
     for d in r.json().get("data", []):
-        ts = datetime.fromtimestamp(int(d["timestamp"]), tz=timezone.utc)
+        ts = datetime.fromtimestamp(int(d["timestamp"]), tz=UTC)
         out[ts.strftime("%Y-%m-%d")] = {
             "value": int(d["value"]),
             "label": d["value_classification"],
@@ -163,7 +163,7 @@ def build_snapshots_for_symbol(
             trend = "haussier" if sma7 > sma25 else "baissier"
         else:
             trend = "neutre"
-        date_str = datetime.fromtimestamp(int(kl[0]) / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+        date_str = datetime.fromtimestamp(int(kl[0]) / 1000, tz=UTC).strftime("%Y-%m-%d")
         daily_trend[date_str] = trend
 
     # Walk the hourly candles forward; only emit snapshots within the requested
@@ -199,7 +199,7 @@ def build_snapshots_for_symbol(
         else:
             trend = "neutre"
 
-        ts_dt = datetime.fromtimestamp(open_ms / 1000, tz=timezone.utc)
+        ts_dt = datetime.fromtimestamp(open_ms / 1000, tz=UTC)
         ts    = ts_dt.isoformat()
         date_str = ts_dt.strftime("%Y-%m-%d")
         trend_1d = daily_trend.get(date_str)

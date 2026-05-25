@@ -18,11 +18,11 @@ from .api import (
     get_fear_and_greed,
     load_config,
 )
-from .llm import call as llm_call
-from .llm import last_usage as llm_last_usage
 from .eval.behavior import section_for_cycle as _behavior_section
 from .eval.capture import capture_snapshots as _capture_snapshots
 from .eval.playbook import section_for_cycle as _playbook_section
+from .llm import call as llm_call
+from .llm import last_usage as llm_last_usage
 from .prompts import DECISION_SCHEMA, SYSTEM, build_analysis
 from .trading import FEE_RATE as SIM_FEE_RATE
 from .trading import paper_sell

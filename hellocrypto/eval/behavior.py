@@ -18,7 +18,7 @@ import json
 import logging
 import os
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from statistics import mean
 
 log = logging.getLogger(__name__)
@@ -62,7 +62,7 @@ def _hour_floor(ts: str) -> str:
     """Truncate an ISO timestamp to the start of its hour (UTC)."""
     dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     dt = dt.replace(minute=0, second=0, microsecond=0)
     return dt.isoformat()
 
@@ -570,7 +570,8 @@ def section_for_cycle(fear_greed: dict | None, market_raw: dict | None) -> str:
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def _main() -> int:
-    import argparse, sys
+    import argparse
+    import sys
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", default="simulation", choices=("simulation", "real", ""))
     parser.add_argument("--min-samples", type=int, default=DEFAULT_MIN_SAMPLES)

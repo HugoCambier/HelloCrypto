@@ -12,7 +12,7 @@ regeneration sees the new data.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from db.snapshots import save_snapshots_batch
 from hellocrypto.api import _bb_position, compute_score
@@ -96,7 +96,7 @@ def capture_snapshots(
     # (which is hourly). Multiple captures within the same hour UPSERT the
     # same row — the latest intra-hour state wins, which matches what the
     # nightly playbook regen wants to see anyway.
-    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
     ts  = now.isoformat()
     # Reuse BTCUSDC's daily trend as the macro trend fallback for symbols
     # missing trend_1d (e.g. a fresh listing).

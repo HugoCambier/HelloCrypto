@@ -244,7 +244,9 @@ def run_full_analysis(
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def _main() -> int:
-    import argparse, json, sys
+    import argparse
+    import json
+    import sys
 
     parser = argparse.ArgumentParser(description="Run the journal analysis on backfilled snapshots.")
     parser.add_argument("--symbols", default="", help="Comma-separated subset; default = all symbols in DB")

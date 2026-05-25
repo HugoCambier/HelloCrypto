@@ -20,9 +20,8 @@ from __future__ import annotations
 import json
 import logging
 import math
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from .journal import run_full_analysis
 from .patterns import PATTERN_SIDES
@@ -177,13 +176,13 @@ def build_playbook(
             slot[cls].append(entry)
 
     # Second pass: rank each list by conviction (descending magnitude)
-    for regime, slot in by_regime.items():
+    for slot in by_regime.values():
         slot["favored"].sort(key=lambda e: -e["conviction"])
         slot["avoid"].sort(key=lambda e:  e["conviction"])  # most-negative first
 
     n_total = sum(p["n_matches"] for p in journal_report.values())
     return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "config":       cfg,
         "n_pattern_matches_total": n_total,
         "regimes":      sorted(by_regime.keys()),
