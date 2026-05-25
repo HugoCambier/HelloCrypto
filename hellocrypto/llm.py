@@ -50,6 +50,44 @@ _TRANSIENT_STATUS = {429, 500, 502, 503, 504}
 _MAX_RETRIES = 5
 _RETRY_BASE_DELAY = 2.0  # seconds (doubles each attempt, with jitter)
 
+# ── Proactive rate limiting (sliding-window) ─────────────────────────────────
+# Set LLM_RATE_LIMIT_RPM=N to throttle calls to N requests per 60s. Useful
+# for bench runs against free-tier APIs (Gemini Flash Lite = 15 RPM). Off
+# (0 / unset) for live trading where calls are sparse (~2-50/day).
+from collections import deque as _deque
+
+_RATE_LIMIT_RPM = int(os.getenv("LLM_RATE_LIMIT_RPM", "0") or 0)
+_RATE_WINDOW_SEC = 60.0
+_rate_lock  = threading.Lock()
+_rate_calls: _deque = _deque()
+
+
+def _throttle() -> None:
+    """Sleep just enough so the last 60s contain at most ``_RATE_LIMIT_RPM`` calls.
+
+    No-op when ``_RATE_LIMIT_RPM <= 0``. Thread-safe (the bench runner is
+    single-threaded today but the live agent + sim could both call in
+    parallel from a Flask worker pool).
+    """
+    if _RATE_LIMIT_RPM <= 0:
+        return
+    with _rate_lock:
+        now = time.time()
+        # Evict timestamps outside the rolling window
+        while _rate_calls and now - _rate_calls[0] >= _RATE_WINDOW_SEC:
+            _rate_calls.popleft()
+        if len(_rate_calls) >= _RATE_LIMIT_RPM:
+            wait = _RATE_WINDOW_SEC - (now - _rate_calls[0]) + 0.05
+            if wait > 0:
+                log.debug("[LLM] rate-limit: sleeping %.2fs (%d/%d in window)",
+                          wait, len(_rate_calls), _RATE_LIMIT_RPM)
+                time.sleep(wait)
+                # After sleeping, re-evict
+                now2 = time.time()
+                while _rate_calls and now2 - _rate_calls[0] >= _RATE_WINDOW_SEC:
+                    _rate_calls.popleft()
+        _rate_calls.append(time.time())
+
 # Stable fallback models used when the primary model stays unavailable.
 _FALLBACK_MODELS = {
     "gemini": "gemini-2.0-flash",
@@ -317,4 +355,6 @@ def call(prompt: str, system: str, config: dict) -> dict:
             f"Valeurs acceptées : {supported}."
         )
 
+    # Proactive throttle (no-op unless LLM_RATE_LIMIT_RPM > 0)
+    _throttle()
     return fn(prompt, system, llm_cfg)

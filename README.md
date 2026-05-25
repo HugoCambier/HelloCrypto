@@ -141,7 +141,7 @@ Le bouton **Logs** (barre de navigation) ouvre un tiroir latéral avec le flux S
 | Provider | Modèles |
 |----------|---------|
 | Claude (Anthropic) | claude-sonnet-4-6, claude-opus-4-5, claude-haiku-4-5 |
-| Gemini (Google) | gemini-3.1-flash-lite-preview, gemini-3-flash-live |
+| Gemini (Google) | gemini-3.1-flash-lite, gemini-3.5-flash, gemini-2.5-flash-lite |
 | Ollama (local) | mistral, qwen2.5:14b, deepseek-r1, … |
 
 Le provider et le modèle sont configurables à chaud depuis le dashboard sans redémarrage.

@@ -516,6 +516,71 @@ def format_behavior_section(report: dict, regime: str, max_lines: int = 6) -> st
     return "\n".join(lines[:max_lines + 1])
 
 
+# ── Confidence calibration (applied at decision time) ────────────────────────
+
+# Minimum samples per (action, bucket) before the calibration kicks in. Below
+# this we pass-through the raw confidence — too few trades to claim a bias.
+CALIBRATION_MIN_SAMPLES = 20
+
+# Shrinkage prior strength. The Bayesian update is:
+#   alpha = n / (n + PRIOR_STRENGTH)
+#   calibrated = alpha * realized + (1 - alpha) * predicted
+# With PRIOR_STRENGTH=50: at n=20 alpha≈0.29, at n=100 alpha≈0.67, at n=500 alpha≈0.91.
+# Translation: the calibration is conservative for thin data and trusts the
+# realized win-rate more as samples grow.
+CALIBRATION_PRIOR_STRENGTH = 50
+
+
+def _bucket_label_for(conf: float) -> str | None:
+    """Same bucketing logic as _compute_confidence_calibration. Returns None if out of range."""
+    for lo, hi in CONFIDENCE_BUCKETS:
+        if lo <= conf < hi:
+            return f"{lo:.1f}-{hi:.1f}"
+    return None
+
+
+def calibrate_confidence(
+    action_type: str,
+    raw_confidence: float,
+    calibration: dict | None,
+) -> float:
+    """Return a calibrated confidence value, bayesian-shrunken to history.
+
+    Only applies to ``BUY`` actions: those are the ones gated by
+    ``min_confidence``. HOLD calibration was found to be noisy (the
+    "win = flat" definition is poorly suited to crypto) so we don't touch
+    HOLDs here. SELL calibration would be useful too but live data is
+    currently too thin to be reliable.
+
+    Pass-through (returns ``raw_confidence`` unchanged) when:
+      - The action is not BUY
+      - No calibration data exists yet (cold start)
+      - The matching bucket has fewer than ``CALIBRATION_MIN_SAMPLES``
+    """
+    if action_type.upper() != "BUY":
+        return raw_confidence
+    if not calibration:
+        return raw_confidence
+    bucket_data = calibration.get("BUY", {})
+    if not bucket_data:
+        return raw_confidence
+    label = _bucket_label_for(raw_confidence)
+    if not label or label not in bucket_data:
+        return raw_confidence
+    cell = bucket_data[label]
+    n = cell.get("n", 0)
+    if n < CALIBRATION_MIN_SAMPLES:
+        return raw_confidence
+    realized  = cell.get("realized_win")
+    predicted = cell.get("predicted_mean")
+    if realized is None or predicted is None:
+        return raw_confidence
+    alpha = n / (n + CALIBRATION_PRIOR_STRENGTH)
+    calibrated = alpha * realized + (1 - alpha) * predicted
+    # Bound to [0, 1] for downstream safety. (Predicted is already in [0, 1].)
+    return max(0.0, min(1.0, calibrated))
+
+
 # ── Persistence + cache for the decision cycle ────────────────────────────────
 
 def save_behavior(report: dict) -> None:

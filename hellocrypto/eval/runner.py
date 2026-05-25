@@ -39,6 +39,13 @@ class StrategyConfig:
     # Decision threshold for rule-based mode
     buy_score_min:  int = 7
     sell_score_max: int = 3
+    # Learning-system toggles — let the bench A/B compare with/without each layer
+    enable_playbook: bool = True
+    enable_behavior: bool = True
+    enable_confidence_calibration: bool = True
+    # OFF by default everywhere because overfitting risk is real — turn on
+    # only after the bench shows it improves things on held-out scenarios.
+    enable_regime_aware_thresholds: bool = False
 
 
 @dataclass
@@ -157,6 +164,16 @@ def run(
             decision = _rule_based_decision(cyc.market, scores, holdings, cfg)
             usage = None
         else:
+            # Optionally inject playbook + behavior sections so the bench can
+            # A/B compare prompts with vs without the learning system.
+            playbook_section = None
+            behavior_section = None
+            if cfg.enable_playbook:
+                from .playbook import section_for_cycle as _pb_sec
+                playbook_section = _pb_sec(cyc.fear_greed, cyc.market)
+            if cfg.enable_behavior:
+                from .behavior import section_for_cycle as _bh_sec
+                behavior_section = _bh_sec(cyc.fear_greed, cyc.market)
             prompt = prompts_mod.build_analysis(
                 market_data=format_market_data_compact(cyc.market, scenario.watchlist, scores),
                 positions=holdings,
@@ -172,6 +189,8 @@ def run(
                 cooldown_map=cooldown_map,
                 total_fees=total_fees,
                 cycle=idx,
+                playbook_section=playbook_section,
+                behavior_section=behavior_section,
             )
             decision, usage = _llm_decision_via_cache(prompt, prompts_mod.SYSTEM, cfg)
 
@@ -180,6 +199,21 @@ def run(
             tokens_out += int(usage.get("out") or 0)
         recent_decisions = (recent_decisions + [decision])[-3:]
 
+        calibration = None
+        if cfg.enable_confidence_calibration:
+            from .behavior import _cached_behavior
+            _bh = _cached_behavior() or {}
+            calibration = _bh.get("confidence_calibration")
+
+        # Regime-aware threshold adjustment (off by default).
+        effective_min_conf = cfg.min_confidence
+        if cfg.enable_regime_aware_thresholds:
+            from .playbook import _cached_playbook, current_regime, regime_aware_min_confidence
+            _pb = _cached_playbook()
+            btc_trend_1d = cyc.market.get("BTCUSDC", {}).get("trend_1d") if "BTCUSDC" in cyc.market else None
+            _regime = current_regime(cyc.fear_greed, btc_trend_1d)
+            effective_min_conf = regime_aware_min_confidence(_pb, _regime, cfg.min_confidence)
+
         new_cash, fees, action_trades = strategy.apply_paper_actions(
             actions=decision.get("actions", []),
             holdings=holdings, cash=cash, prices=prices,
@@ -187,7 +221,8 @@ def run(
             market_raw=cyc.market, cycle=idx,
             risk_level=cfg.risk_level,
             sell_cooldown_cycles=cfg.sell_cooldown_cycles,
-            min_confidence=cfg.min_confidence,
+            min_confidence=effective_min_conf,
+            confidence_calibration=calibration,
         )
         cash = new_cash
         total_fees += fees

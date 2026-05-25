@@ -324,6 +324,54 @@ def _cached_playbook(path: Path = DEFAULT_PLAYBOOK_PATH) -> dict | None:
     return _PLAYBOOK_CACHE
 
 
+def regime_aware_min_confidence(
+    playbook: dict | None,
+    regime: str,
+    base_min: float,
+    *,
+    bounds: float = 0.2,
+    min_pattern_matches: int = 1000,
+    edge_strong_pct: float = 1.0,
+) -> float:
+    """Adjust the confidence gate based on the playbook strength of a regime.
+
+    The intuition:
+      - Regime with **0 favored patterns AND substantial data** → harder gate
+        (the playbook says nothing works here, demand higher conviction)
+      - Regime with **a favored pattern of net edge ≥ ``edge_strong_pct``** →
+        softer gate (the playbook says strong edges exist, don't choke them)
+      - Anything else → no change
+
+    Safeguards against overfitting:
+      - Requires ``min_pattern_matches`` total pattern matches in the playbook
+        (not in the regime — the whole playbook) before applying any change
+      - Variation is bounded to ±``bounds`` around ``base_min``
+      - Returns ``base_min`` unchanged when playbook is absent or thin
+
+    Returns the adjusted ``min_confidence`` value in [0, 1].
+    """
+    if not playbook:
+        return base_min
+    total_matches = playbook.get("n_pattern_matches_total", 0)
+    if total_matches < min_pattern_matches:
+        return base_min
+    slot = playbook.get("by_regime", {}).get(regime)
+    if slot is None:
+        return base_min
+
+    favored = slot.get("favored", [])
+    if not favored:
+        # No edge in this regime → tighten the gate
+        return min(1.0, base_min + bounds)
+
+    best_edge = max(e.get("net_edge_pct", 0) for e in favored)
+    if best_edge >= edge_strong_pct:
+        # Strong edge available → loosen the gate (don't reject good setups)
+        return max(0.0, base_min - bounds)
+
+    return base_min
+
+
 def section_for_cycle(
     fear_greed: dict | None,
     market_raw: dict | None,

@@ -16,8 +16,8 @@ log = logging.getLogger(__name__)
 _DEFAULT_LLM_MODELS = {
     "claude": ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001",
                "claude-opus-4-5", "claude-haiku-4-5"],
-    "gemini": ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro",
-               "gemini-3.1-flash-lite-preview"],
+    "gemini": ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash",
+               "gemini-2.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash"],
     "ollama": ["llama3.2", "llama3.1", "mistral", "deepseek-r1", "qwen2.5"],
 }
 

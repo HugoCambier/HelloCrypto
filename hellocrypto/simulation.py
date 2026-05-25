@@ -468,6 +468,20 @@ def run(
 
         # ── Execute paper trades ───────────────────────────────────────────────
         min_conf = float(cfg.get("min_confidence", 0.0) or 0.0)
+        # Fetch confidence calibration from the cached behavior report (None
+        # when no data yet — apply_paper_actions then passes-through unchanged).
+        from .eval.behavior import _cached_behavior
+        _bh = _cached_behavior() or {}
+        calibration = _bh.get("confidence_calibration") if cfg.get("enable_confidence_calibration", True) else None
+
+        # Regime-aware min_confidence (opt-in via config flag).
+        if cfg.get("enable_regime_aware_thresholds", False):
+            from .eval.playbook import _cached_playbook, current_regime, regime_aware_min_confidence
+            _pb = _cached_playbook()
+            btc_trend_1d = market_raw.get("BTCUSDC", {}).get("trend_1d") if "BTCUSDC" in market_raw else None
+            _regime = current_regime(fear_greed, btc_trend_1d)
+            min_conf = regime_aware_min_confidence(_pb, _regime, min_conf)
+
         new_cash, fees, action_trades = strategy.apply_paper_actions(
             actions=decision.get("actions", []),
             holdings=holdings, cash=cash, prices=prices,
@@ -476,6 +490,7 @@ def run(
             risk_level=risk_level,
             sell_cooldown_cycles=sell_cooldown_cycles,
             min_confidence=min_conf,
+            confidence_calibration=calibration,
         )
         cash = new_cash
         total_fees += fees

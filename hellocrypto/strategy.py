@@ -137,6 +137,7 @@ def apply_paper_actions(
     sell_cooldown_cycles: int,
     *,
     min_confidence: float = 0.0,
+    confidence_calibration: dict | None = None,
 ) -> tuple[float, float, list[PaperTrade]]:
     """Apply a list of LLM-emitted actions in paper-trading mode.
 
@@ -146,6 +147,13 @@ def apply_paper_actions(
     `min_confidence` is enforced when the action carries a `confidence` field
     (Phase D+ schema). Actions without a confidence field bypass the gate
     (backwards-compatible with the legacy schema).
+
+    `confidence_calibration` is the ``confidence_calibration`` slice of the
+    behavior report (passed through from the cycle). When provided, BUY
+    confidences are shrunken toward the realized win-rate of the matching
+    bucket before the ``min_confidence`` gate — bayesian shrinkage means
+    thin data barely moves the value, abundant data corrects systematic
+    bias.
     """
     fees_total = 0.0
     trades: list[PaperTrade] = []
@@ -156,8 +164,20 @@ def apply_paper_actions(
         if not atype or not sym:
             continue
 
+        # Calibrate the LLM-emitted confidence against the agent's own history.
+        # Pass-through when calibration is absent or sample-thin (see behavior.py).
+        raw_conf = action.get("confidence")
+        if raw_conf is not None and confidence_calibration is not None:
+            from .eval.behavior import calibrate_confidence
+            calibrated = calibrate_confidence(atype, float(raw_conf), confidence_calibration)
+            if abs(calibrated - float(raw_conf)) > 0.01:
+                log.info("[STRAT] calibrate %s %s: %.2f → %.2f",
+                         atype.upper(), sym, float(raw_conf), calibrated)
+            conf = calibrated
+        else:
+            conf = raw_conf
+
         # Phase E gate: skip low-confidence actions when the model emits a confidence.
-        conf = action.get("confidence")
         if conf is not None and atype != "hold" and float(conf) < min_confidence:
             log.info("[STRAT] skip %s %s — confidence %.2f < %.2f",
                      atype.upper(), sym, float(conf), min_confidence)

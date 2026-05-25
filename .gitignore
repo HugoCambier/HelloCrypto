@@ -28,5 +28,6 @@ data/
 # GCP
 .gcloud/
 
-# Claude Code
-.claude/
+# Claude Code — user-local state ignored, project skills tracked
+.claude/*
+!.claude/skills/

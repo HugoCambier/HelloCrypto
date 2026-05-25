@@ -43,7 +43,7 @@ _DEFAULT_CONFIG = {
         "UNIUSDC", "AAVEUSDC", "ATOMUSDC", "APTUSDC", "ARBUSDC", "OPUSDC",
         "SUIUSDC", "INJUSDC",
     ],
-    "llm": {"provider": "gemini", "model": "gemini-3.1-flash-lite-preview"},
+    "llm": {"provider": "gemini", "model": "gemini-3.1-flash-lite"},
 }
 
 

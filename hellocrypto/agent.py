@@ -261,6 +261,23 @@ def _execute_cycle(
             pass
 
         min_conf = float(cfg.get("min_confidence", 0.5) or 0.0)
+        # Fetch confidence calibration from the cached behavior report. Same
+        # bayesian shrinkage as in simulation — pass-through when no data.
+        from .eval.behavior import _cached_behavior, calibrate_confidence
+        _bh = _cached_behavior() or {}
+        _calibration = _bh.get("confidence_calibration") if cfg.get("enable_confidence_calibration", True) else None
+
+        # Regime-aware threshold (opt-in, off by default per overfitting concerns).
+        if cfg.get("enable_regime_aware_thresholds", False):
+            from .eval.playbook import _cached_playbook, current_regime, regime_aware_min_confidence
+            _pb = _cached_playbook()
+            btc_trend_1d = market_data_raw.get("BTCUSDC", {}).get("trend_1d") if "BTCUSDC" in market_data_raw else None
+            _regime = current_regime(fear_greed, btc_trend_1d)
+            adjusted = regime_aware_min_confidence(_pb, _regime, min_conf)
+            if abs(adjusted - min_conf) > 0.001:
+                log.info("Regime %s → min_confidence %.2f → %.2f", _regime, min_conf, adjusted)
+            min_conf = adjusted
+
         for action in decision.get("actions", []):
             atype = action.get("type", "")
             sym = action.get("symbol", "")
@@ -271,7 +288,15 @@ def _execute_cycle(
 
             # Phase E: gate par confidence — applique uniquement quand le
             # modèle a renvoyé une confidence. Sinon, comportement legacy.
-            conf = action.get("confidence")
+            raw_conf = action.get("confidence")
+            if raw_conf is not None and _calibration is not None:
+                calibrated = calibrate_confidence(atype, float(raw_conf), _calibration)
+                if abs(calibrated - float(raw_conf)) > 0.01:
+                    log.info("Calibrate %s %s: %.2f → %.2f",
+                             atype.upper(), sym, float(raw_conf), calibrated)
+                conf = calibrated
+            else:
+                conf = raw_conf
             if conf is not None and atype != "hold" and float(conf) < min_conf:
                 log.info("Skip %s %s — confidence %.2f < %.2f",
                          atype.upper(), sym, float(conf), min_conf)
