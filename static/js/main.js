@@ -275,7 +275,11 @@ function _onNrLlmProviderChange() {
 async function launchNewRun() {
   const btn = document.getElementById('nr-launch-btn');
   const mode = document.getElementById('nr-mode-seg').dataset.val || 'simulation';
-  const body = {
+  const runWatchlist = getCryptoSelection('nr-watchlist-drop');
+  // Global config update: only user-level preferences (LLM, risk, budget…).
+  // Watchlist is per-run and shipped separately to /api/simulation/start so
+  // selecting a subset for one run never shrinks the Marché page's universe.
+  const cfgBody = {
     budget:            +document.getElementById('nr-budget').value,
     cycle_seconds:     Math.max(5, +document.getElementById('nr-cycle').value) * 60,
     stop_loss_pct:     +document.getElementById('nr-sl').value,
@@ -285,17 +289,16 @@ async function launchNewRun() {
       provider: document.getElementById('nr-llm-provider').value,
       model:    document.getElementById('nr-llm-model').value,
     },
-    watchlist: getCryptoSelection('nr-watchlist-drop'),
     mode,
   };
 
   btn.disabled = true; btn.textContent = 'Lancement…';
 
   try {
-    // Persist config so it's reused by other parts of the app
+    // Persist user preferences (without touching the global watchlist)
     await fetch('/api/config', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(cfgBody),
     });
 
     if (mode === 'simulation') {
@@ -306,9 +309,10 @@ async function launchNewRun() {
       const r = await fetch('/api/simulation/start', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
-          budget: body.budget, cycle_seconds: body.cycle_seconds,
-          stop_loss_pct: body.stop_loss_pct, trailing_stop_pct: body.trailing_stop_pct,
-          risk_level: body.risk_level,
+          budget: cfgBody.budget, cycle_seconds: cfgBody.cycle_seconds,
+          stop_loss_pct: cfgBody.stop_loss_pct, trailing_stop_pct: cfgBody.trailing_stop_pct,
+          risk_level: cfgBody.risk_level,
+          watchlist: runWatchlist,
           resume,
           from_binance,
           session_name: name,

@@ -51,7 +51,7 @@ def analysis_start():
         global _analysis_state
         try:
             cfg           = load_config()
-            watchlist     = cfg.get("watchlist", [])
+            watchlist     = cfg.get("watchlist", []) or []
             log.info("[ANALYSIS] watchlist (%d) : %s", len(watchlist), watchlist)
             market_raw    = get_enriched_market_data(watchlist, cycle_seconds=300)
             log.info("[ANALYSIS] market_raw loaded for %d/%d symbols", len(market_raw), len(watchlist))

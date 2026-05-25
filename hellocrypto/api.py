@@ -37,12 +37,10 @@ _DEFAULT_CONFIG = {
     # Phase E: floor de confiance (0–1) en-dessous duquel les actions sont
     # ignorées. 0 = pas de gate ; 0.5 = mode prudent recommandé.
     "min_confidence": 0.5,
-    "watchlist": [
-        "BTCUSDC", "ETHUSDC", "BNBUSDC", "SOLUSDC", "XRPUSDC", "DOGEUSDC",
-        "ADAUSDC", "AVAXUSDC", "LINKUSDC", "DOTUSDC", "LTCUSDC", "NEARUSDC",
-        "UNIUSDC", "AAVEUSDC", "ATOMUSDC", "APTUSDC", "ARBUSDC", "OPUSDC",
-        "SUIUSDC", "INJUSDC",
-    ],
+    # Minimal fallback only — the real list lives in config.json. Kept tiny
+    # on purpose so a stale/forgotten default can never silently override the
+    # checked-in watchlist. If you want to add coins, edit config.json.
+    "watchlist": ["BTCUSDC", "ETHUSDC"],
     "llm": {"provider": "gemini", "model": "gemini-3.1-flash-lite"},
 }
 

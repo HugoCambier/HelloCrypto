@@ -380,9 +380,19 @@ def sim_start():
             resume = False
             resume_failed = True
 
+    # Per-run watchlist: the modal lets the user pick a subset for this run
+    # specifically — we keep it isolated from the global cfg.watchlist so
+    # other parts of the app (Marché page, future runs) aren't affected.
+    body_watchlist = body.get("watchlist")
+    if isinstance(body_watchlist, list) and body_watchlist:
+        run_watchlist = [str(s).upper() for s in body_watchlist if s]
+    else:
+        run_watchlist = cfg.get("watchlist", [])
+
     run_cfg      = {**cfg, "risk_level": risk_level, "cycle_seconds": cycle_sec,
                     "stop_loss_pct": stop_loss_pct, "trailing_stop_pct": trailing_stop_pct,
-                    "sell_cooldown_cycles": sell_cooldown_cycles}
+                    "sell_cooldown_cycles": sell_cooldown_cycles,
+                    "watchlist": run_watchlist}
     session_id   = uuid.uuid4().hex[:8]
     session_name = body.get("session_name") or datetime.utcnow().strftime("%Y-%m-%d %H:%M")
     _sim_stop_event = threading.Event()
