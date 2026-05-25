@@ -32,8 +32,9 @@ def tick(stop_event: threading.Event | None = None) -> dict:
         stop_event = threading.Event()
 
     _maybe_purge_old_logs()
-    _maybe_rebuild_playbook()
-    _maybe_rebuild_behavior()
+    # Note: playbook / behavior rebuilds are NOT called here. They run on
+    # their own daily schedule via /api/cron/learn so a slow rebuild
+    # cannot delay a trading decision cycle.
 
     active_sim = store.get_state("active_sim")
     if active_sim:
