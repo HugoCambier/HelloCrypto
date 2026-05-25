@@ -14,7 +14,16 @@ HelloCrypto/
 │   ├── api.py           # Client Binance REST + indicateurs techniques (MACD, BB, ATR)
 │   ├── llm.py           # Abstraction multi-provider (Claude / Gemini / Ollama)
 │   ├── prompts.py       # Tous les prompts LLM centralisés
+│   ├── strategy.py      # Helpers décision/exécution (peaks, cooldowns, stops)
+│   ├── cron.py          # Tick cron : rebuild playbook + behavior + purge logs
 │   ├── dashboard.py     # Factory Flask + enregistrement des blueprints
+│   ├── eval/            # Système d'apprentissage continu (voir section dédiée)
+│   │   ├── patterns.py     # 10 setups nommés (oversold_reversal, falling_knife, …)
+│   │   ├── journal.py      # Horizon returns + MAE/MFE par pattern × régime
+│   │   ├── playbook.py     # Distille le journal → leçons favored/avoid par régime
+│   │   ├── behavior.py     # Comportement passé : exécutés + occasions ratées + calibration
+│   │   ├── capture.py      # Persiste un snapshot live à chaque cycle
+│   │   └── scenario.py, runner.py, metrics.py, llm_cache.py   # Replay engine
 │   └── routes/
 │       ├── agent.py        # /api/agent/* — cycle de vie de l'agent
 │       ├── simulation.py   # /api/simulation/* — paper trading
@@ -25,14 +34,17 @@ HelloCrypto/
 │       ├── config.py       # /api/config/llm + /api/ollama/*
 │       └── logs.py         # /api/logs/* — SSE + historique base de données
 ├── db/
-│   ├── store.py         # Persistance des trades et positions (Firestore / JSON local)
+│   ├── store.py         # Persistance trades / sessions / analyses (SQLite / PostgreSQL / Firestore)
+│   ├── snapshots.py     # Table price_snapshots (OHLCV + indicateurs + régime)
 │   └── clean.py         # Utilitaires de nettoyage des données
 ├── runner/
 │   └── main.py          # Point d'entrée commun (agent / simulation)
-├── templates/
-│   └── index.html       # Interface web
-├── static/js/
-│   └── main.js          # Logique frontend (Chart.js, fetch, SSE)
+├── scripts/
+│   ├── backfill_binance.py  # Bootstrap 12mo d'historique depuis Binance
+│   ├── snapshot_scenario.py # Capture un scénario figé pour replay
+│   └── eval.py, compare.py  # Outils d'évaluation/comparaison
+├── templates/           # index.html, backtest.html, market.html
+├── static/js/           # main.js, backtest.js, market.js, analytics.js, orders.js
 ├── .env.example         # Template des variables d'environnement
 ├── config.json          # Paramètres de trading
 ├── Makefile             # Commandes de développement
@@ -133,3 +145,41 @@ Le bouton **Logs** (barre de navigation) ouvre un tiroir latéral avec le flux S
 | Ollama (local) | mistral, qwen2.5:14b, deepseek-r1, … |
 
 Le provider et le modèle sont configurables à chaud depuis le dashboard sans redémarrage.
+
+## Système d'apprentissage continu
+
+L'agent n'évalue pas chaque cycle de manière indépendante : trois couches de
+feedback bâties sur l'historique sont injectées dans le prompt à chaque décision.
+
+| Couche | Source | Question répondue |
+|---|---|---|
+| **Macro** | F&G + trend BTC daily | Dans quel régime suis-je ? |
+| **Playbook** | `price_snapshots` (12+ mois) | Quels patterns sont rentables dans ce régime, net de frais ? |
+| **Behavior** | `trades` + `market_analyses` joints aux snapshots | Mon track record dans ce régime : trades exécutés, occasions ratées, calibration confidence |
+
+**Régimes** : F&G bucket (`fear` / `neutral` / `greed`) × trend BTC daily (`bear` / `range` / `bull`) → 9 régimes max, fallback `general` sous échantillon faible.
+
+**Bootstrap initial** (une fois après installation) :
+```bash
+poetry run python -m scripts.backfill_binance --days 365
+```
+Charge 12 mois d'OHLCV horaires de toute la watchlist + F&G historique, calcule les indicateurs (RSI, MACD, Bollinger, ATR, SMA, trend), pré-tague le régime, et persiste dans `price_snapshots`. ~25 Mo / 87k lignes pour une watchlist de 10 symboles.
+
+**Cycle de vie automatique** — le cron tick (ping `/api/cron/tick` toutes les 5 min) déclenche :
+
+| Tâche | Cadence | Sentinel |
+|---|---|---|
+| Régénération playbook | 24 h | `agent_state.last_playbook_rebuild_at` |
+| Régénération behavior | 6 h | `agent_state.last_behavior_rebuild_at` |
+| Purge logs > 14 j | 24 h | `agent_state.last_log_purge_at` |
+
+Chaque cycle agent / simulation ajoute un snapshot live dans `price_snapshots` (UPSERT intra-heure → aligné sur la grille horaire du backfill), donc la base d'apprentissage grossit continuellement et les rebuilds intègrent les nouvelles données.
+
+**Inspection manuelle** :
+```bash
+# Régénérer le playbook à la demande (CLI directe)
+poetry run python -m hellocrypto.eval.playbook --out data/playbook.json
+
+# Voir le rapport behavior brut
+poetry run python -m hellocrypto.eval.behavior --mode simulation
+```
