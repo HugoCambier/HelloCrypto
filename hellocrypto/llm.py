@@ -339,12 +339,15 @@ def _call_ollama(prompt: str, system: str, llm_cfg: dict) -> dict:
             data=payload,
             headers={"Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=300) as resp:
             return json.loads(resp.read())["message"]["content"]
 
-    # Retry on malformed JSON. Small local models (7B) emit unterminated
-    # strings or truncated objects ~1-3% of the time. Nudge temperature on
-    # retries to break determinism if the model is stuck.
+    # Retry on malformed JSON AND transient network errors. Small local
+    # models (7B) emit unterminated strings ~1-3% of the time; under
+    # concurrent load (WORKERS=3) requests can also queue past urllib's
+    # socket timeout. Nudge temperature on JSON retries to break
+    # determinism if the model is stuck on the same bad output.
+    import urllib.error
     last_exc: Exception | None = None
     for attempt in range(1, _MAX_RETRIES + 1):
         try:
@@ -353,12 +356,16 @@ def _call_ollama(prompt: str, system: str, llm_cfg: dict) -> dict:
             last_exc = exc
             log.warning("[LLM] Ollama(%s) JSON parse failed (attempt %d/%d): %s",
                         model, attempt, _MAX_RETRIES, exc)
-            time.sleep(_backoff_delay(attempt))
-    log.error("[LLM] Ollama(%s) gave up after %d malformed responses, defaulting to HOLD",
+        except (TimeoutError, urllib.error.URLError, ConnectionError, OSError) as exc:
+            last_exc = exc
+            log.warning("[LLM] Ollama(%s) network error (attempt %d/%d): %s",
+                        model, attempt, _MAX_RETRIES, exc)
+        time.sleep(_backoff_delay(attempt))
+    log.error("[LLM] Ollama(%s) gave up after %d failures, defaulting to HOLD",
               model, _MAX_RETRIES)
     return {
         "market_sentiment": "neutral",
-        "summary":          f"LLM parse failure ({last_exc})",
+        "summary":          f"LLM call failure ({last_exc})",
         "actions":          [],
     }
 
