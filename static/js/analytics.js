@@ -187,25 +187,47 @@ function strategyTimeseriesFromHistory(history, budget) {
   return points;
 }
 
-// Reconstruct open positions from trade history; value at last known price per symbol.
-function unrealizedFromHistory(history) {
-  const positions = {};
-  const lastPrice = {};
+// Walk *history* (newest-first, as returned by /api/performance) oldest→newest
+// and return per-symbol open positions valued at their last-seen trade price.
+// Tracks running cost basis so the donut + KPIs can show avg entry too.
+function positionsFromHistory(history) {
+  const acc = {};            // sym → { qty, cost, lastPrice }
   const sorted = [...(history || [])].reverse();
   for (const t of sorted) {
     if (!t.symbol) continue;
     const sym = t.symbol;
-    if (!positions[sym]) positions[sym] = { qty: 0 };
-    if (t.price) lastPrice[sym] = t.price;
-    const qty = t.qty || 0;
-    if (t.action === 'BUY') positions[sym].qty += qty;
-    else if (/SELL/i.test(t.action || '')) positions[sym].qty -= qty;
+    if (!acc[sym]) acc[sym] = { qty: 0, cost: 0, lastPrice: null };
+    if (t.price) acc[sym].lastPrice = t.price;
+    const qty    = Number(t.qty) || 0;
+    const amount = t.amount != null ? Number(t.amount) : qty * (Number(t.price) || 0);
+    if (/BUY/i.test(t.action || '')) {
+      acc[sym].qty  += qty;
+      acc[sym].cost += amount;
+    } else if (/SELL/i.test(t.action || '')) {
+      // Reduce cost basis proportionally to qty sold.
+      const before = acc[sym].qty;
+      if (before > 0) acc[sym].cost *= Math.max(0, before - qty) / before;
+      acc[sym].qty -= qty;
+    }
   }
-  let total = 0;
-  for (const [sym, p] of Object.entries(positions)) {
-    if (p.qty > 1e-8 && lastPrice[sym]) total += p.qty * lastPrice[sym];
+  const out = [];
+  for (const [sym, p] of Object.entries(acc)) {
+    if (p.qty <= 1e-8) continue;
+    const price = p.lastPrice || 0;
+    out.push({
+      symbol:        sym,
+      qty:           p.qty,
+      avg_price:     p.qty > 0 ? p.cost / p.qty : null,
+      current_price: price,
+      value:         p.qty * price,
+    });
   }
-  return total;
+  return out;
+}
+
+// Backwards-compatible helper: total unrealized at last known prices.
+function unrealizedFromHistory(history) {
+  return positionsFromHistory(history).reduce((s, p) => s + (p.value || 0), 0);
 }
 
 // ─── KPI setter (secondary KPIs) ─────────────────────────────────────────────

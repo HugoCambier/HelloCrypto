@@ -773,13 +773,19 @@ async function loadCharts() {
   if (token !== _chartsFetchToken) return;
 
   let cash = 0, positions = [];
-  if (_selectedMode === 'simulation' && _simRunning && _selectedSession === _simSessionId && _simSnap?.holdings) {
+  if (_selectedMode === 'simulation' && _simRunning && _selectedSession === _simSessionId && _simSnap) {
+    // Live sim: the backend snapshot already exposes a fully-valued positions
+    // array (symbol/qty/avg_price/current_price/value) — use it as-is. The
+    // legacy ``holdings`` dict has no current prices, so reconstructing from
+    // it would zero everything out.
     cash = _simSnap.cash ?? 0;
-    positions = Object.entries(_simSnap.holdings).map(([sym, h]) => {
-      const qty = h.qty ?? h;
-      const price = (_simSnap.prices||{})[sym] ?? 0;
-      return { symbol: sym, qty, current_price: price, value: qty * price, avg_price: h.avg_price ?? price };
-    }).filter(p => p.value > 0);
+    positions = (_simSnap.positions || []).filter(p => (p.value || 0) > 0);
+  } else if (_selectedMode === 'simulation' && perf) {
+    // Past sim (or live one whose snapshot isn't ours): reconstruct from the
+    // trade history — positions valued at their last-seen trade price, cash
+    // = budget + net cashflow (sell-side fees already netted into `net`).
+    cash = (perf.budget ?? 0) + (perf.net ?? 0);
+    positions = positionsFromHistory(perf.history || []);
   } else if (portfolio && !portfolio.error && _selectedMode === 'real') {
     cash = portfolio.cash ?? 0;
     positions = (portfolio.positions || []).map(p => ({
