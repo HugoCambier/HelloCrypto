@@ -73,25 +73,32 @@ def main() -> int:
         )
 
     started_at = datetime.fromisoformat(started_at_str)
-    now = datetime.now(UTC)
-    elapsed = (now - started_at).total_seconds()
-
-    overall_pct = work_done * 100 // work_total if work_total else 0
-    pace = work_done / elapsed if elapsed > 0 else 0  # work units / sec
-    remaining = (work_total - work_done) / pace if pace > 0 else 0
-    eta = now.timestamp() + remaining
-    eta_str = datetime.fromtimestamp(eta).strftime("%H:%M") if pace > 0 else "—"
-
-    print(f"Bench started: {started_at.strftime('%H:%M:%S')} — elapsed {_fmt_duration(elapsed)}")
+    print(f"Bench started: {started_at.strftime('%H:%M:%S')}")
     print(f"Variants: {' → '.join(variants_order)}")
-    print(f"Scenarios:")
+    print("Scenarios:")
     for line in lines:
         print(line)
-    print(
-        f"\nOverall: {work_done}/{work_total} cycles ({overall_pct}%) "
-        f"— pace {pace*60:.1f} cycles/min — "
-        f"ETA {eta_str} (reste {_fmt_duration(remaining) if pace > 0 else '?'})"
-    )
+
+    # Prefer the precomputed aggregate (written each cycle into the file);
+    # fall back to recomputing if an older run wrote no "overall" block.
+    o = state.get("overall") or {}
+    if o:
+        print(
+            f"\nOverall: {o['cycles_done']}/{o['cycles_total']} cycles ({o['pct']}%) "
+            f"— elapsed {o['elapsed']} — pace {o['pace_per_min']} cycles/min — "
+            f"ETA {o['eta_local']} (reste {o['remaining']})"
+        )
+    else:
+        now = datetime.now(UTC)
+        elapsed = (now - started_at).total_seconds()
+        pace = work_done / elapsed if elapsed > 0 else 0
+        remaining = (work_total - work_done) / pace if pace > 0 else 0
+        eta_str = datetime.fromtimestamp(now.timestamp() + remaining).strftime("%H:%M") if pace > 0 else "—"
+        print(
+            f"\nOverall: {work_done}/{work_total} cycles "
+            f"({work_done*100//work_total if work_total else 0}%) "
+            f"— pace {pace*60:.1f} cycles/min — ETA {eta_str}"
+        )
     return 0
 
 

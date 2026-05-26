@@ -33,8 +33,57 @@ PROGRESS_FILE = Path("eval/reports/_progress.json")
 _progress_lock = threading.Lock()
 
 
+def _fmt_duration(seconds: float) -> str:
+    seconds = int(max(0, seconds))
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}h{m:02d}m"
+    if m:
+        return f"{m}m{s:02d}s"
+    return f"{s}s"
+
+
+def _compute_overall(state: dict) -> dict:
+    """Aggregate completion + ETA across all scenarios/variants.
+
+    Pace = cumulative work units / elapsed wall time. Self-correcting:
+    cache-hit variants (calibrated/full_learning) fly through their cycles
+    and pull the ETA closer to reality as the run progresses.
+    """
+    scenarios = state.get("scenarios", {}) or {}
+    variants_order = state.get("variants_order", []) or []
+    n_cycles = state.get("n_cycles", 0) or 0
+    started_at_str = state.get("started_at")
+    if not (scenarios and variants_order and n_cycles and started_at_str):
+        return {}
+
+    n_variants = len(variants_order)
+    work_per_scenario = n_variants * n_cycles
+    work_total = work_per_scenario * len(scenarios)
+    work_done = sum(
+        slot.get("variant_idx", 0) * n_cycles + slot.get("cycle", 0)
+        for slot in scenarios.values() if slot
+    )
+
+    elapsed = (datetime.now(UTC) - datetime.fromisoformat(started_at_str)).total_seconds()
+    pace = work_done / elapsed if elapsed > 0 else 0.0  # units/sec
+    remaining = (work_total - work_done) / pace if pace > 0 else 0.0
+    eta_ts = datetime.now(UTC).timestamp() + remaining
+
+    return {
+        "cycles_done":   work_done,
+        "cycles_total":  work_total,
+        "pct":           work_done * 100 // work_total if work_total else 0,
+        "pace_per_min":  round(pace * 60, 1),
+        "elapsed":       _fmt_duration(elapsed),
+        "remaining":     _fmt_duration(remaining) if pace > 0 else "?",
+        "eta_local":     datetime.fromtimestamp(eta_ts).strftime("%Y-%m-%d %H:%M") if pace > 0 else "—",
+    }
+
+
 def _progress_update(scenario_name: str, variant: str, cycle: int, n_cycles: int) -> None:
-    """Atomically write this scenario's slot in the shared progress file.
+    """Atomically write this scenario's slot + aggregate ETA in the progress file.
 
     ``variant_idx`` is filled in by the bench startup writer (``progress_init``)
     so the reader can compute aggregate progress without knowing the variant
@@ -61,6 +110,7 @@ def _progress_update(scenario_name: str, variant: str, cycle: int, n_cycles: int
                 "n_cycles":    n_cycles,
                 "updated_at":  datetime.now(UTC).isoformat(timespec="seconds"),
             })
+            state["overall"] = _compute_overall(state)
             PROGRESS_FILE.parent.mkdir(parents=True, exist_ok=True)
             tmp = PROGRESS_FILE.with_suffix(".tmp")
             tmp.write_text(json.dumps(state, indent=2))
