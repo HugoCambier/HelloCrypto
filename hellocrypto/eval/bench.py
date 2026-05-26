@@ -32,6 +32,7 @@ import glob
 import json
 import logging
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -95,35 +96,64 @@ def _make_cfg(base: StrategyConfig, variant: dict) -> StrategyConfig:
     return StrategyConfig(**payload)
 
 
+def _run_scenario(
+    scen_path: str,
+    base_cfg: StrategyConfig,
+    variants: dict[str, dict],
+) -> tuple[str, dict]:
+    """Run all variants for a single scenario, serially (cache-friendly)."""
+    scen = load_scenario(scen_path)
+    log.info("─── Scenario: %s (%d cycles) ───", scen.name, scen.n_cycles)
+    out: dict = {}
+    for vname, vcfg in variants.items():
+        cfg = _make_cfg(base_cfg, vcfg)
+        log.info("  [%s] variant=%s (playbook=%s, behavior=%s)",
+                 scen.name, vname, cfg.enable_playbook, cfg.enable_behavior)
+        report = run(scen, cfg, version=vname)
+        out[vname] = report
+        m = report.metrics
+        log.info(
+            "    [%s] → %s | ret=%+.2f%% | α_vs_btc=%+.2f%% | DD=%.2f%% | "
+            "Sharpe=%s | win=%s%% | trades=%d | tokens=%d",
+            scen.name, vname,
+            m.get("return_pct", 0),
+            m.get("alpha_vs_btc_pct", 0),
+            m.get("max_drawdown_pct", 0),
+            m.get("sharpe") if m.get("sharpe") is not None else "—",
+            f"{m.get('win_rate_pct'):.0f}" if m.get("win_rate_pct") is not None else "—",
+            m.get("num_trades", 0),
+            m.get("tokens_total", 0),
+        )
+    return scen.name, out
+
+
 def run_bench(
     scenarios: list[str],
     base_cfg: StrategyConfig,
     variants: dict[str, dict] = VARIANTS,
+    workers: int = 1,
 ) -> dict:
-    """Run every (scenario × variant) combination. Returns nested results."""
+    """Run every (scenario × variant) combination. Returns nested results.
+
+    When ``workers > 1``, scenarios run concurrently (one thread per scenario).
+    Variants within a scenario stay serial so the LLM cache populated by
+    ``baseline``/``playbook``/``full_prompt`` is reused by ``calibrated`` and
+    ``full_learning`` (which produce identical prompts). Concurrency is bounded
+    by the Ollama server's ``OLLAMA_NUM_PARALLEL`` (set it to >= workers).
+    """
     results: dict[str, dict] = {}
-    for scen_path in scenarios:
-        scen = load_scenario(scen_path)
-        log.info("─── Scenario: %s (%d cycles) ───", scen.name, scen.n_cycles)
-        results[scen.name] = {}
-        for vname, vcfg in variants.items():
-            cfg = _make_cfg(base_cfg, vcfg)
-            log.info("  variant=%s (playbook=%s, behavior=%s)",
-                     vname, cfg.enable_playbook, cfg.enable_behavior)
-            report = run(scen, cfg, version=vname)
-            results[scen.name][vname] = report
-            m = report.metrics
-            log.info(
-                "    → ret=%+.2f%% | α_vs_btc=%+.2f%% | DD=%.2f%% | "
-                "Sharpe=%s | win=%s%% | trades=%d | tokens=%d",
-                m.get("return_pct", 0),
-                m.get("alpha_vs_btc_pct", 0),
-                m.get("max_drawdown_pct", 0),
-                m.get("sharpe") if m.get("sharpe") is not None else "—",
-                f"{m.get('win_rate_pct'):.0f}" if m.get("win_rate_pct") is not None else "—",
-                m.get("num_trades", 0),
-                m.get("tokens_total", 0),
-            )
+    if workers <= 1:
+        for scen_path in scenarios:
+            name, out = _run_scenario(scen_path, base_cfg, variants)
+            results[name] = out
+        return results
+
+    log.info("Parallel mode: %d concurrent scenarios", workers)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_run_scenario, p, base_cfg, variants): p for p in scenarios}
+        for fut in as_completed(futures):
+            name, out = fut.result()
+            results[name] = out
     return results
 
 
@@ -248,6 +278,9 @@ def _main() -> int:
     parser.add_argument("--min-confidence", type=float, default=0.5)
     parser.add_argument("--out-dir",   default="data/eval_reports/bench")
     parser.add_argument("--log-level", default="INFO")
+    parser.add_argument("--workers",   type=int, default=1,
+                        help="Parallel scenarios. Bounded by OLLAMA_NUM_PARALLEL "
+                             "on the Ollama server. Default 1 (sequential).")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -271,7 +304,7 @@ def _main() -> int:
         min_confidence=args.min_confidence,
     )
 
-    results = run_bench(scenarios, base_cfg)
+    results = run_bench(scenarios, base_cfg, workers=args.workers)
     print_comparison_table(results)
 
     out_path = write_bench_report(results, Path(args.out_dir))

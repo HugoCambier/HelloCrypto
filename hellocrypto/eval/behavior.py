@@ -449,14 +449,13 @@ def compute_behavior(
 def format_behavior_section(report: dict, regime: str, max_lines: int = 6) -> str:
     """Return a compact behavior summary for the given regime (or '').
 
-    Includes (when data is sufficient):
-      - Executed BUY/SELL outcomes
-      - Missed opportunities (high-score HOLDs that would have been profitable)
-      - Confidence calibration (regime-agnostic, surfaced once)
+    Includes per-regime executed BUY/SELL outcomes and missed opportunities.
+    Returns '' when the regime has no actionable behavior stats — surfacing
+    only a generic calibration hint creates noise and double-counts with
+    the post-LLM ``calibrate_confidence`` step in ``strategy``.
     """
     slot = report.get("by_regime", {}).get(regime, {})
-    calibration = report.get("confidence_calibration", {})
-    if not slot and not calibration:
+    if not slot:
         return ""
 
     n_trades    = report.get("n_trades", 0)
@@ -497,21 +496,13 @@ def format_behavior_section(report: dict, regime: str, max_lines: int = 6) -> st
                 f"score moyen {miss.get('avg_score','?')}, conf {miss.get('avg_confidence','?')} — {interp}"
             )
 
-    # ── Confidence calibration (regime-agnostic, one line) ────────────────
-    if calibration:
-        # Surface the bucket with the largest absolute gap — that's where
-        # the LLM most needs to recalibrate.
-        worst_action, worst_bucket, worst_gap, worst_n = None, None, 0.0, 0
-        for action, buckets in calibration.items():
-            for label, c in buckets.items():
-                if abs(c["gap"]) > abs(worst_gap) and c["n"] >= 10:
-                    worst_action, worst_bucket, worst_gap, worst_n = action, label, c["gap"], c["n"]
-        if worst_action:
-            direction = "surconfiant" if worst_gap > 0 else "sous-confiant"
-            lines.append(
-                f"  Calibration: tu es {direction} sur {worst_action} conf={worst_bucket} "
-                f"(écart {worst_gap*100:+.0f} pts sur n={worst_n})"
-            )
+    # No actionable per-regime stats made it through (just the header) →
+    # suppress to keep the prompt clean. Calibration is intentionally NOT
+    # surfaced here — it's already applied post-LLM via
+    # ``calibrate_confidence`` in ``strategy.apply_paper_actions``, and
+    # showing it would double-correct.
+    if len(lines) <= 1:
+        return ""
 
     return "\n".join(lines[:max_lines + 1])
 

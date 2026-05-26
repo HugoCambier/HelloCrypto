@@ -390,7 +390,7 @@ def run(
         _capture_snapshots(market_raw, fear_greed, btc_dominance,
                            cycle=cycle, session_id=session_id)
         scores        = compute_scores(market_raw)
-        playbook_section = _playbook_section(fear_greed, market_raw)
+        playbook_section = _playbook_section(fear_greed, market_raw, scores=scores)
         behavior_section = _behavior_section(fear_greed, market_raw)
 
         # ── LLM decision ──────────────────────────────────────────────────────

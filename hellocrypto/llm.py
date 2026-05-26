@@ -321,26 +321,46 @@ def _call_ollama(prompt: str, system: str, llm_cfg: dict) -> dict:
     model      = llm_cfg.get("model", "llama3.2")
     max_tokens = int(llm_cfg.get("max_tokens", 2000))
     base_url   = llm_cfg.get("base_url", "http://localhost:11434").rstrip("/")
+    temperature = float(llm_cfg.get("temperature", 0.5))
 
-    payload = json.dumps({
-        "model":    model,
-        "messages": [
-            {"role": "system",  "content": system},
-            {"role": "user",    "content": prompt},
-        ],
-        "stream":  False,
-        "format":  "json",          # force structured JSON output
-        "options": {"num_predict": max_tokens, "temperature": float(llm_cfg.get("temperature", 0.5))},
-    }).encode()
+    def _post(temp: float) -> str:
+        payload = json.dumps({
+            "model":    model,
+            "messages": [
+                {"role": "system",  "content": system},
+                {"role": "user",    "content": prompt},
+            ],
+            "stream":  False,
+            "format":  "json",
+            "options": {"num_predict": max_tokens, "temperature": temp},
+        }).encode()
+        req = urllib.request.Request(
+            f"{base_url}/api/chat",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            return json.loads(resp.read())["message"]["content"]
 
-    req = urllib.request.Request(
-        f"{base_url}/api/chat",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        data = json.loads(resp.read())
-    return _parse(data["message"]["content"])
+    # Retry on malformed JSON. Small local models (7B) emit unterminated
+    # strings or truncated objects ~1-3% of the time. Nudge temperature on
+    # retries to break determinism if the model is stuck.
+    last_exc: Exception | None = None
+    for attempt in range(1, _MAX_RETRIES + 1):
+        try:
+            return _parse(_post(temperature + 0.05 * (attempt - 1)))
+        except json.JSONDecodeError as exc:
+            last_exc = exc
+            log.warning("[LLM] Ollama(%s) JSON parse failed (attempt %d/%d): %s",
+                        model, attempt, _MAX_RETRIES, exc)
+            time.sleep(_backoff_delay(attempt))
+    log.error("[LLM] Ollama(%s) gave up after %d malformed responses, defaulting to HOLD",
+              model, _MAX_RETRIES)
+    return {
+        "market_sentiment": "neutral",
+        "summary":          f"LLM parse failure ({last_exc})",
+        "actions":          [],
+    }
 
 
 # ── Public interface ──────────────────────────────────────────────────────────

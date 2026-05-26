@@ -135,7 +135,10 @@ def run(
     stop_loss  = cfg.stop_loss_pct  / 100
     trail_stop = cfg.trailing_stop_pct / 100
 
+    n_cycles = len(scenario.cycles)
     for idx, cyc in enumerate(scenario.cycles, start=1):
+        if idx == 1 or idx == n_cycles or idx % 5 == 0:
+            log.info("    cycle %d/%d (%s)", idx, n_cycles, scenario.name)
         prices = {sym: d["price"] for sym, d in cyc.market.items() if "price" in d}
         if not prices:
             continue
@@ -170,7 +173,7 @@ def run(
             behavior_section = None
             if cfg.enable_playbook:
                 from .playbook import section_for_cycle as _pb_sec
-                playbook_section = _pb_sec(cyc.fear_greed, cyc.market)
+                playbook_section = _pb_sec(cyc.fear_greed, cyc.market, scores=scores)
             if cfg.enable_behavior:
                 from .behavior import section_for_cycle as _bh_sec
                 behavior_section = _bh_sec(cyc.fear_greed, cyc.market)

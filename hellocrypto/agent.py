@@ -222,7 +222,7 @@ def _execute_cycle(
         # fear_greed + btc_dominance already fetched above for snapshot capture
         scores = compute_scores(market_data_raw)
         market_data = format_market_data_compact(market_data_raw, watchlist, scores)
-        playbook_section = _playbook_section(fear_greed, market_data_raw)
+        playbook_section = _playbook_section(fear_greed, market_data_raw, scores=scores)
         behavior_section = _behavior_section(fear_greed, market_data_raw)
 
         decision = llm_call(

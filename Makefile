@@ -1,4 +1,4 @@
-.PHONY: install hooks agent dashboard simulation shell deploy clean backtest bench bench-full bench-scenarios
+.PHONY: install hooks agent dashboard simulation shell deploy clean backtest bench bench-full bench-scenarios bench-ollama bench-ollama-full bench-ollama-overnight
 
 install:     ## Install dependencies (Gemini + PostgreSQL)
 	poetry install --extras gemini --extras postgres
@@ -38,6 +38,26 @@ bench-full:  ## Same as bench but on 7d scenarios (~1500 calls, runs ~2h with th
 
 bench-scenarios:  ## (Re)build the holdout scenarios from price_snapshots
 	poetry run python -m scripts.build_holdout_scenarios --suite both
+
+bench-ollama:      ## Bench compact via Ollama (caffeinate empêche le sleep). WORKERS=3 + OLLAMA_NUM_PARALLEL=4 pour ~3x speedup
+	caffeinate -i poetry run python -m hellocrypto.eval.bench \
+		--provider ollama --model $${OLLAMA_MODEL:-qwen2.5:14b} \
+		--temperature 0.0 --min-confidence 0.5 \
+		--workers $${WORKERS:-1}
+
+bench-ollama-full: ## Bench 7j × 3 régimes × 5 variantes. WORKERS=3 recommandé
+	poetry run python -m hellocrypto.eval.bench \
+		--scenarios "data/scenarios/holdout/full/*.json" \
+		--provider ollama --model $${OLLAMA_MODEL:-qwen2.5:14b} \
+		--temperature 0.0 --min-confidence 0.5 \
+		--workers $${WORKERS:-1}
+
+bench-ollama-overnight: ## Bench 7j + caffeinate (empêche le sleep macOS). WORKERS=3 OLLAMA_MODEL=qwen2.5:14b conseillés
+	caffeinate -i poetry run python -m hellocrypto.eval.bench \
+		--scenarios "data/scenarios/holdout/full/*.json" \
+		--provider ollama --model $${OLLAMA_MODEL:-qwen2.5:14b} \
+		--temperature 0.0 --min-confidence 0.5 \
+		--workers $${WORKERS:-3}
 
 clean:       ## Remove Python cache files
 	find . -type d -name __pycache__ -exec rm -rf {} +

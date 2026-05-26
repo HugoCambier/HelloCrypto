@@ -376,12 +376,17 @@ def section_for_cycle(
     fear_greed: dict | None,
     market_raw: dict | None,
     path: Path = DEFAULT_PLAYBOOK_PATH,
+    scores: dict | None = None,
 ) -> str:
     """Convenience entry point for the decision cycle.
 
     Loads (cached) playbook → derives the current regime from F&G + BTC daily
-    trend → returns the prompt-ready section. Returns '' on any miss so the
-    caller can chain it directly into ``build_analysis(..., playbook_section=...)``.
+    trend → returns the prompt-ready section, anchored on patterns that fire
+    *right now* (server-side gated). Returns '' when no pattern fires so the
+    LLM doesn't get permissive "favored" hints without an actual signal.
+
+    Falls back to the static regime summary only when ``market_raw`` is
+    missing (e.g. callers that don't have per-symbol market context yet).
     """
     pb = _cached_playbook(path)
     if not pb:
@@ -390,6 +395,10 @@ def section_for_cycle(
     if market_raw and "BTCUSDC" in market_raw:
         btc_trend_1d = market_raw["BTCUSDC"].get("trend_1d")
     regime = current_regime(fear_greed, btc_trend_1d)
+    if market_raw:
+        from .active_patterns import format_active_section
+        fng_b = fng_bucket(fear_greed.get("value") if fear_greed else None)
+        return format_active_section(pb, regime, market_raw, scores=scores, regime_fng=fng_b)
     return format_playbook_section(pb, regime)
 
 

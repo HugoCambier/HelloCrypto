@@ -189,7 +189,7 @@ def apply_paper_actions(
                          sym, sell_cooldown_cycles - (cycle - cooldown_map[sym]))
                 continue
             rsi      = market_raw.get(sym, {}).get("rsi14")
-            base_amt = float(action.get("usdc_amount", 0))
+            base_amt = float(action.get("usdc_amount") or 0)
             # Phase E: confidence scales position size when present (range 0.5–1.0).
             if conf is not None:
                 base_amt *= max(0.5, min(1.0, float(conf)))
@@ -213,7 +213,7 @@ def apply_paper_actions(
                          (action.get("horizon") or "?"))
 
         elif atype == "sell" and sym in holdings and sym in prices:
-            qty   = min(action.get("qty", holdings[sym]["qty"]), holdings[sym]["qty"])
+            qty   = min(action.get("qty") or holdings[sym]["qty"], holdings[sym]["qty"])
             entry = holdings[sym]["avg_price"]
             res   = paper_sell(sym, qty, prices[sym], holdings)
             cash       += res.received
