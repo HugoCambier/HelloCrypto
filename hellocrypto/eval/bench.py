@@ -38,7 +38,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .runner import StrategyConfig, run
+from .runner import PROGRESS_FILE, StrategyConfig, run
 from .scenario import load as load_scenario
 
 log = logging.getLogger(__name__)
@@ -304,12 +304,18 @@ def _main() -> int:
         min_confidence=args.min_confidence,
     )
 
-    results = run_bench(scenarios, base_cfg, workers=args.workers)
-    print_comparison_table(results)
-
-    out_path = write_bench_report(results, Path(args.out_dir))
-    log.info("Full bench report → %s", out_path)
-    return 0
+    try:
+        results = run_bench(scenarios, base_cfg, workers=args.workers)
+        print_comparison_table(results)
+        out_path = write_bench_report(results, Path(args.out_dir))
+        log.info("Full bench report → %s", out_path)
+        return 0
+    finally:
+        # Progress file is only useful mid-run; remove on completion or crash.
+        try:
+            PROGRESS_FILE.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":

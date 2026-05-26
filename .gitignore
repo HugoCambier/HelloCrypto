@@ -15,7 +15,9 @@ logs/
 data/
 
 # Eval/learning artifacts — tracked except for the provider-specific LLM cache
+# and the transient bench progress file (only useful mid-run, deleted on exit)
 eval/llm_cache/
+eval/reports/_progress.json
 
 # macOS
 .DS_Store

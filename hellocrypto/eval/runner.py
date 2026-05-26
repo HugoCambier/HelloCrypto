@@ -8,10 +8,13 @@ Designed for reproducibility:
 """
 from __future__ import annotations
 
+import json
 import logging
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
+from pathlib import Path
 
 from .. import prompts as prompts_mod
 from .. import strategy
@@ -21,6 +24,37 @@ from .metrics import summarize
 from .scenario import Scenario
 
 log = logging.getLogger(__name__)
+
+
+# Inspectable progress file written after each cycle. Bench tasks update
+# their slot; readers parse it to display a clean cross-scenario view
+# without grepping the log. Removed by ``bench._main`` once the run ends.
+PROGRESS_FILE = Path("eval/reports/_progress.json")
+_progress_lock = threading.Lock()
+
+
+def _progress_update(scenario_name: str, variant: str, cycle: int, n_cycles: int) -> None:
+    """Atomically write this scenario's slot in the shared progress file."""
+    try:
+        with _progress_lock:
+            state: dict = {}
+            if PROGRESS_FILE.exists():
+                try:
+                    state = json.loads(PROGRESS_FILE.read_text())
+                except (json.JSONDecodeError, OSError):
+                    state = {}
+            state.setdefault("scenarios", {})[scenario_name] = {
+                "variant":    variant,
+                "cycle":      cycle,
+                "n_cycles":   n_cycles,
+                "updated_at": datetime.now(UTC).isoformat(timespec="seconds"),
+            }
+            PROGRESS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            tmp = PROGRESS_FILE.with_suffix(".tmp")
+            tmp.write_text(json.dumps(state, indent=2))
+            tmp.replace(PROGRESS_FILE)
+    except OSError:
+        pass  # Progress tracking is best-effort, never block the bench.
 
 
 @dataclass
@@ -139,6 +173,7 @@ def run(
     for idx, cyc in enumerate(scenario.cycles, start=1):
         if idx == 1 or idx == n_cycles or idx % 5 == 0:
             log.info("    cycle %d/%d (%s)", idx, n_cycles, scenario.name)
+        _progress_update(scenario.name, version, idx, n_cycles)
         prices = {sym: d["price"] for sym, d in cyc.market.items() if "price" in d}
         if not prices:
             continue
