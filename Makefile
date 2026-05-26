@@ -39,11 +39,8 @@ bench-full:  ## Same as bench but on 7d scenarios (~1500 calls, runs ~2h with th
 bench-scenarios:  ## (Re)build the holdout scenarios from price_snapshots
 	poetry run python -m scripts.build_holdout_scenarios --suite both
 
-bench-progress:  ## Show live progress of a running bench (reads eval/reports/_progress.json)
-	@test -f eval/reports/_progress.json && \
-		python3 -c "import json; s=json.load(open('eval/reports/_progress.json'))['scenarios']; \
-		[print(f'  {k}: variant={v[\"variant\"]:<13} cycle={v[\"cycle\"]:>3}/{v[\"n_cycles\"]} ({v[\"cycle\"]*100//v[\"n_cycles\"]:>3}%) @ {v[\"updated_at\"]}') for k,v in sorted(s.items())]" \
-		|| echo "No bench running (eval/reports/_progress.json absent)"
+bench-progress:  ## Show live progress + ETA of a running bench
+	@poetry run python -m hellocrypto.eval.progress
 
 bench-ollama:      ## Bench compact via Ollama (caffeinate empêche le sleep). WORKERS=3 + OLLAMA_NUM_PARALLEL=4 pour ~3x speedup
 	caffeinate -i poetry run python -m hellocrypto.eval.bench \

@@ -34,7 +34,12 @@ _progress_lock = threading.Lock()
 
 
 def _progress_update(scenario_name: str, variant: str, cycle: int, n_cycles: int) -> None:
-    """Atomically write this scenario's slot in the shared progress file."""
+    """Atomically write this scenario's slot in the shared progress file.
+
+    ``variant_idx`` is filled in by the bench startup writer (``progress_init``)
+    so the reader can compute aggregate progress without knowing the variant
+    ordering — we just merge cycle/variant here, preserving the existing meta.
+    """
     try:
         with _progress_lock:
             state: dict = {}
@@ -43,18 +48,48 @@ def _progress_update(scenario_name: str, variant: str, cycle: int, n_cycles: int
                     state = json.loads(PROGRESS_FILE.read_text())
                 except (json.JSONDecodeError, OSError):
                     state = {}
-            state.setdefault("scenarios", {})[scenario_name] = {
-                "variant":    variant,
-                "cycle":      cycle,
-                "n_cycles":   n_cycles,
-                "updated_at": datetime.now(UTC).isoformat(timespec="seconds"),
-            }
+            variants_order: list = state.get("variants_order", [])
+            try:
+                variant_idx = variants_order.index(variant)
+            except ValueError:
+                variant_idx = 0
+            scen_slot = state.setdefault("scenarios", {}).setdefault(scenario_name, {})
+            scen_slot.update({
+                "variant":     variant,
+                "variant_idx": variant_idx,
+                "cycle":       cycle,
+                "n_cycles":    n_cycles,
+                "updated_at":  datetime.now(UTC).isoformat(timespec="seconds"),
+            })
             PROGRESS_FILE.parent.mkdir(parents=True, exist_ok=True)
             tmp = PROGRESS_FILE.with_suffix(".tmp")
             tmp.write_text(json.dumps(state, indent=2))
             tmp.replace(PROGRESS_FILE)
     except OSError:
         pass  # Progress tracking is best-effort, never block the bench.
+
+
+def progress_init(scenario_names: list[str], variants_order: list[str], n_cycles_per_scenario: int) -> None:
+    """Seed the progress file with run-wide metadata at bench startup.
+
+    Stores ``started_at``, the variant ordering, and the per-scenario cycle
+    count so readers can compute aggregate progress + ETA without rescanning
+    scenario JSON files.
+    """
+    try:
+        with _progress_lock:
+            state = {
+                "started_at":     datetime.now(UTC).isoformat(timespec="seconds"),
+                "variants_order": list(variants_order),
+                "n_cycles":       n_cycles_per_scenario,
+                "scenarios":      {name: {} for name in scenario_names},
+            }
+            PROGRESS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            tmp = PROGRESS_FILE.with_suffix(".tmp")
+            tmp.write_text(json.dumps(state, indent=2))
+            tmp.replace(PROGRESS_FILE)
+    except OSError:
+        pass
 
 
 @dataclass

@@ -38,7 +38,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .runner import PROGRESS_FILE, StrategyConfig, run
+from .runner import PROGRESS_FILE, StrategyConfig, progress_init, run
 from .scenario import load as load_scenario
 
 log = logging.getLogger(__name__)
@@ -302,6 +302,15 @@ def _main() -> int:
         model=args.model,
         temperature=args.temperature,
         min_confidence=args.min_confidence,
+    )
+
+    # Seed progress file with run-wide meta (started_at, variants, cycle count)
+    # so readers can compute aggregate progress + ETA without rescanning JSON.
+    first = load_scenario(scenarios[0])
+    progress_init(
+        scenario_names=[Path(s).stem for s in scenarios],
+        variants_order=list(VARIANTS.keys()),
+        n_cycles_per_scenario=first.n_cycles,
     )
 
     try:
