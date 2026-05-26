@@ -44,7 +44,6 @@ from .trading import compute_position_size
 
 load_dotenv()
 
-Path("logs").mkdir(exist_ok=True)
 Path("data").mkdir(exist_ok=True)
 
 log = logging.getLogger(__name__)
@@ -416,7 +415,7 @@ def run_agent() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[logging.StreamHandler(), logging.FileHandler("logs/agent.log")],
+        handlers=[logging.StreamHandler()],
     )
 
     log.info(

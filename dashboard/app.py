@@ -246,7 +246,6 @@ def main() -> None:
     store.init_db()
     sync_users_from_env()
     from pathlib import Path
-    Path("logs").mkdir(exist_ok=True)
     Path("data").mkdir(exist_ok=True)
     # Cloud Run sets PORT; FLASK_HOST defaults to 0.0.0.0 (required by Cloud Run).
     # On a VM behind nginx, set FLASK_HOST=127.0.0.1 in the systemd service.

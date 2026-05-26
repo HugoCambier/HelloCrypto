@@ -7,8 +7,6 @@ from pathlib import Path
 # Project root (two levels up from this file: hellocrypto/routes/shared.py → /)
 _ROOT = Path(__file__).parent.parent.parent
 
-_LOG_FILE = _ROOT / "logs" / "agent.log"
-
 PERIODS: dict[str, timedelta] = {
     "1h":  timedelta(hours=1),
     "6h":  timedelta(hours=6),

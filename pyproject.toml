@@ -44,7 +44,7 @@ addopts    = "-q"
 [tool.ruff]
 line-length    = 110
 target-version = "py311"
-extend-exclude = ["logs", "data"]
+extend-exclude = ["data"]
 
 [tool.ruff.lint]
 # SIM volontairement omis : ses suggestions (contextlib.suppress, ternaires

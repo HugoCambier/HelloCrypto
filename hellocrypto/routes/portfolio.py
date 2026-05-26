@@ -83,27 +83,6 @@ def api_portfolio():
         return jsonify({"error": "Erreur lors de la récupération du portefeuille"}), 500
 
 
-@bp.get("/api/binance/balance")
-def api_binance_balance():
-    try:
-        cfg       = load_config()
-        watchlist = cfg.get("watchlist", [])
-        usdc      = get_balance("USDC")
-        coins = {}
-        for sym in watchlist:
-            coin = sym.replace("USDC", "").replace("BUSD", "")
-            try:
-                qty = get_balance(coin)
-            except Exception:
-                log.warning("Solde indisponible pour %s", coin, exc_info=True)
-                qty = 0.0
-            coins[sym] = {"coin": coin, "qty": round(qty, 8)}
-        return jsonify({"usdc": round(usdc, 2), "coins": coins})
-    except Exception:
-        log.exception("Erreur api_binance_balance")
-        return jsonify({"error": "Erreur Binance", "usdc": None, "coins": {}}), 200
-
-
 @bp.post("/api/trade/buy")
 @rate_limit(max_calls=10, per_seconds=60)  # garde-fou anti-spam ordres manuels
 def api_buy():

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -25,7 +24,6 @@ def create_app() -> Flask:
     )
 
     from .routes import (
-        bp_agent,
         bp_analysis,
         bp_backtest,
         bp_config,
@@ -37,7 +35,7 @@ def create_app() -> Flask:
     )
     for bp in (
         bp_logs, bp_performance, bp_portfolio,
-        bp_simulation, bp_backtest, bp_agent,
+        bp_simulation, bp_backtest,
         bp_config, bp_analysis, bp_cron,
     ):
         app.register_blueprint(bp)
@@ -71,15 +69,3 @@ def create_app() -> Flask:
 
 
 app = create_app()
-
-
-def main() -> None:
-    (_ROOT / "logs").mkdir(exist_ok=True)
-    (_ROOT / "data").mkdir(exist_ok=True)
-    port = int(os.environ.get("PORT", os.environ.get("FLASK_PORT", "5000")))
-    print(f"Dashboard → http://localhost:{port}")
-    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
-
-
-if __name__ == "__main__":
-    main()

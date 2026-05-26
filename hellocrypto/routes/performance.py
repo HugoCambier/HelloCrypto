@@ -83,19 +83,6 @@ def _compute_benchmarks(start_iso: str, watchlist: list[str], budget: float) -> 
     return result
 
 
-@bp.get("/api/watchlist")
-def api_watchlist():
-    cfg = load_config()
-    return jsonify({
-        "watchlist":             cfg.get("watchlist", []),
-        "stop_loss_pct":         float(cfg.get("stop_loss_pct", 10)),
-        "trailing_stop_pct":     float(cfg.get("trailing_stop_pct", 5)),
-        "budget":                float(cfg.get("budget", 1000)),
-        "risk_level":            int(cfg.get("risk_level", 5)),
-        "sell_cooldown_cycles":  int(cfg.get("sell_cooldown_cycles", 3)),
-    })
-
-
 @bp.get("/api/watchlist/enriched")
 def api_watchlist_enriched():
     """Return watchlist symbols with inline market indicators."""

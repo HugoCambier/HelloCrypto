@@ -178,24 +178,3 @@ def api_analyses():
     except Exception:
         log.exception("Erreur api_analyses")
         return jsonify({"error": "Erreur lors du chargement des analyses"}), 500
-
-
-@bp.post("/api/admin/clean-logs")
-def admin_clean_logs():
-    body            = request.json or {}
-    older_than_days = int(body.get("older_than_days", 30))
-    keep_last       = body.get("keep_last")
-    mode            = body.get("mode")
-    session_id      = body.get("session_id")
-    try:
-        from db.store import clean_logs
-        deleted = clean_logs(
-            older_than_days=older_than_days,
-            mode=mode or None,
-            session_id=session_id or None,
-            keep_last=int(keep_last) if keep_last is not None else None,
-        )
-        return jsonify({"ok": True, "deleted": deleted})
-    except Exception:
-        log.exception("Erreur admin_clean_logs")
-        return jsonify({"error": "Erreur lors du nettoyage des logs"}), 500
