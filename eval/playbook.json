@@ -1,0 +1,442 @@
+{
+  "generated_at": "2026-05-25T14:12:25.989511+00:00",
+  "config": {
+    "fee_pct": 0.2,
+    "min_edge_pct": 0.3,
+    "min_samples": 50,
+    "favored_winrate": 0.53,
+    "horizon_h": 24,
+    "trap_mae_threshold": -3.0
+  },
+  "n_pattern_matches_total": 31267,
+  "regimes": [
+    "fear+bear",
+    "fear+bull",
+    "greed+bear",
+    "greed+bull",
+    "greed+range",
+    "neutral+bear",
+    "neutral+bull",
+    "neutral+range"
+  ],
+  "by_regime": {
+    "neutral+range": {
+      "favored": [
+        {
+          "pattern": "bb_lower_bounce",
+          "side": "long",
+          "n": 266,
+          "mean_pct": 0.537,
+          "net_edge_pct": 0.337,
+          "win_rate": 0.707,
+          "mae_24h": -2.519,
+          "mfe_24h": 3.119,
+          "conviction": 0.55,
+          "lesson": "bb_lower_bounce (LONG) in neutral+range: n=266, h24 mean +0.54% (net +0.34%), win 71%, MAE -2.52% / MFE +3.12% → favored"
+        },
+        {
+          "pattern": "oversold_reversal",
+          "side": "long",
+          "n": 51,
+          "mean_pct": 0.593,
+          "net_edge_pct": 0.393,
+          "win_rate": 0.686,
+          "mae_24h": -1.359,
+          "mfe_24h": 2.983,
+          "conviction": 0.281,
+          "lesson": "oversold_reversal (LONG) in neutral+range: n=51, h24 mean +0.59% (net +0.39%), win 69%, MAE -1.36% / MFE +2.98% → favored"
+        }
+      ],
+      "avoid": [
+        {
+          "pattern": "bb_upper_fade",
+          "side": "short",
+          "n": 191,
+          "mean_pct": 0.137,
+          "net_edge_pct": -0.337,
+          "win_rate": 0.534,
+          "mae_24h": -2.32,
+          "mfe_24h": 2.382,
+          "conviction": -0.466,
+          "lesson": "bb_upper_fade (SHORT) in neutral+range: n=191, h24 mean +0.14% (net -0.34%), win 53%, MAE -2.32% / MFE +2.38% → trap (avoid)"
+        }
+      ]
+    },
+    "fear+bear": {
+      "favored": [
+        {
+          "pattern": "oversold_reversal",
+          "side": "long",
+          "n": 273,
+          "mean_pct": 2.244,
+          "net_edge_pct": 2.044,
+          "win_rate": 0.703,
+          "mae_24h": -2.793,
+          "mfe_24h": 4.609,
+          "conviction": 3.377,
+          "lesson": "oversold_reversal (LONG) in fear+bear: n=273, h24 mean +2.24% (net +2.04%), win 70%, MAE -2.79% / MFE +4.61% → favored"
+        },
+        {
+          "pattern": "overbought_top",
+          "side": "short",
+          "n": 191,
+          "mean_pct": -0.511,
+          "net_edge_pct": 0.311,
+          "win_rate": 0.602,
+          "mae_24h": -2.863,
+          "mfe_24h": 2.398,
+          "conviction": 0.43,
+          "lesson": "overbought_top (SHORT) in fear+bear: n=191, h24 mean -0.51% (net +0.31%), win 60%, MAE -2.86% / MFE +2.40% → favored"
+        }
+      ],
+      "avoid": [
+        {
+          "pattern": "confluence_strong_sell",
+          "side": "short",
+          "n": 607,
+          "mean_pct": -0.115,
+          "net_edge_pct": -0.085,
+          "win_rate": 0.501,
+          "mae_24h": -2.555,
+          "mfe_24h": 2.499,
+          "conviction": -0.209,
+          "lesson": "confluence_strong_sell (SHORT) in fear+bear: n=607, h24 mean -0.12% (net -0.09%), win 50%, MAE -2.56% / MFE +2.50% → trap (avoid)"
+        }
+      ]
+    },
+    "greed+bull": {
+      "favored": [
+        {
+          "pattern": "momentum_continuation_up",
+          "side": "long",
+          "n": 1666,
+          "mean_pct": 0.616,
+          "net_edge_pct": 0.416,
+          "win_rate": 0.556,
+          "mae_24h": -2.646,
+          "mfe_24h": 3.526,
+          "conviction": 1.698,
+          "lesson": "momentum_continuation_up (LONG) in greed+bull: n=1666, h24 mean +0.62% (net +0.42%), win 56%, MAE -2.65% / MFE +3.53% → favored"
+        },
+        {
+          "pattern": "confluence_strong_buy",
+          "side": "long",
+          "n": 137,
+          "mean_pct": 0.69,
+          "net_edge_pct": 0.49,
+          "win_rate": 0.693,
+          "mae_24h": -2.346,
+          "mfe_24h": 3.103,
+          "conviction": 0.574,
+          "lesson": "confluence_strong_buy (LONG) in greed+bull: n=137, h24 mean +0.69% (net +0.49%), win 69%, MAE -2.35% / MFE +3.10% → favored"
+        }
+      ],
+      "avoid": [
+        {
+          "pattern": "bb_upper_fade",
+          "side": "short",
+          "n": 617,
+          "mean_pct": 0.679,
+          "net_edge_pct": -0.879,
+          "win_rate": 0.446,
+          "mae_24h": -2.934,
+          "mfe_24h": 4.032,
+          "conviction": -2.183,
+          "lesson": "bb_upper_fade (SHORT) in greed+bull: n=617, h24 mean +0.68% (net -0.88%), win 45%, MAE -2.93% / MFE +4.03% → trap (avoid)"
+        },
+        {
+          "pattern": "overbought_top",
+          "side": "short",
+          "n": 71,
+          "mean_pct": 0.989,
+          "net_edge_pct": -1.189,
+          "win_rate": 0.465,
+          "mae_24h": -3.503,
+          "mfe_24h": 4.862,
+          "conviction": -1.002,
+          "lesson": "overbought_top (SHORT) in greed+bull: n=71, h24 mean +0.99% (net -1.19%), win 46%, MAE -3.50% / MFE +4.86% → trap (avoid)"
+        },
+        {
+          "pattern": "bb_lower_bounce",
+          "side": "long",
+          "n": 293,
+          "mean_pct": 0.157,
+          "net_edge_pct": -0.043,
+          "win_rate": 0.567,
+          "mae_24h": -2.862,
+          "mfe_24h": 2.681,
+          "conviction": -0.074,
+          "lesson": "bb_lower_bounce (LONG) in greed+bull: n=293, h24 mean +0.16% (net -0.04%), win 57%, MAE -2.86% / MFE +2.68% → trap (avoid)"
+        }
+      ]
+    },
+    "neutral+bear": {
+      "favored": [],
+      "avoid": [
+        {
+          "pattern": "bb_lower_bounce",
+          "side": "long",
+          "n": 578,
+          "mean_pct": -1.47,
+          "net_edge_pct": -1.67,
+          "win_rate": 0.427,
+          "mae_24h": -7.429,
+          "mfe_24h": 2.659,
+          "conviction": -4.015,
+          "lesson": "bb_lower_bounce (LONG) in neutral+bear: n=578, h24 mean -1.47% (net -1.67%), win 43%, MAE -7.43% / MFE +2.66% → trap (avoid)"
+        },
+        {
+          "pattern": "falling_knife",
+          "side": "long",
+          "n": 205,
+          "mean_pct": -2.237,
+          "net_edge_pct": -2.437,
+          "win_rate": 0.376,
+          "mae_24h": -10.234,
+          "mfe_24h": 2.869,
+          "conviction": -3.489,
+          "lesson": "falling_knife (LONG) in neutral+bear: n=205, h24 mean -2.24% (net -2.44%), win 38%, MAE -10.23% / MFE +2.87% → trap (avoid)"
+        },
+        {
+          "pattern": "bb_upper_fade",
+          "side": "short",
+          "n": 721,
+          "mean_pct": 0.235,
+          "net_edge_pct": -0.435,
+          "win_rate": 0.437,
+          "mae_24h": -2.359,
+          "mfe_24h": 2.504,
+          "conviction": -1.168,
+          "lesson": "bb_upper_fade (SHORT) in neutral+bear: n=721, h24 mean +0.23% (net -0.43%), win 44%, MAE -2.36% / MFE +2.50% → trap (avoid)"
+        },
+        {
+          "pattern": "confluence_strong_sell",
+          "side": "short",
+          "n": 226,
+          "mean_pct": 0.264,
+          "net_edge_pct": -0.464,
+          "win_rate": 0.416,
+          "mae_24h": -2.187,
+          "mfe_24h": 2.135,
+          "conviction": -0.698,
+          "lesson": "confluence_strong_sell (SHORT) in neutral+bear: n=226, h24 mean +0.26% (net -0.46%), win 42%, MAE -2.19% / MFE +2.13% → trap (avoid)"
+        },
+        {
+          "pattern": "overbought_top",
+          "side": "short",
+          "n": 51,
+          "mean_pct": 0.406,
+          "net_edge_pct": -0.606,
+          "win_rate": 0.51,
+          "mae_24h": -1.572,
+          "mfe_24h": 2.392,
+          "conviction": -0.433,
+          "lesson": "overbought_top (SHORT) in neutral+bear: n=51, h24 mean +0.41% (net -0.61%), win 51%, MAE -1.57% / MFE +2.39% → trap (avoid)"
+        }
+      ]
+    },
+    "neutral+bull": {
+      "favored": [],
+      "avoid": [
+        {
+          "pattern": "momentum_continuation_up",
+          "side": "long",
+          "n": 2650,
+          "mean_pct": -0.469,
+          "net_edge_pct": -0.669,
+          "win_rate": 0.454,
+          "mae_24h": -2.674,
+          "mfe_24h": 2.314,
+          "conviction": -3.444,
+          "lesson": "momentum_continuation_up (LONG) in neutral+bull: n=2650, h24 mean -0.47% (net -0.67%), win 45%, MAE -2.67% / MFE +2.31% → trap (avoid)"
+        },
+        {
+          "pattern": "confluence_strong_buy",
+          "side": "long",
+          "n": 233,
+          "mean_pct": -0.367,
+          "net_edge_pct": -0.567,
+          "win_rate": 0.511,
+          "mae_24h": -2.755,
+          "mfe_24h": 1.906,
+          "conviction": -0.865,
+          "lesson": "confluence_strong_buy (LONG) in neutral+bull: n=233, h24 mean -0.37% (net -0.57%), win 51%, MAE -2.75% / MFE +1.91% → trap (avoid)"
+        },
+        {
+          "pattern": "bb_lower_bounce",
+          "side": "long",
+          "n": 729,
+          "mean_pct": -0.086,
+          "net_edge_pct": -0.286,
+          "win_rate": 0.465,
+          "mae_24h": -3.043,
+          "mfe_24h": 2.667,
+          "conviction": -0.772,
+          "lesson": "bb_lower_bounce (LONG) in neutral+bull: n=729, h24 mean -0.09% (net -0.29%), win 46%, MAE -3.04% / MFE +2.67% → trap (avoid)"
+        },
+        {
+          "pattern": "overbought_top",
+          "side": "short",
+          "n": 63,
+          "mean_pct": 0.311,
+          "net_edge_pct": -0.511,
+          "win_rate": 0.508,
+          "mae_24h": -2.303,
+          "mfe_24h": 2.798,
+          "conviction": -0.406,
+          "lesson": "overbought_top (SHORT) in neutral+bull: n=63, h24 mean +0.31% (net -0.51%), win 51%, MAE -2.30% / MFE +2.80% → trap (avoid)"
+        },
+        {
+          "pattern": "bb_upper_fade",
+          "side": "short",
+          "n": 782,
+          "mean_pct": -0.071,
+          "net_edge_pct": -0.129,
+          "win_rate": 0.503,
+          "mae_24h": -2.526,
+          "mfe_24h": 2.672,
+          "conviction": -0.361,
+          "lesson": "bb_upper_fade (SHORT) in neutral+bull: n=782, h24 mean -0.07% (net -0.13%), win 50%, MAE -2.53% / MFE +2.67% → trap (avoid)"
+        }
+      ]
+    },
+    "greed+range": {
+      "favored": [
+        {
+          "pattern": "bb_upper_fade",
+          "side": "short",
+          "n": 80,
+          "mean_pct": -1.556,
+          "net_edge_pct": 1.356,
+          "win_rate": 0.725,
+          "mae_24h": -2.799,
+          "mfe_24h": 1.812,
+          "conviction": 1.213,
+          "lesson": "bb_upper_fade (SHORT) in greed+range: n=80, h24 mean -1.56% (net +1.36%), win 72%, MAE -2.80% / MFE +1.81% → favored"
+        }
+      ],
+      "avoid": [
+        {
+          "pattern": "bb_lower_bounce",
+          "side": "long",
+          "n": 123,
+          "mean_pct": -1.649,
+          "net_edge_pct": -1.849,
+          "win_rate": 0.309,
+          "mae_24h": -3.812,
+          "mfe_24h": 1.743,
+          "conviction": -2.051,
+          "lesson": "bb_lower_bounce (LONG) in greed+range: n=123, h24 mean -1.65% (net -1.85%), win 31%, MAE -3.81% / MFE +1.74% → trap (avoid)"
+        }
+      ]
+    },
+    "greed+bear": {
+      "favored": [
+        {
+          "pattern": "bb_upper_fade",
+          "side": "short",
+          "n": 200,
+          "mean_pct": -0.712,
+          "net_edge_pct": 0.512,
+          "win_rate": 0.605,
+          "mae_24h": -3.027,
+          "mfe_24h": 2.612,
+          "conviction": 0.724,
+          "lesson": "bb_upper_fade (SHORT) in greed+bear: n=200, h24 mean -0.71% (net +0.51%), win 60%, MAE -3.03% / MFE +2.61% → favored"
+        }
+      ],
+      "avoid": [
+        {
+          "pattern": "euphoria_top",
+          "side": "long",
+          "n": 67,
+          "mean_pct": -1.644,
+          "net_edge_pct": -1.844,
+          "win_rate": 0.239,
+          "mae_24h": -3.694,
+          "mfe_24h": 2.095,
+          "conviction": -1.509,
+          "lesson": "euphoria_top (LONG) in greed+bear: n=67, h24 mean -1.64% (net -1.84%), win 24%, MAE -3.69% / MFE +2.10% → trap (avoid)"
+        },
+        {
+          "pattern": "bb_lower_bounce",
+          "side": "long",
+          "n": 142,
+          "mean_pct": -0.183,
+          "net_edge_pct": -0.383,
+          "win_rate": 0.444,
+          "mae_24h": -2.131,
+          "mfe_24h": 2.427,
+          "conviction": -0.456,
+          "lesson": "bb_lower_bounce (LONG) in greed+bear: n=142, h24 mean -0.18% (net -0.38%), win 44%, MAE -2.13% / MFE +2.43% → trap (avoid)"
+        },
+        {
+          "pattern": "falling_knife",
+          "side": "long",
+          "n": 63,
+          "mean_pct": 0.175,
+          "net_edge_pct": -0.025,
+          "win_rate": 0.524,
+          "mae_24h": -1.854,
+          "mfe_24h": 2.635,
+          "conviction": -0.02,
+          "lesson": "falling_knife (LONG) in greed+bear: n=63, h24 mean +0.17% (net -0.03%), win 52%, MAE -1.85% / MFE +2.63% → trap (avoid)"
+        }
+      ]
+    },
+    "fear+bull": {
+      "favored": [
+        {
+          "pattern": "confluence_strong_buy",
+          "side": "long",
+          "n": 288,
+          "mean_pct": 1.131,
+          "net_edge_pct": 0.931,
+          "win_rate": 0.608,
+          "mae_24h": -1.65,
+          "mfe_24h": 3.059,
+          "conviction": 1.58,
+          "lesson": "confluence_strong_buy (LONG) in fear+bull: n=288, h24 mean +1.13% (net +0.93%), win 61%, MAE -1.65% / MFE +3.06% → favored"
+        }
+      ],
+      "avoid": [
+        {
+          "pattern": "momentum_continuation_up",
+          "side": "long",
+          "n": 2825,
+          "mean_pct": 0.023,
+          "net_edge_pct": -0.177,
+          "win_rate": 0.455,
+          "mae_24h": -2.278,
+          "mfe_24h": 2.557,
+          "conviction": -0.941,
+          "lesson": "momentum_continuation_up (LONG) in fear+bull: n=2825, h24 mean +0.02% (net -0.18%), win 46%, MAE -2.28% / MFE +2.56% → trap (avoid)"
+        },
+        {
+          "pattern": "bb_lower_bounce",
+          "side": "long",
+          "n": 658,
+          "mean_pct": 0.016,
+          "net_edge_pct": -0.184,
+          "win_rate": 0.508,
+          "mae_24h": -2.065,
+          "mfe_24h": 2.091,
+          "conviction": -0.472,
+          "lesson": "bb_lower_bounce (LONG) in fear+bull: n=658, h24 mean +0.02% (net -0.18%), win 51%, MAE -2.06% / MFE +2.09% → trap (avoid)"
+        },
+        {
+          "pattern": "bb_upper_fade",
+          "side": "short",
+          "n": 812,
+          "mean_pct": -0.054,
+          "net_edge_pct": -0.146,
+          "win_rate": 0.544,
+          "mae_24h": -2.413,
+          "mfe_24h": 2.817,
+          "conviction": -0.416,
+          "lesson": "bb_upper_fade (SHORT) in fear+bull: n=812, h24 mean -0.05% (net -0.15%), win 54%, MAE -2.41% / MFE +2.82% → trap (avoid)"
+        }
+      ]
+    }
+  }
+}

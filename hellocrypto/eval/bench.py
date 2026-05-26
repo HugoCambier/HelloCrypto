@@ -15,7 +15,7 @@ scenario × variant, runs ``eval.runner.run()``, and prints a delta table.
 
 Usage:
     poetry run python -m hellocrypto.eval.bench
-    poetry run python -m hellocrypto.eval.bench --scenarios "data/scenarios/holdout/*.json"
+    poetry run python -m hellocrypto.eval.bench --scenarios "eval/scenarios/holdout/*.json"
     poetry run python -m hellocrypto.eval.bench --provider gemini --model gemini-3.1-flash-lite
 
 Limitation noted: the playbook + behavior reports in DB reflect the
@@ -266,9 +266,9 @@ def write_bench_report(results: dict, out_dir: Path) -> Path:
 
 def _main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scenarios", default="data/scenarios/holdout/compact/*.json",
+    parser.add_argument("--scenarios", default="eval/scenarios/holdout/compact/*.json",
                         help="Glob pattern for scenario files (default: compact 1d suite ; "
-                             "use data/scenarios/holdout/full/*.json for the 7d suite)")
+                             "use eval/scenarios/holdout/full/*.json for the 7d suite)")
     parser.add_argument("--budget",    type=float, default=1000.0)
     parser.add_argument("--risk-level", type=int, default=5)
     parser.add_argument("--provider",  default="rules",
@@ -276,7 +276,7 @@ def _main() -> int:
     parser.add_argument("--model",     default="")
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--min-confidence", type=float, default=0.5)
-    parser.add_argument("--out-dir",   default="data/eval_reports/bench")
+    parser.add_argument("--out-dir",   default="eval/reports/bench")
     parser.add_argument("--log-level", default="INFO")
     parser.add_argument("--workers",   type=int, default=1,
                         help="Parallel scenarios. Bounded by OLLAMA_NUM_PARALLEL "

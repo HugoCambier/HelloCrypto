@@ -1,0 +1,1093 @@
+{
+  "name": "synthetic_demo",
+  "start": "2026-05-01T00:00:00",
+  "end": "2026-05-01T20:00:00",
+  "watchlist": [
+    "BTCUSDC",
+    "ETHUSDC"
+  ],
+  "cycle_seconds": 3600,
+  "cycles": [
+    {
+      "timestamp": "2026-05-01T00:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 50249.99999999999,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 49244.99999999999,
+            "middle": 49747.49999999999,
+            "upper": 50752.49999999999,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2985.0,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2895.45,
+            "middle": 2955.15,
+            "upper": 3014.85,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T01:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 50501.249999999985,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 49491.224999999984,
+            "middle": 49996.23749999999,
+            "upper": 51006.26249999998,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2970.075,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2880.97275,
+            "middle": 2940.37425,
+            "upper": 2999.77575,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T02:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 50753.75624999998,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 49738.681124999974,
+            "middle": 50246.218687499975,
+            "upper": 51261.29381249998,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2955.224625,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2866.56788625,
+            "middle": 2925.67237875,
+            "upper": 2984.7768712499997,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T03:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 51007.52503124997,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 49987.37453062497,
+            "middle": 50497.44978093747,
+            "upper": 51517.60028156247,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2940.4485018749997,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2852.2350468187497,
+            "middle": 2911.0440168562495,
+            "upper": 2969.85298689375,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T04:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 51262.56265640621,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 50237.31140327809,
+            "middle": 50749.93702984215,
+            "upper": 51775.18828297027,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2925.7462593656246,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2837.9738715846556,
+            "middle": 2896.4887967719683,
+            "upper": 2955.003721959281,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T05:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 51518.87546968824,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 50488.49796029447,
+            "middle": 51003.68671499135,
+            "upper": 52034.064224385125,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2911.1175280687967,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2823.784002226733,
+            "middle": 2882.006352788109,
+            "upper": 2940.2287033494845,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T06:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 51776.46984703667,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 50740.940450095935,
+            "middle": 51258.7051485663,
+            "upper": 52294.23454550704,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2896.5619404284525,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2809.665082215599,
+            "middle": 2867.596321024168,
+            "upper": 2925.527559832737,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T07:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 52035.35219627185,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 50994.64515234641,
+            "middle": 51514.998674309136,
+            "upper": 52555.70571823457,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2882.0791307263103,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2795.6167568045207,
+            "middle": 2853.258339419047,
+            "upper": 2910.8999220335736,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T08:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 52295.528957253206,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 51249.61837810814,
+            "middle": 51772.57366768067,
+            "upper": 52818.48424682574,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2867.668735072679,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2781.6386730204986,
+            "middle": 2838.992047721952,
+            "upper": 2896.3454224234056,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T09:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 52557.006602039466,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 51505.86646999868,
+            "middle": 52031.43653601907,
+            "upper": 53082.57666805986,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2853.3303913973155,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2767.730479655396,
+            "middle": 2824.7970874833422,
+            "upper": 2881.8636953112887,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T10:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 52819.79163504966,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 51763.39580234866,
+            "middle": 52291.593718699165,
+            "upper": 53347.989551400155,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2839.063739440329,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2753.891827257119,
+            "middle": 2810.6731020459256,
+            "upper": 2867.454376834732,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T11:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 53083.8905932249,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 52022.2127813604,
+            "middle": 52553.05168729265,
+            "upper": 53614.729499157154,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2824.868420743127,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2740.122368120833,
+            "middle": 2796.6197365356957,
+            "upper": 2853.1171049505583,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T12:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 53349.31004619102,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 52282.3238452672,
+            "middle": 52815.81694572911,
+            "upper": 53882.803146652936,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2810.7440786394113,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2726.4217562802287,
+            "middle": 2782.636637853017,
+            "upper": 2838.8515194258057,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T13:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 53616.05659642197,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 52543.73546449353,
+            "middle": 53079.89603045775,
+            "upper": 54152.217162386194,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2796.690358246214,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2712.7896474988274,
+            "middle": 2768.723454663752,
+            "upper": 2824.6572618286764,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T14:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 53884.136879404075,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 52806.45414181599,
+            "middle": 53345.295510610034,
+            "upper": 54422.97824819812,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2782.7069064549833,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2699.225699261334,
+            "middle": 2754.8798373904333,
+            "upper": 2810.533975519533,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T15:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 54153.55756380109,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 53070.48641252507,
+            "middle": 53612.021988163084,
+            "upper": 54695.0931394391,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2768.7933719227085,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2685.7295707650273,
+            "middle": 2741.1054382034813,
+            "upper": 2796.4813056419357,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T16:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 54424.32535162009,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 53335.83884458769,
+            "middle": 53880.08209810389,
+            "upper": 54968.56860513629,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2754.949405063095,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2672.300922911202,
+            "middle": 2727.399911012464,
+            "upper": 2782.498899113726,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T17:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 54696.44697837819,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 53602.518038810624,
+            "middle": 54149.48250859441,
+            "upper": 55243.41144816197,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2741.17465803778,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2658.939418296646,
+            "middle": 2713.762911457402,
+            "upper": 2768.5864046181578,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T18:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 54969.92921327007,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 53870.53062900467,
+            "middle": 54420.22992113737,
+            "upper": 55519.628505402776,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2727.468784747591,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2645.6447212051635,
+            "middle": 2700.1940969001153,
+            "upper": 2754.743472595067,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    },
+    {
+      "timestamp": "2026-05-01T19:00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 55244.77885933642,
+          "change_pct_24h": 2.0,
+          "change_pct_1h": 0.5,
+          "rsi14": 38,
+          "trend": "haussier",
+          "trend_short": "haussier",
+          "trend_1d": "haussier",
+          "volume_usdc": 1000000000.0,
+          "range_pct_24h": 1.5,
+          "macd": {
+            "macd": 0.1,
+            "signal": 0.05,
+            "histogram": 0.05
+          },
+          "bollinger": {
+            "lower": 54139.88328214969,
+            "middle": 54692.33107074305,
+            "upper": 55797.22664792978,
+            "width_pct": 2.0
+          }
+        },
+        "ETHUSDC": {
+          "price": 2713.831440823853,
+          "change_pct_24h": -1.5,
+          "change_pct_1h": -0.3,
+          "rsi14": 72,
+          "trend": "baissier",
+          "trend_short": "baissier",
+          "trend_1d": "baissier",
+          "volume_usdc": 500000000.0,
+          "range_pct_24h": 2.0,
+          "macd": {
+            "macd": -0.1,
+            "signal": -0.05,
+            "histogram": -0.05
+          },
+          "bollinger": {
+            "lower": 2632.4164975991375,
+            "middle": 2686.6931264156146,
+            "upper": 2740.9697552320913,
+            "width_pct": 3.5
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 50,
+        "label": "Neutral"
+      },
+      "btc_dominance": 55.0
+    }
+  ],
+  "note": "Demo synthétique pour smoke-test du harness."
+}

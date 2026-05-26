@@ -10,9 +10,12 @@ __pycache__/
 # Virtual envs (Poetry manages its own, but just in case)
 .venv/
 
-# Runtime data (generated at runtime, not versioned)
+# Runtime state (DB, LLM cache, agent/simulation state) — generated at runtime
 logs/
 data/
+
+# Eval/learning artifacts — tracked except for the provider-specific LLM cache
+eval/llm_cache/
 
 # macOS
 .DS_Store

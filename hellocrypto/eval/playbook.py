@@ -1,7 +1,7 @@
 """Playbook — distill the journal report into regime-keyed trading guidance.
 
 Input  : raw journal output (pattern → regime → horizon stats)
-Output : ``data/playbook.json``, regime-keyed, with two ranked lists per regime:
+Output : ``eval/playbook.json``, regime-keyed, with two ranked lists per regime:
          - ``favored`` : patterns whose net edge (gross mean − round-trip fees)
                           exceeds the configured threshold with enough samples
          - ``avoid``   : patterns the model would be tempted to take but whose
@@ -28,7 +28,7 @@ from .patterns import PATTERN_SIDES
 
 log = logging.getLogger(__name__)
 
-DEFAULT_PLAYBOOK_PATH = Path("data/playbook.json")
+DEFAULT_PLAYBOOK_PATH = Path("eval/playbook.json")
 
 # Tunable thresholds — surfaced in the playbook metadata for traceability.
 DEFAULTS = {

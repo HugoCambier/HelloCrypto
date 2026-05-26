@@ -32,7 +32,7 @@ bench:       ## A/B bench learning system vs baseline (compact 1d scenarios, thr
 
 bench-full:  ## Same as bench but on 7d scenarios (~1500 calls, runs ~2h with throttling)
 	LLM_RATE_LIMIT_RPM=12 poetry run python -m hellocrypto.eval.bench \
-		--scenarios "data/scenarios/holdout/full/*.json" \
+		--scenarios "eval/scenarios/holdout/full/*.json" \
 		--provider gemini --model gemini-3.1-flash-lite \
 		--temperature 0.0 --min-confidence 0.5
 
@@ -47,14 +47,14 @@ bench-ollama:      ## Bench compact via Ollama (caffeinate empêche le sleep). W
 
 bench-ollama-full: ## Bench 7j × 3 régimes × 5 variantes. WORKERS=3 recommandé
 	poetry run python -m hellocrypto.eval.bench \
-		--scenarios "data/scenarios/holdout/full/*.json" \
+		--scenarios "eval/scenarios/holdout/full/*.json" \
 		--provider ollama --model $${OLLAMA_MODEL:-qwen2.5:14b} \
 		--temperature 0.0 --min-confidence 0.5 \
 		--workers $${WORKERS:-1}
 
 bench-ollama-overnight: ## Bench 7j + caffeinate (empêche le sleep macOS). WORKERS=3 OLLAMA_MODEL=qwen2.5:14b conseillés
 	caffeinate -i poetry run python -m hellocrypto.eval.bench \
-		--scenarios "data/scenarios/holdout/full/*.json" \
+		--scenarios "eval/scenarios/holdout/full/*.json" \
 		--provider ollama --model $${OLLAMA_MODEL:-qwen2.5:14b} \
 		--temperature 0.0 --min-confidence 0.5 \
 		--workers $${WORKERS:-3}

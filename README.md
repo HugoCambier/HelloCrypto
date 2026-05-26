@@ -178,7 +178,7 @@ Chaque cycle agent / simulation ajoute un snapshot live dans `price_snapshots` (
 **Inspection manuelle** :
 ```bash
 # Régénérer le playbook à la demande (CLI directe)
-poetry run python -m hellocrypto.eval.playbook --out data/playbook.json
+poetry run python -m hellocrypto.eval.playbook --out eval/playbook.json
 
 # Voir le rapport behavior brut
 poetry run python -m hellocrypto.eval.behavior --mode simulation

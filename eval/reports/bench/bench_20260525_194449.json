@@ -1,0 +1,483 @@
+{
+  "generated_at": "2026-05-25T19:44:49.637269+00:00",
+  "variants": {
+    "baseline": {
+      "enable_playbook": false,
+      "enable_behavior": false,
+      "enable_confidence_calibration": false,
+      "enable_regime_aware_thresholds": false,
+      "description": "Pre-learning state — no playbook/behavior/calibration"
+    },
+    "playbook": {
+      "enable_playbook": true,
+      "enable_behavior": false,
+      "enable_confidence_calibration": false,
+      "enable_regime_aware_thresholds": false,
+      "description": "+ playbook section in prompt (no behavior, no calibration)"
+    },
+    "full_prompt": {
+      "enable_playbook": true,
+      "enable_behavior": true,
+      "enable_confidence_calibration": false,
+      "enable_regime_aware_thresholds": false,
+      "description": "+ behavior section in prompt (no calibration)"
+    },
+    "calibrated": {
+      "enable_playbook": true,
+      "enable_behavior": true,
+      "enable_confidence_calibration": true,
+      "enable_regime_aware_thresholds": false,
+      "description": "+ confidence auto-calibration"
+    },
+    "full_learning": {
+      "enable_playbook": true,
+      "enable_behavior": true,
+      "enable_confidence_calibration": true,
+      "enable_regime_aware_thresholds": true,
+      "description": "+ regime-aware min_confidence (final layer)"
+    }
+  },
+  "results": {
+    "holdout_fear_bear_1d": {
+      "baseline": {
+        "version": "baseline",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1000.0,
+          "return_pct": 0.0,
+          "btc_return_pct": -0.7148,
+          "alpha_vs_btc_pct": 0.7148,
+          "max_drawdown_pct": 0.0,
+          "sharpe": null,
+          "win_rate_pct": null,
+          "num_trades": 0,
+          "total_fees": 0.0,
+          "tokens_in": 41671,
+          "tokens_out": 9390,
+          "tokens_total": 51061
+        },
+        "cycles_run": 24,
+        "num_trades": 0
+      },
+      "playbook": {
+        "version": "playbook",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1000.0,
+          "return_pct": 0.0,
+          "btc_return_pct": -0.7148,
+          "alpha_vs_btc_pct": 0.7148,
+          "max_drawdown_pct": 0.0,
+          "sharpe": null,
+          "win_rate_pct": null,
+          "num_trades": 0,
+          "total_fees": 0.0,
+          "tokens_in": 47496,
+          "tokens_out": 8948,
+          "tokens_total": 56444
+        },
+        "cycles_run": 24,
+        "num_trades": 0
+      },
+      "full_prompt": {
+        "version": "full_prompt",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1000.0,
+          "return_pct": 0.0,
+          "btc_return_pct": -0.7148,
+          "alpha_vs_btc_pct": 0.7148,
+          "max_drawdown_pct": 0.0,
+          "sharpe": null,
+          "win_rate_pct": null,
+          "num_trades": 0,
+          "total_fees": 0.0,
+          "tokens_in": 51910,
+          "tokens_out": 9431,
+          "tokens_total": 61341
+        },
+        "cycles_run": 24,
+        "num_trades": 0
+      },
+      "calibrated": {
+        "version": "calibrated",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1000.0,
+          "return_pct": 0.0,
+          "btc_return_pct": -0.7148,
+          "alpha_vs_btc_pct": 0.7148,
+          "max_drawdown_pct": 0.0,
+          "sharpe": null,
+          "win_rate_pct": null,
+          "num_trades": 0,
+          "total_fees": 0.0,
+          "tokens_in": 51910,
+          "tokens_out": 9431,
+          "tokens_total": 61341
+        },
+        "cycles_run": 24,
+        "num_trades": 0
+      },
+      "full_learning": {
+        "version": "full_learning",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1000.0,
+          "return_pct": 0.0,
+          "btc_return_pct": -0.7148,
+          "alpha_vs_btc_pct": 0.7148,
+          "max_drawdown_pct": 0.0,
+          "sharpe": null,
+          "win_rate_pct": null,
+          "num_trades": 0,
+          "total_fees": 0.0,
+          "tokens_in": 51910,
+          "tokens_out": 9431,
+          "tokens_total": 61341
+        },
+        "cycles_run": 24,
+        "num_trades": 0
+      }
+    },
+    "holdout_greed_bull_1d": {
+      "baseline": {
+        "version": "baseline",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1011.79,
+          "return_pct": 1.179,
+          "btc_return_pct": -0.5813,
+          "alpha_vs_btc_pct": 1.7603,
+          "max_drawdown_pct": -0.3145,
+          "sharpe": 23.7032,
+          "win_rate_pct": 100.0,
+          "num_trades": 11,
+          "total_fees": 1.6671,
+          "tokens_in": 49635,
+          "tokens_out": 10874,
+          "tokens_total": 60509
+        },
+        "cycles_run": 24,
+        "num_trades": 11
+      },
+      "playbook": {
+        "version": "playbook",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1016.51,
+          "return_pct": 1.651,
+          "btc_return_pct": -0.5813,
+          "alpha_vs_btc_pct": 2.2323,
+          "max_drawdown_pct": -0.6893,
+          "sharpe": 19.0987,
+          "win_rate_pct": null,
+          "num_trades": 4,
+          "total_fees": 0.626,
+          "tokens_in": 57487,
+          "tokens_out": 10950,
+          "tokens_total": 68437
+        },
+        "cycles_run": 24,
+        "num_trades": 4
+      },
+      "full_prompt": {
+        "version": "full_prompt",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1014.09,
+          "return_pct": 1.409,
+          "btc_return_pct": -0.5813,
+          "alpha_vs_btc_pct": 1.9903,
+          "max_drawdown_pct": -0.7854,
+          "sharpe": 17.2679,
+          "win_rate_pct": 0.0,
+          "num_trades": 11,
+          "total_fees": 1.249,
+          "tokens_in": 62692,
+          "tokens_out": 13554,
+          "tokens_total": 76246
+        },
+        "cycles_run": 24,
+        "num_trades": 11
+      },
+      "calibrated": {
+        "version": "calibrated",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1014.09,
+          "return_pct": 1.409,
+          "btc_return_pct": -0.5813,
+          "alpha_vs_btc_pct": 1.9903,
+          "max_drawdown_pct": -0.7854,
+          "sharpe": 17.2679,
+          "win_rate_pct": 0.0,
+          "num_trades": 11,
+          "total_fees": 1.249,
+          "tokens_in": 62692,
+          "tokens_out": 13554,
+          "tokens_total": 76246
+        },
+        "cycles_run": 24,
+        "num_trades": 11
+      },
+      "full_learning": {
+        "version": "full_learning",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1014.09,
+          "return_pct": 1.409,
+          "btc_return_pct": -0.5813,
+          "alpha_vs_btc_pct": 1.9903,
+          "max_drawdown_pct": -0.7854,
+          "sharpe": 17.2679,
+          "win_rate_pct": 0.0,
+          "num_trades": 11,
+          "total_fees": 1.249,
+          "tokens_in": 62692,
+          "tokens_out": 13554,
+          "tokens_total": 76246
+        },
+        "cycles_run": 24,
+        "num_trades": 11
+      }
+    },
+    "holdout_neutral_bull_1d": {
+      "baseline": {
+        "version": "baseline",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 996.35,
+          "return_pct": -0.365,
+          "btc_return_pct": 0.0247,
+          "alpha_vs_btc_pct": -0.3897,
+          "max_drawdown_pct": -0.4228,
+          "sharpe": -25.323,
+          "win_rate_pct": null,
+          "num_trades": 1,
+          "total_fees": 0.1875,
+          "tokens_in": 43016,
+          "tokens_out": 9686,
+          "tokens_total": 52702
+        },
+        "cycles_run": 24,
+        "num_trades": 1
+      },
+      "playbook": {
+        "version": "playbook",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1000.0,
+          "return_pct": 0.0,
+          "btc_return_pct": 0.0247,
+          "alpha_vs_btc_pct": -0.0247,
+          "max_drawdown_pct": 0.0,
+          "sharpe": null,
+          "win_rate_pct": null,
+          "num_trades": 0,
+          "total_fees": 0.0,
+          "tokens_in": 49046,
+          "tokens_out": 9553,
+          "tokens_total": 58599
+        },
+        "cycles_run": 24,
+        "num_trades": 0
+      },
+      "full_prompt": {
+        "version": "full_prompt",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1000.0,
+          "return_pct": 0.0,
+          "btc_return_pct": 0.0247,
+          "alpha_vs_btc_pct": -0.0247,
+          "max_drawdown_pct": 0.0,
+          "sharpe": null,
+          "win_rate_pct": null,
+          "num_trades": 0,
+          "total_fees": 0.0,
+          "tokens_in": 50589,
+          "tokens_out": 9538,
+          "tokens_total": 60127
+        },
+        "cycles_run": 24,
+        "num_trades": 0
+      },
+      "calibrated": {
+        "version": "calibrated",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1000.0,
+          "return_pct": 0.0,
+          "btc_return_pct": 0.0247,
+          "alpha_vs_btc_pct": -0.0247,
+          "max_drawdown_pct": 0.0,
+          "sharpe": null,
+          "win_rate_pct": null,
+          "num_trades": 0,
+          "total_fees": 0.0,
+          "tokens_in": 50589,
+          "tokens_out": 9538,
+          "tokens_total": 60127
+        },
+        "cycles_run": 24,
+        "num_trades": 0
+      },
+      "full_learning": {
+        "version": "full_learning",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "gemini",
+          "model": "gemini-3.1-flash-lite",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1000.0,
+          "return_pct": 0.0,
+          "btc_return_pct": 0.0247,
+          "alpha_vs_btc_pct": -0.0247,
+          "max_drawdown_pct": 0.0,
+          "sharpe": null,
+          "win_rate_pct": null,
+          "num_trades": 0,
+          "total_fees": 0.0,
+          "tokens_in": 50589,
+          "tokens_out": 9538,
+          "tokens_total": 60127
+        },
+        "cycles_run": 24,
+        "num_trades": 0
+      }
+    }
+  }
+}

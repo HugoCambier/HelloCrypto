@@ -3,7 +3,7 @@
 
 Walks back from `--end` by `--days` days at intervals of `--cycle-seconds`,
 fetching each symbol's klines + indicators at that point in time. Stores
-each cycle's snapshot under data/scenarios/<name>.json.
+each cycle's snapshot under eval/scenarios/<name>.json.
 
 BTC dominance: historical data isn't free, so we hold it constant at a
 midpoint value (configurable via --btc-dominance). The strategy uses it

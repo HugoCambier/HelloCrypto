@@ -1,0 +1,483 @@
+{
+  "generated_at": "2026-05-25T16:46:11.234692+00:00",
+  "variants": {
+    "baseline": {
+      "enable_playbook": false,
+      "enable_behavior": false,
+      "enable_confidence_calibration": false,
+      "enable_regime_aware_thresholds": false,
+      "description": "Pre-learning state — no playbook/behavior/calibration"
+    },
+    "playbook": {
+      "enable_playbook": true,
+      "enable_behavior": false,
+      "enable_confidence_calibration": false,
+      "enable_regime_aware_thresholds": false,
+      "description": "+ playbook section in prompt (no behavior, no calibration)"
+    },
+    "full_prompt": {
+      "enable_playbook": true,
+      "enable_behavior": true,
+      "enable_confidence_calibration": false,
+      "enable_regime_aware_thresholds": false,
+      "description": "+ behavior section in prompt (no calibration)"
+    },
+    "calibrated": {
+      "enable_playbook": true,
+      "enable_behavior": true,
+      "enable_confidence_calibration": true,
+      "enable_regime_aware_thresholds": false,
+      "description": "+ confidence auto-calibration"
+    },
+    "full_learning": {
+      "enable_playbook": true,
+      "enable_behavior": true,
+      "enable_confidence_calibration": true,
+      "enable_regime_aware_thresholds": true,
+      "description": "+ regime-aware min_confidence (final layer)"
+    }
+  },
+  "results": {
+    "holdout_fear_bear": {
+      "baseline": {
+        "version": "baseline",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "rules",
+          "model": "",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 980.1,
+          "return_pct": -1.99,
+          "btc_return_pct": 1.2736,
+          "alpha_vs_btc_pct": -3.2636,
+          "max_drawdown_pct": -2.9718,
+          "sharpe": -6.4965,
+          "win_rate_pct": 40.0,
+          "num_trades": 10,
+          "total_fees": 2.5073,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 10
+      },
+      "playbook": {
+        "version": "playbook",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "rules",
+          "model": "",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 980.1,
+          "return_pct": -1.99,
+          "btc_return_pct": 1.2736,
+          "alpha_vs_btc_pct": -3.2636,
+          "max_drawdown_pct": -2.9718,
+          "sharpe": -6.4965,
+          "win_rate_pct": 40.0,
+          "num_trades": 10,
+          "total_fees": 2.5073,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 10
+      },
+      "full_prompt": {
+        "version": "full_prompt",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "rules",
+          "model": "",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 980.1,
+          "return_pct": -1.99,
+          "btc_return_pct": 1.2736,
+          "alpha_vs_btc_pct": -3.2636,
+          "max_drawdown_pct": -2.9718,
+          "sharpe": -6.4965,
+          "win_rate_pct": 40.0,
+          "num_trades": 10,
+          "total_fees": 2.5073,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 10
+      },
+      "calibrated": {
+        "version": "calibrated",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "rules",
+          "model": "",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 980.1,
+          "return_pct": -1.99,
+          "btc_return_pct": 1.2736,
+          "alpha_vs_btc_pct": -3.2636,
+          "max_drawdown_pct": -2.9718,
+          "sharpe": -6.4965,
+          "win_rate_pct": 40.0,
+          "num_trades": 10,
+          "total_fees": 2.5073,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 10
+      },
+      "full_learning": {
+        "version": "full_learning",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "rules",
+          "model": "",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 980.1,
+          "return_pct": -1.99,
+          "btc_return_pct": 1.2736,
+          "alpha_vs_btc_pct": -3.2636,
+          "max_drawdown_pct": -2.9718,
+          "sharpe": -6.4965,
+          "win_rate_pct": 40.0,
+          "num_trades": 10,
+          "total_fees": 2.5073,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 10
+      }
+    },
+    "holdout_greed_bull": {
+      "baseline": {
+        "version": "baseline",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "rules",
+          "model": "",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1007.31,
+          "return_pct": 0.731,
+          "btc_return_pct": -0.0362,
+          "alpha_vs_btc_pct": 0.7672,
+          "max_drawdown_pct": -9.2049,
+          "sharpe": 0.6599,
+          "win_rate_pct": 50.0,
+          "num_trades": 14,
+          "total_fees": 1.4805,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 14
+      },
+      "playbook": {
+        "version": "playbook",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "rules",
+          "model": "",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1007.31,
+          "return_pct": 0.731,
+          "btc_return_pct": -0.0362,
+          "alpha_vs_btc_pct": 0.7672,
+          "max_drawdown_pct": -9.2049,
+          "sharpe": 0.6599,
+          "win_rate_pct": 50.0,
+          "num_trades": 14,
+          "total_fees": 1.4805,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 14
+      },
+      "full_prompt": {
+        "version": "full_prompt",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "rules",
+          "model": "",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1007.31,
+          "return_pct": 0.731,
+          "btc_return_pct": -0.0362,
+          "alpha_vs_btc_pct": 0.7672,
+          "max_drawdown_pct": -9.2049,
+          "sharpe": 0.6599,
+          "win_rate_pct": 50.0,
+          "num_trades": 14,
+          "total_fees": 1.4805,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 14
+      },
+      "calibrated": {
+        "version": "calibrated",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "rules",
+          "model": "",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1007.31,
+          "return_pct": 0.731,
+          "btc_return_pct": -0.0362,
+          "alpha_vs_btc_pct": 0.7672,
+          "max_drawdown_pct": -9.2049,
+          "sharpe": 0.6599,
+          "win_rate_pct": 50.0,
+          "num_trades": 14,
+          "total_fees": 1.4805,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 14
+      },
+      "full_learning": {
+        "version": "full_learning",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "rules",
+          "model": "",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1007.31,
+          "return_pct": 0.731,
+          "btc_return_pct": -0.0362,
+          "alpha_vs_btc_pct": 0.7672,
+          "max_drawdown_pct": -9.2049,
+          "sharpe": 0.6599,
+          "win_rate_pct": 50.0,
+          "num_trades": 14,
+          "total_fees": 1.4805,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 14
+      }
+    },
+    "holdout_neutral_bull": {
+      "baseline": {
+        "version": "baseline",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "rules",
+          "model": "",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1035.45,
+          "return_pct": 3.545,
+          "btc_return_pct": 2.6982,
+          "alpha_vs_btc_pct": 0.8468,
+          "max_drawdown_pct": -2.8284,
+          "sharpe": 6.8934,
+          "win_rate_pct": 66.67,
+          "num_trades": 15,
+          "total_fees": 1.611,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 15
+      },
+      "playbook": {
+        "version": "playbook",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "rules",
+          "model": "",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1035.45,
+          "return_pct": 3.545,
+          "btc_return_pct": 2.6982,
+          "alpha_vs_btc_pct": 0.8468,
+          "max_drawdown_pct": -2.8284,
+          "sharpe": 6.8934,
+          "win_rate_pct": 66.67,
+          "num_trades": 15,
+          "total_fees": 1.611,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 15
+      },
+      "full_prompt": {
+        "version": "full_prompt",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "rules",
+          "model": "",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1035.45,
+          "return_pct": 3.545,
+          "btc_return_pct": 2.6982,
+          "alpha_vs_btc_pct": 0.8468,
+          "max_drawdown_pct": -2.8284,
+          "sharpe": 6.8934,
+          "win_rate_pct": 66.67,
+          "num_trades": 15,
+          "total_fees": 1.611,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 15
+      },
+      "calibrated": {
+        "version": "calibrated",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "rules",
+          "model": "",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1035.45,
+          "return_pct": 3.545,
+          "btc_return_pct": 2.6982,
+          "alpha_vs_btc_pct": 0.8468,
+          "max_drawdown_pct": -2.8284,
+          "sharpe": 6.8934,
+          "win_rate_pct": 66.67,
+          "num_trades": 15,
+          "total_fees": 1.611,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 15
+      },
+      "full_learning": {
+        "version": "full_learning",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "rules",
+          "model": "",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1035.45,
+          "return_pct": 3.545,
+          "btc_return_pct": 2.6982,
+          "alpha_vs_btc_pct": 0.8468,
+          "max_drawdown_pct": -2.8284,
+          "sharpe": 6.8934,
+          "win_rate_pct": 66.67,
+          "num_trades": 15,
+          "total_fees": 1.611,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 15
+      }
+    }
+  }
+}

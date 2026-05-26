@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-_SCENARIOS_DIR = Path(__file__).parent.parent.parent / "data" / "scenarios"
+_SCENARIOS_DIR = Path(__file__).parent.parent.parent / "eval" / "scenarios"
 
 
 @dataclass
@@ -41,7 +41,7 @@ class Scenario:
 
 
 def save(scenario: Scenario, path: Path | None = None) -> Path:
-    """Persist a scenario to disk under data/scenarios/<name>.json."""
+    """Persist a scenario to disk under eval/scenarios/<name>.json."""
     if path is None:
         _SCENARIOS_DIR.mkdir(parents=True, exist_ok=True)
         path = _SCENARIOS_DIR / f"{scenario.name}.json"
@@ -51,7 +51,7 @@ def save(scenario: Scenario, path: Path | None = None) -> Path:
 
 
 def load(name_or_path: str | Path) -> Scenario:
-    """Load a scenario by short name (looked up in data/scenarios/) or full path."""
+    """Load a scenario by short name (looked up in eval/scenarios/) or full path."""
     p = Path(name_or_path)
     if not p.suffix:
         p = _SCENARIOS_DIR / f"{p.name}.json"
@@ -61,7 +61,7 @@ def load(name_or_path: str | Path) -> Scenario:
 
 
 def list_scenarios() -> list[str]:
-    """Return all scenario names available under data/scenarios/."""
+    """Return all scenario names available under eval/scenarios/."""
     if not _SCENARIOS_DIR.exists():
         return []
     return sorted(p.stem for p in _SCENARIOS_DIR.glob("*.json"))

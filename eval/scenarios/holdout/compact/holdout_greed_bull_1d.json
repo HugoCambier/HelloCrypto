@@ -1,0 +1,6501 @@
+{
+  "name": "holdout_greed_bull_1d",
+  "start": "2025-07-20T00:00:00+00:00",
+  "end": "2025-07-21T00:00:00+00:00",
+  "watchlist": [
+    "BTCUSDC",
+    "ETHUSDC",
+    "SOLUSDC",
+    "XRPUSDC",
+    "BNBUSDC",
+    "ADAUSDC",
+    "AVAXUSDC",
+    "DOGEUSDC",
+    "LINKUSDC",
+    "POLUSDC"
+  ],
+  "cycle_seconds": 3600,
+  "cycles": [
+    {
+      "timestamp": "2025-07-20T00:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118009.95,
+          "change_pct_1h": 0.078,
+          "change_pct_24h": 0.153,
+          "volume_usdc": 41.19279,
+          "high_24h": 118070.02,
+          "low_24h": 117718.75,
+          "rsi14": 38.3,
+          "sma7": 117903.852857,
+          "sma25": 118113.0336,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.298,
+          "atr": 372.497857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 38.410548
+          },
+          "bollinger": {
+            "lower": 117647.5366,
+            "middle": 118095.7325,
+            "upper": 118543.9284,
+            "width_pct": 0.759
+          }
+        },
+        "ETHUSDC": {
+          "price": 3593.21,
+          "change_pct_1h": -0.025,
+          "change_pct_24h": 1.935,
+          "volume_usdc": 22808.8177,
+          "high_24h": 3599.92,
+          "low_24h": 3580.88,
+          "rsi14": 59.9,
+          "sma7": 3577.085714,
+          "sma25": 3566.4276,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.53,
+          "atr": 30.322857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 5.971045
+          },
+          "bollinger": {
+            "lower": 3535.7918,
+            "middle": 3566.3455,
+            "upper": 3596.8992,
+            "width_pct": 1.713
+          }
+        },
+        "SOLUSDC": {
+          "price": 177.75,
+          "change_pct_1h": 0.378,
+          "change_pct_24h": 1.398,
+          "volume_usdc": 14906.132,
+          "high_24h": 178.03,
+          "low_24h": 176.44,
+          "rsi14": 51.1,
+          "sma7": 176.978571,
+          "sma25": 176.9292,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.895,
+          "atr": 1.743571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.1829
+          },
+          "bollinger": {
+            "lower": 175.6104,
+            "middle": 176.944,
+            "upper": 178.2776,
+            "width_pct": 1.507
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.4291,
+          "change_pct_1h": 0.085,
+          "change_pct_24h": -0.108,
+          "volume_usdc": 1409614.3,
+          "high_24h": 3.4336,
+          "low_24h": 3.4092,
+          "rsi14": 49.8,
+          "sma7": 3.422557,
+          "sma25": 3.4311,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.712,
+          "atr": 0.037629,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.004782
+          },
+          "bollinger": {
+            "lower": 3.3798,
+            "middle": 3.4266,
+            "upper": 3.4734,
+            "width_pct": 2.732
+          }
+        },
+        "BNBUSDC": {
+          "price": 734.55,
+          "change_pct_1h": 0.131,
+          "change_pct_24h": 1.617,
+          "volume_usdc": 457.415,
+          "high_24h": 734.69,
+          "low_24h": 731.87,
+          "rsi14": 47.6,
+          "sma7": 732.972857,
+          "sma25": 732.924,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.384,
+          "atr": 5.074286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.360777
+          },
+          "bollinger": {
+            "lower": 727.5876,
+            "middle": 733.501,
+            "upper": 739.4144,
+            "width_pct": 1.612
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.829,
+          "change_pct_1h": -0.145,
+          "change_pct_24h": 2.523,
+          "volume_usdc": 980660.7,
+          "high_24h": 0.8316,
+          "low_24h": 0.8235,
+          "rsi14": 50.8,
+          "sma7": 0.827557,
+          "sma25": 0.82504,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.977,
+          "atr": 0.01135,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.001821
+          },
+          "bollinger": {
+            "lower": 0.8169,
+            "middle": 0.8258,
+            "upper": 0.8346,
+            "width_pct": 2.143
+          }
+        },
+        "AVAXUSDC": {
+          "price": 24.44,
+          "change_pct_1h": -0.245,
+          "change_pct_24h": 5.481,
+          "volume_usdc": 17458.44,
+          "high_24h": 24.58,
+          "low_24h": 24.32,
+          "rsi14": 62.3,
+          "sma7": 24.55,
+          "sma25": 23.9048,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.064,
+          "atr": 0.431429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.095715
+          },
+          "bollinger": {
+            "lower": 23.0813,
+            "middle": 23.988,
+            "upper": 24.8947,
+            "width_pct": 7.56
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.24659,
+          "change_pct_1h": 2.087,
+          "change_pct_24h": 3.353,
+          "volume_usdc": 20384067.0,
+          "high_24h": 0.24787,
+          "low_24h": 0.24013,
+          "rsi14": 41.8,
+          "sma7": 0.242096,
+          "sma25": 0.245689,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 3.139,
+          "atr": 0.004057,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.000351
+          },
+          "bollinger": {
+            "lower": 0.2356,
+            "middle": 0.2457,
+            "upper": 0.2557,
+            "width_pct": 8.181
+          }
+        },
+        "LINKUSDC": {
+          "price": 18.43,
+          "change_pct_1h": 0.163,
+          "change_pct_24h": 4.242,
+          "volume_usdc": 29586.49,
+          "high_24h": 18.58,
+          "low_24h": 18.33,
+          "rsi14": 68.0,
+          "sma7": 18.331429,
+          "sma25": 18.0496,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.356,
+          "atr": 0.24,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.075001
+          },
+          "bollinger": {
+            "lower": 17.5929,
+            "middle": 18.059,
+            "upper": 18.5251,
+            "width_pct": 5.162
+          }
+        },
+        "POLUSDC": {
+          "price": 0.24,
+          "change_pct_1h": -0.125,
+          "change_pct_24h": 3.315,
+          "volume_usdc": 153001.2,
+          "high_24h": 0.2407,
+          "low_24h": 0.2387,
+          "rsi14": 60.1,
+          "sma7": 0.238743,
+          "sma25": 0.236548,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.833,
+          "atr": 0.002564,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.001017
+          },
+          "bollinger": {
+            "lower": 0.2318,
+            "middle": 0.2365,
+            "upper": 0.2413,
+            "width_pct": 4.017
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T01:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118010.0,
+          "change_pct_1h": 0.0,
+          "change_pct_24h": -0.103,
+          "volume_usdc": 60.56529,
+          "high_24h": 118200.82,
+          "low_24h": 117958.71,
+          "rsi14": 40.3,
+          "sma7": 117915.288571,
+          "sma25": 118120.2332,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.205,
+          "atr": 366.017857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 45.229259
+          },
+          "bollinger": {
+            "lower": 117641.8087,
+            "middle": 118081.1525,
+            "upper": 118520.4963,
+            "width_pct": 0.744
+          }
+        },
+        "ETHUSDC": {
+          "price": 3606.7,
+          "change_pct_1h": 0.375,
+          "change_pct_24h": 1.646,
+          "volume_usdc": 39080.477,
+          "high_24h": 3628.45,
+          "low_24h": 3591.25,
+          "rsi14": 64.8,
+          "sma7": 3584.497143,
+          "sma25": 3569.6952,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.031,
+          "atr": 30.137857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 7.193374
+          },
+          "bollinger": {
+            "lower": 3533.2373,
+            "middle": 3567.2505,
+            "upper": 3601.2637,
+            "width_pct": 1.907
+          }
+        },
+        "SOLUSDC": {
+          "price": 177.96,
+          "change_pct_1h": 0.118,
+          "change_pct_24h": 0.69,
+          "volume_usdc": 232355.885,
+          "high_24h": 179.84,
+          "low_24h": 177.71,
+          "rsi14": 55.5,
+          "sma7": 177.131429,
+          "sma25": 177.0356,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.197,
+          "atr": 1.781429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.237197
+          },
+          "bollinger": {
+            "lower": 175.5889,
+            "middle": 176.9575,
+            "upper": 178.3261,
+            "width_pct": 1.547
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.4248,
+          "change_pct_1h": -0.125,
+          "change_pct_24h": -0.583,
+          "volume_usdc": 1262487.7,
+          "high_24h": 3.4529,
+          "low_24h": 3.4229,
+          "rsi14": 55.9,
+          "sma7": 3.422957,
+          "sma25": 3.43078,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.876,
+          "atr": 0.0368,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.004717
+          },
+          "bollinger": {
+            "lower": 3.3807,
+            "middle": 3.4248,
+            "upper": 3.4689,
+            "width_pct": 2.575
+          }
+        },
+        "BNBUSDC": {
+          "price": 739.01,
+          "change_pct_1h": 0.607,
+          "change_pct_24h": 1.709,
+          "volume_usdc": 1363.893,
+          "high_24h": 741.66,
+          "low_24h": 734.53,
+          "rsi14": 52.3,
+          "sma7": 734.134286,
+          "sma25": 733.57,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.965,
+          "atr": 5.22,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.775522
+          },
+          "bollinger": {
+            "lower": 727.3419,
+            "middle": 733.686,
+            "upper": 740.0301,
+            "width_pct": 1.729
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8325,
+          "change_pct_1h": 0.422,
+          "change_pct_24h": 1.636,
+          "volume_usdc": 2221916.4,
+          "high_24h": 0.8398,
+          "low_24h": 0.8278,
+          "rsi14": 59.7,
+          "sma7": 0.828786,
+          "sma25": 0.825996,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.441,
+          "atr": 0.011236,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002044
+          },
+          "bollinger": {
+            "lower": 0.8168,
+            "middle": 0.8259,
+            "upper": 0.8351,
+            "width_pct": 2.216
+          }
+        },
+        "AVAXUSDC": {
+          "price": 24.52,
+          "change_pct_1h": 0.327,
+          "change_pct_24h": 4.786,
+          "volume_usdc": 15788.29,
+          "high_24h": 24.64,
+          "low_24h": 24.41,
+          "rsi14": 63.2,
+          "sma7": 24.571429,
+          "sma25": 23.9588,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.938,
+          "atr": 0.427143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.085498
+          },
+          "bollinger": {
+            "lower": 23.0838,
+            "middle": 24.0185,
+            "upper": 24.9532,
+            "width_pct": 7.783
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.25183,
+          "change_pct_1h": 2.125,
+          "change_pct_24h": 3.788,
+          "volume_usdc": 28654457.0,
+          "high_24h": 0.25727,
+          "low_24h": 0.24608,
+          "rsi14": 61.2,
+          "sma7": 0.243624,
+          "sma25": 0.246219,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 4.443,
+          "atr": 0.004241,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000309
+          },
+          "bollinger": {
+            "lower": 0.2357,
+            "middle": 0.2456,
+            "upper": 0.2554,
+            "width_pct": 8.021
+          }
+        },
+        "LINKUSDC": {
+          "price": 18.52,
+          "change_pct_1h": 0.488,
+          "change_pct_24h": 3.233,
+          "volume_usdc": 28451.41,
+          "high_24h": 18.6,
+          "low_24h": 18.41,
+          "rsi14": 76.4,
+          "sma7": 18.377143,
+          "sma25": 18.0832,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.026,
+          "atr": 0.237857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.077114
+          },
+          "bollinger": {
+            "lower": 17.5739,
+            "middle": 18.0815,
+            "upper": 18.5891,
+            "width_pct": 5.615
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2397,
+          "change_pct_1h": -0.125,
+          "change_pct_24h": 1.827,
+          "volume_usdc": 165301.2,
+          "high_24h": 0.2416,
+          "low_24h": 0.2397,
+          "rsi14": 65.2,
+          "sma7": 0.239329,
+          "sma25": 0.236844,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.793,
+          "atr": 0.002521,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.00097
+          },
+          "bollinger": {
+            "lower": 0.2317,
+            "middle": 0.2366,
+            "upper": 0.2414,
+            "width_pct": 4.1
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T02:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118053.09,
+          "change_pct_1h": 0.037,
+          "change_pct_24h": -0.202,
+          "volume_usdc": 79.91721,
+          "high_24h": 118080.0,
+          "low_24h": 117806.45,
+          "rsi14": 43.5,
+          "sma7": 117912.358571,
+          "sma25": 118117.0768,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.232,
+          "atr": 369.51,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 50.125207
+          },
+          "bollinger": {
+            "lower": 117639.5176,
+            "middle": 118070.31,
+            "upper": 118501.1024,
+            "width_pct": 0.73
+          }
+        },
+        "ETHUSDC": {
+          "price": 3618.31,
+          "change_pct_1h": 0.322,
+          "change_pct_24h": 1.28,
+          "volume_usdc": 23363.3487,
+          "high_24h": 3626.73,
+          "low_24h": 3598.34,
+          "rsi14": 65.3,
+          "sma7": 3589.992857,
+          "sma25": 3572.4964,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.785,
+          "atr": 30.277143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 8.278511
+          },
+          "bollinger": {
+            "lower": 3528.8511,
+            "middle": 3569.466,
+            "upper": 3610.0809,
+            "width_pct": 2.276
+          }
+        },
+        "SOLUSDC": {
+          "price": 177.63,
+          "change_pct_1h": -0.185,
+          "change_pct_24h": 0.197,
+          "volume_usdc": 16335.352,
+          "high_24h": 178.03,
+          "low_24h": 177.08,
+          "rsi14": 50.9,
+          "sma7": 177.204286,
+          "sma25": 177.0712,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.535,
+          "atr": 1.725,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.235294
+          },
+          "bollinger": {
+            "lower": 175.6442,
+            "middle": 177.0185,
+            "upper": 178.3928,
+            "width_pct": 1.553
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.4075,
+          "change_pct_1h": -0.505,
+          "change_pct_24h": -1.283,
+          "volume_usdc": 2003939.4,
+          "high_24h": 3.426,
+          "low_24h": 3.3879,
+          "rsi14": 47.9,
+          "sma7": 3.419243,
+          "sma25": 3.429284,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.118,
+          "atr": 0.036864,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.003035
+          },
+          "bollinger": {
+            "lower": 3.3794,
+            "middle": 3.4228,
+            "upper": 3.4661,
+            "width_pct": 2.533
+          }
+        },
+        "BNBUSDC": {
+          "price": 742.14,
+          "change_pct_1h": 0.424,
+          "change_pct_24h": 1.578,
+          "volume_usdc": 654.808,
+          "high_24h": 742.19,
+          "low_24h": 737.96,
+          "rsi14": 49.8,
+          "sma7": 735.172857,
+          "sma25": 734.192,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.57,
+          "atr": 5.087143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 1.201638
+          },
+          "bollinger": {
+            "lower": 726.8521,
+            "middle": 734.161,
+            "upper": 741.4699,
+            "width_pct": 1.991
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8328,
+          "change_pct_1h": 0.036,
+          "change_pct_24h": 1.166,
+          "volume_usdc": 1847179.1,
+          "high_24h": 0.8357,
+          "low_24h": 0.8288,
+          "rsi14": 53.4,
+          "sma7": 0.829229,
+          "sma25": 0.826544,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.829,
+          "atr": 0.010657,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002059
+          },
+          "bollinger": {
+            "lower": 0.8167,
+            "middle": 0.8263,
+            "upper": 0.836,
+            "width_pct": 2.336
+          }
+        },
+        "AVAXUSDC": {
+          "price": 24.54,
+          "change_pct_1h": 0.082,
+          "change_pct_24h": 4.16,
+          "volume_usdc": 8775.6,
+          "high_24h": 24.67,
+          "low_24h": 24.45,
+          "rsi14": 60.7,
+          "sma7": 24.508571,
+          "sma25": 24.0044,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.896,
+          "atr": 0.415,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.074069
+          },
+          "bollinger": {
+            "lower": 23.0915,
+            "middle": 24.051,
+            "upper": 25.0105,
+            "width_pct": 7.979
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.2512,
+          "change_pct_1h": -0.25,
+          "change_pct_24h": 3.018,
+          "volume_usdc": 13121270.0,
+          "high_24h": 0.25411,
+          "low_24h": 0.2505,
+          "rsi14": 57.8,
+          "sma7": 0.244821,
+          "sma25": 0.246561,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.437,
+          "atr": 0.004244,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000659
+          },
+          "bollinger": {
+            "lower": 0.2358,
+            "middle": 0.2456,
+            "upper": 0.2554,
+            "width_pct": 7.98
+          }
+        },
+        "LINKUSDC": {
+          "price": 18.53,
+          "change_pct_1h": 0.054,
+          "change_pct_24h": 2.489,
+          "volume_usdc": 16790.11,
+          "high_24h": 18.61,
+          "low_24h": 18.44,
+          "rsi14": 74.6,
+          "sma7": 18.398571,
+          "sma25": 18.1068,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.917,
+          "atr": 0.234286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.074156
+          },
+          "bollinger": {
+            "lower": 17.5627,
+            "middle": 18.106,
+            "upper": 18.6493,
+            "width_pct": 6.001
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2397,
+          "change_pct_1h": 0.0,
+          "change_pct_24h": 1.31,
+          "volume_usdc": 87024.2,
+          "high_24h": 0.2402,
+          "low_24h": 0.239,
+          "rsi14": 62.7,
+          "sma7": 0.239543,
+          "sma25": 0.237016,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.501,
+          "atr": 0.002443,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000889
+          },
+          "bollinger": {
+            "lower": 0.2316,
+            "middle": 0.2367,
+            "upper": 0.2417,
+            "width_pct": 4.267
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T03:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118032.01,
+          "change_pct_1h": -0.018,
+          "change_pct_24h": -0.33,
+          "volume_usdc": 175.75911,
+          "high_24h": 118237.84,
+          "low_24h": 117773.0,
+          "rsi14": 43.9,
+          "sma7": 117949.258571,
+          "sma25": 118106.6776,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.394,
+          "atr": 387.356429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 48.337139
+          },
+          "bollinger": {
+            "lower": 117636.9126,
+            "middle": 118058.811,
+            "upper": 118480.7094,
+            "width_pct": 0.715
+          }
+        },
+        "ETHUSDC": {
+          "price": 3660.2,
+          "change_pct_1h": 1.158,
+          "change_pct_24h": 1.794,
+          "volume_usdc": 65675.739,
+          "high_24h": 3696.55,
+          "low_24h": 3610.27,
+          "rsi14": 73.0,
+          "sma7": 3603.505714,
+          "sma25": 3576.0012,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.357,
+          "atr": 34.763571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 11.037311
+          },
+          "bollinger": {
+            "lower": 3517.0368,
+            "middle": 3573.761,
+            "upper": 3630.4852,
+            "width_pct": 3.174
+          }
+        },
+        "SOLUSDC": {
+          "price": 178.07,
+          "change_pct_1h": 0.248,
+          "change_pct_24h": 0.27,
+          "volume_usdc": 22745.258,
+          "high_24h": 178.85,
+          "low_24h": 177.26,
+          "rsi14": 52.2,
+          "sma7": 177.285714,
+          "sma25": 177.1028,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.893,
+          "atr": 1.762143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.251274
+          },
+          "bollinger": {
+            "lower": 175.6169,
+            "middle": 177.0655,
+            "upper": 178.5141,
+            "width_pct": 1.636
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.4364,
+          "change_pct_1h": 0.848,
+          "change_pct_24h": -0.443,
+          "volume_usdc": 1293827.1,
+          "high_24h": 3.4424,
+          "low_24h": 3.4056,
+          "rsi14": 54.6,
+          "sma7": 3.421886,
+          "sma25": 3.428668,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.071,
+          "atr": 0.036929,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.003785
+          },
+          "bollinger": {
+            "lower": 3.3825,
+            "middle": 3.4212,
+            "upper": 3.46,
+            "width_pct": 2.265
+          }
+        },
+        "BNBUSDC": {
+          "price": 743.24,
+          "change_pct_1h": 0.148,
+          "change_pct_24h": 1.058,
+          "volume_usdc": 1181.854,
+          "high_24h": 746.57,
+          "low_24h": 741.28,
+          "rsi14": 60.0,
+          "sma7": 736.617143,
+          "sma25": 734.6972,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.712,
+          "atr": 4.891429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 1.478968
+          },
+          "bollinger": {
+            "lower": 726.3986,
+            "middle": 734.677,
+            "upper": 742.9554,
+            "width_pct": 2.254
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8409,
+          "change_pct_1h": 0.973,
+          "change_pct_24h": 1.583,
+          "volume_usdc": 1373072.2,
+          "high_24h": 0.8461,
+          "low_24h": 0.832,
+          "rsi14": 62.5,
+          "sma7": 0.830871,
+          "sma25": 0.827252,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.677,
+          "atr": 0.0111,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002487
+          },
+          "bollinger": {
+            "lower": 0.8156,
+            "middle": 0.8271,
+            "upper": 0.8386,
+            "width_pct": 2.781
+          }
+        },
+        "AVAXUSDC": {
+          "price": 24.59,
+          "change_pct_1h": 0.204,
+          "change_pct_24h": 3.189,
+          "volume_usdc": 10977.4,
+          "high_24h": 24.8,
+          "low_24h": 24.48,
+          "rsi14": 65.3,
+          "sma7": 24.471429,
+          "sma25": 24.0456,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.301,
+          "atr": 0.415,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.064847
+          },
+          "bollinger": {
+            "lower": 23.119,
+            "middle": 24.094,
+            "upper": 25.069,
+            "width_pct": 8.093
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.25537,
+          "change_pct_1h": 1.66,
+          "change_pct_24h": 2.357,
+          "volume_usdc": 11851578.0,
+          "high_24h": 0.25592,
+          "low_24h": 0.25096,
+          "rsi14": 71.5,
+          "sma7": 0.246901,
+          "sma25": 0.247022,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.942,
+          "atr": 0.004206,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.00108
+          },
+          "bollinger": {
+            "lower": 0.2356,
+            "middle": 0.2456,
+            "upper": 0.2557,
+            "width_pct": 8.184
+          }
+        },
+        "LINKUSDC": {
+          "price": 18.68,
+          "change_pct_1h": 0.809,
+          "change_pct_24h": 2.637,
+          "volume_usdc": 29677.54,
+          "high_24h": 18.84,
+          "low_24h": 18.52,
+          "rsi14": 81.9,
+          "sma7": 18.44,
+          "sma25": 18.1308,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.713,
+          "atr": 0.245714,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.076958
+          },
+          "bollinger": {
+            "lower": 17.5479,
+            "middle": 18.1415,
+            "upper": 18.7351,
+            "width_pct": 6.544
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2411,
+          "change_pct_1h": 0.584,
+          "change_pct_24h": 0.542,
+          "volume_usdc": 216832.9,
+          "high_24h": 0.2426,
+          "low_24h": 0.2392,
+          "rsi14": 73.8,
+          "sma7": 0.239857,
+          "sma25": 0.237196,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.41,
+          "atr": 0.0025,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000873
+          },
+          "bollinger": {
+            "lower": 0.2315,
+            "middle": 0.2369,
+            "upper": 0.2423,
+            "width_pct": 4.559
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T04:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118018.01,
+          "change_pct_1h": -0.012,
+          "change_pct_24h": -0.183,
+          "volume_usdc": 47.23674,
+          "high_24h": 118192.8,
+          "low_24h": 117958.01,
+          "rsi14": 59.4,
+          "sma7": 117984.991429,
+          "sma25": 118090.4708,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.199,
+          "atr": 361.460714,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 44.814576
+          },
+          "bollinger": {
+            "lower": 117632.2018,
+            "middle": 118050.8115,
+            "upper": 118469.4212,
+            "width_pct": 0.709
+          }
+        },
+        "ETHUSDC": {
+          "price": 3656.26,
+          "change_pct_1h": -0.108,
+          "change_pct_24h": 1.783,
+          "volume_usdc": 39759.4936,
+          "high_24h": 3668.61,
+          "low_24h": 3635.08,
+          "rsi14": 81.6,
+          "sma7": 3615.342857,
+          "sma25": 3578.4236,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.917,
+          "atr": 34.618571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 11.940049
+          },
+          "bollinger": {
+            "lower": 3512.2562,
+            "middle": 3578.744,
+            "upper": 3645.2318,
+            "width_pct": 3.716
+          }
+        },
+        "SOLUSDC": {
+          "price": 177.68,
+          "change_pct_1h": -0.219,
+          "change_pct_24h": 0.135,
+          "volume_usdc": 13876.174,
+          "high_24h": 178.65,
+          "low_24h": 177.58,
+          "rsi14": 63.5,
+          "sma7": 177.527143,
+          "sma25": 177.1064,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.602,
+          "atr": 1.62,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.22774
+          },
+          "bollinger": {
+            "lower": 175.7339,
+            "middle": 177.142,
+            "upper": 178.5501,
+            "width_pct": 1.59
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.4246,
+          "change_pct_1h": -0.343,
+          "change_pct_24h": -1.137,
+          "volume_usdc": 1075066.8,
+          "high_24h": 3.4451,
+          "low_24h": 3.4142,
+          "rsi14": 63.5,
+          "sma7": 3.424571,
+          "sma25": 3.427584,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.902,
+          "atr": 0.034929,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.003269
+          },
+          "bollinger": {
+            "lower": 3.3826,
+            "middle": 3.4204,
+            "upper": 3.4582,
+            "width_pct": 2.21
+          }
+        },
+        "BNBUSDC": {
+          "price": 742.27,
+          "change_pct_1h": -0.131,
+          "change_pct_24h": 0.639,
+          "volume_usdc": 537.694,
+          "high_24h": 744.59,
+          "low_24h": 741.44,
+          "rsi14": 72.4,
+          "sma7": 738.251429,
+          "sma25": 734.9696,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.424,
+          "atr": 4.561429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 1.521097
+          },
+          "bollinger": {
+            "lower": 726.5132,
+            "middle": 735.239,
+            "upper": 743.9648,
+            "width_pct": 2.374
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8377,
+          "change_pct_1h": -0.381,
+          "change_pct_24h": 0.721,
+          "volume_usdc": 1514528.7,
+          "high_24h": 0.8476,
+          "low_24h": 0.8357,
+          "rsi14": 74.0,
+          "sma7": 0.832671,
+          "sma25": 0.827648,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.421,
+          "atr": 0.010829,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002427
+          },
+          "bollinger": {
+            "lower": 0.8153,
+            "middle": 0.8277,
+            "upper": 0.8401,
+            "width_pct": 2.996
+          }
+        },
+        "AVAXUSDC": {
+          "price": 24.62,
+          "change_pct_1h": 0.122,
+          "change_pct_24h": 3.013,
+          "volume_usdc": 8277.74,
+          "high_24h": 24.71,
+          "low_24h": 24.49,
+          "rsi14": 72.9,
+          "sma7": 24.511429,
+          "sma25": 24.0772,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.894,
+          "atr": 0.403571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.056397
+          },
+          "bollinger": {
+            "lower": 23.1786,
+            "middle": 24.147,
+            "upper": 25.1154,
+            "width_pct": 8.021
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.25458,
+          "change_pct_1h": -0.309,
+          "change_pct_24h": -0.024,
+          "volume_usdc": 13757570.0,
+          "high_24h": 0.25794,
+          "low_24h": 0.2526,
+          "rsi14": 78.0,
+          "sma7": 0.248814,
+          "sma25": 0.247226,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.098,
+          "atr": 0.004273,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.001219
+          },
+          "bollinger": {
+            "lower": 0.2354,
+            "middle": 0.2457,
+            "upper": 0.256,
+            "width_pct": 8.384
+          }
+        },
+        "LINKUSDC": {
+          "price": 18.67,
+          "change_pct_1h": -0.054,
+          "change_pct_24h": 2.808,
+          "volume_usdc": 18658.36,
+          "high_24h": 18.75,
+          "low_24h": 18.55,
+          "rsi14": 89.4,
+          "sma7": 18.498571,
+          "sma25": 18.1496,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.071,
+          "atr": 0.246429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.073659
+          },
+          "bollinger": {
+            "lower": 17.555,
+            "middle": 18.18,
+            "upper": 18.805,
+            "width_pct": 6.876
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2424,
+          "change_pct_1h": 0.539,
+          "change_pct_24h": 1.38,
+          "volume_usdc": 192304.4,
+          "high_24h": 0.243,
+          "low_24h": 0.2406,
+          "rsi14": 91.8,
+          "sma7": 0.240329,
+          "sma25": 0.2373,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.99,
+          "atr": 0.002421,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000906
+          },
+          "bollinger": {
+            "lower": 0.2314,
+            "middle": 0.2372,
+            "upper": 0.2431,
+            "width_pct": 4.933
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T05:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 117914.02,
+          "change_pct_1h": -0.088,
+          "change_pct_24h": -0.328,
+          "volume_usdc": 51.7886,
+          "high_24h": 118046.78,
+          "low_24h": 117866.0,
+          "rsi14": 41.2,
+          "sma7": 117993.497143,
+          "sma25": 118077.6712,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.153,
+          "atr": 332.768571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 33.061398
+          },
+          "bollinger": {
+            "lower": 117626.7966,
+            "middle": 118030.613,
+            "upper": 118434.4294,
+            "width_pct": 0.684
+          }
+        },
+        "ETHUSDC": {
+          "price": 3649.3,
+          "change_pct_1h": -0.19,
+          "change_pct_24h": 1.691,
+          "volume_usdc": 20859.5849,
+          "high_24h": 3664.88,
+          "low_24h": 3638.08,
+          "rsi14": 76.4,
+          "sma7": 3625.441429,
+          "sma25": 3580.7072,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.734,
+          "atr": 34.153571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 11.404311
+          },
+          "bollinger": {
+            "lower": 3510.5767,
+            "middle": 3583.181,
+            "upper": 3655.7853,
+            "width_pct": 4.053
+          }
+        },
+        "SOLUSDC": {
+          "price": 177.88,
+          "change_pct_1h": 0.113,
+          "change_pct_24h": 0.107,
+          "volume_usdc": 7795.884,
+          "high_24h": 178.08,
+          "low_24h": 177.19,
+          "rsi14": 52.7,
+          "sma7": 177.721429,
+          "sma25": 177.124,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.5,
+          "atr": 1.498571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.211875
+          },
+          "bollinger": {
+            "lower": 175.7608,
+            "middle": 177.1955,
+            "upper": 178.6302,
+            "width_pct": 1.619
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.4206,
+          "change_pct_1h": -0.117,
+          "change_pct_24h": -1.153,
+          "volume_usdc": 899283.2,
+          "high_24h": 3.4268,
+          "low_24h": 3.4043,
+          "rsi14": 52.4,
+          "sma7": 3.424171,
+          "sma25": 3.425848,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.658,
+          "atr": 0.031836,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002442
+          },
+          "bollinger": {
+            "lower": 3.3846,
+            "middle": 3.4186,
+            "upper": 3.4527,
+            "width_pct": 1.992
+          }
+        },
+        "BNBUSDC": {
+          "price": 744.09,
+          "change_pct_1h": 0.245,
+          "change_pct_24h": 1.194,
+          "volume_usdc": 602.05,
+          "high_24h": 744.59,
+          "low_24h": 739.75,
+          "rsi14": 72.3,
+          "sma7": 739.841429,
+          "sma25": 735.2308,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.65,
+          "atr": 4.557857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 1.582988
+          },
+          "bollinger": {
+            "lower": 726.3109,
+            "middle": 735.785,
+            "upper": 745.2591,
+            "width_pct": 2.575
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8413,
+          "change_pct_1h": 0.43,
+          "change_pct_24h": 1.41,
+          "volume_usdc": 1520197.3,
+          "high_24h": 0.8424,
+          "low_24h": 0.8313,
+          "rsi14": 70.5,
+          "sma7": 0.834914,
+          "sma25": 0.828032,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.319,
+          "atr": 0.010586,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002474
+          },
+          "bollinger": {
+            "lower": 0.8145,
+            "middle": 0.8281,
+            "upper": 0.8417,
+            "width_pct": 3.285
+          }
+        },
+        "AVAXUSDC": {
+          "price": 24.66,
+          "change_pct_1h": 0.162,
+          "change_pct_24h": 3.137,
+          "volume_usdc": 7860.81,
+          "high_24h": 24.7,
+          "low_24h": 24.44,
+          "rsi14": 69.8,
+          "sma7": 24.552857,
+          "sma25": 24.1076,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.054,
+          "atr": 0.390714,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.048819
+          },
+          "bollinger": {
+            "lower": 23.2521,
+            "middle": 24.203,
+            "upper": 25.1539,
+            "width_pct": 7.858
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.25258,
+          "change_pct_1h": -0.786,
+          "change_pct_24h": -0.363,
+          "volume_usdc": 10187620.0,
+          "high_24h": 0.2548,
+          "low_24h": 0.25117,
+          "rsi14": 69.5,
+          "sma7": 0.250529,
+          "sma25": 0.247144,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.437,
+          "atr": 0.004251,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.00109
+          },
+          "bollinger": {
+            "lower": 0.2355,
+            "middle": 0.2457,
+            "upper": 0.2559,
+            "width_pct": 8.303
+          }
+        },
+        "LINKUSDC": {
+          "price": 18.72,
+          "change_pct_1h": 0.268,
+          "change_pct_24h": 3.597,
+          "volume_usdc": 24274.29,
+          "high_24h": 18.75,
+          "low_24h": 18.58,
+          "rsi14": 86.9,
+          "sma7": 18.564286,
+          "sma25": 18.172,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.908,
+          "atr": 0.233571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.069663
+          },
+          "bollinger": {
+            "lower": 17.5636,
+            "middle": 18.2195,
+            "upper": 18.8754,
+            "width_pct": 7.2
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2437,
+          "change_pct_1h": 0.536,
+          "change_pct_24h": 2.095,
+          "volume_usdc": 321468.0,
+          "high_24h": 0.244,
+          "low_24h": 0.2407,
+          "rsi14": 90.5,
+          "sma7": 0.240986,
+          "sma25": 0.237484,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.354,
+          "atr": 0.002343,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000958
+          },
+          "bollinger": {
+            "lower": 0.2312,
+            "middle": 0.2376,
+            "upper": 0.2441,
+            "width_pct": 5.429
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T06:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 117893.13,
+          "change_pct_1h": -0.018,
+          "change_pct_24h": -0.319,
+          "volume_usdc": 35.12299,
+          "high_24h": 117957.7,
+          "low_24h": 117832.31,
+          "rsi14": 43.7,
+          "sma7": 117990.03,
+          "sma25": 118061.3324,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.106,
+          "atr": 319.742857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 21.807246
+          },
+          "bollinger": {
+            "lower": 117656.6184,
+            "middle": 117999.9685,
+            "upper": 118343.3186,
+            "width_pct": 0.582
+          }
+        },
+        "ETHUSDC": {
+          "price": 3654.61,
+          "change_pct_1h": 0.146,
+          "change_pct_24h": 2.255,
+          "volume_usdc": 19169.7838,
+          "high_24h": 3663.68,
+          "low_24h": 3641.01,
+          "rsi14": 76.1,
+          "sma7": 3634.084286,
+          "sma25": 3583.3476,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.62,
+          "atr": 33.302857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 10.727086
+          },
+          "bollinger": {
+            "lower": 3509.8422,
+            "middle": 3587.9115,
+            "upper": 3665.9808,
+            "width_pct": 4.352
+          }
+        },
+        "SOLUSDC": {
+          "price": 177.43,
+          "change_pct_1h": -0.253,
+          "change_pct_24h": 0.578,
+          "volume_usdc": 8512.548,
+          "high_24h": 177.89,
+          "low_24h": 177.03,
+          "rsi14": 48.7,
+          "sma7": 177.771429,
+          "sma25": 177.1136,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.485,
+          "atr": 1.463571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.163447
+          },
+          "bollinger": {
+            "lower": 175.7601,
+            "middle": 177.193,
+            "upper": 178.6259,
+            "width_pct": 1.617
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.4188,
+          "change_pct_1h": -0.053,
+          "change_pct_24h": -0.861,
+          "volume_usdc": 846892.9,
+          "high_24h": 3.4244,
+          "low_24h": 3.4043,
+          "rsi14": 41.5,
+          "sma7": 3.423114,
+          "sma25": 3.42418,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.588,
+          "atr": 0.029357,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.001705
+          },
+          "bollinger": {
+            "lower": 3.3845,
+            "middle": 3.4181,
+            "upper": 3.4516,
+            "width_pct": 1.963
+          }
+        },
+        "BNBUSDC": {
+          "price": 742.63,
+          "change_pct_1h": -0.196,
+          "change_pct_24h": 1.364,
+          "volume_usdc": 413.911,
+          "high_24h": 744.25,
+          "low_24h": 741.81,
+          "rsi14": 67.5,
+          "sma7": 741.132857,
+          "sma25": 735.5236,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.329,
+          "atr": 4.387143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 1.436745
+          },
+          "bollinger": {
+            "lower": 726.1652,
+            "middle": 736.0985,
+            "upper": 746.0318,
+            "width_pct": 2.699
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8356,
+          "change_pct_1h": -0.678,
+          "change_pct_24h": 1.334,
+          "volume_usdc": 1396790.5,
+          "high_24h": 0.8415,
+          "low_24h": 0.8354,
+          "rsi14": 59.7,
+          "sma7": 0.835686,
+          "sma25": 0.828272,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.73,
+          "atr": 0.010114,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002008
+          },
+          "bollinger": {
+            "lower": 0.8145,
+            "middle": 0.8285,
+            "upper": 0.8425,
+            "width_pct": 3.38
+          }
+        },
+        "AVAXUSDC": {
+          "price": 24.61,
+          "change_pct_1h": -0.203,
+          "change_pct_24h": 3.014,
+          "volume_usdc": 6460.34,
+          "high_24h": 24.71,
+          "low_24h": 24.54,
+          "rsi14": 66.5,
+          "sma7": 24.568571,
+          "sma25": 24.1356,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.691,
+          "atr": 0.372143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.036243
+          },
+          "bollinger": {
+            "lower": 23.3273,
+            "middle": 24.253,
+            "upper": 25.1787,
+            "width_pct": 7.634
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.25111,
+          "change_pct_1h": -0.582,
+          "change_pct_24h": -0.068,
+          "volume_usdc": 7571045.0,
+          "high_24h": 0.25268,
+          "low_24h": 0.24906,
+          "rsi14": 65.2,
+          "sma7": 0.251894,
+          "sma25": 0.247048,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.442,
+          "atr": 0.004265,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000848
+          },
+          "bollinger": {
+            "lower": 0.2355,
+            "middle": 0.2456,
+            "upper": 0.2558,
+            "width_pct": 8.265
+          }
+        },
+        "LINKUSDC": {
+          "price": 18.62,
+          "change_pct_1h": -0.534,
+          "change_pct_24h": 3.215,
+          "volume_usdc": 25951.17,
+          "high_24h": 18.72,
+          "low_24h": 18.52,
+          "rsi14": 76.7,
+          "sma7": 18.595714,
+          "sma25": 18.194,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.074,
+          "atr": 0.227143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.055614
+          },
+          "bollinger": {
+            "lower": 17.5979,
+            "middle": 18.2565,
+            "upper": 18.9151,
+            "width_pct": 7.215
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2425,
+          "change_pct_1h": -0.492,
+          "change_pct_24h": 1.934,
+          "volume_usdc": 173778.2,
+          "high_24h": 0.244,
+          "low_24h": 0.2421,
+          "rsi14": 85.4,
+          "sma7": 0.2413,
+          "sma25": 0.237636,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.784,
+          "atr": 0.002264,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000858
+          },
+          "bollinger": {
+            "lower": 0.2312,
+            "middle": 0.2379,
+            "upper": 0.2447,
+            "width_pct": 5.675
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T07:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118085.1,
+          "change_pct_1h": 0.163,
+          "change_pct_24h": -0.15,
+          "volume_usdc": 96.3378,
+          "high_24h": 118282.73,
+          "low_24h": 117893.12,
+          "rsi14": 59.2,
+          "sma7": 118000.765714,
+          "sma25": 118053.9388,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.33,
+          "atr": 329.784286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 24.518326
+          },
+          "bollinger": {
+            "lower": 117690.3833,
+            "middle": 117984.2235,
+            "upper": 118278.0637,
+            "width_pct": 0.498
+          }
+        },
+        "ETHUSDC": {
+          "price": 3670.33,
+          "change_pct_1h": 0.43,
+          "change_pct_24h": 2.687,
+          "volume_usdc": 34903.9212,
+          "high_24h": 3691.3,
+          "low_24h": 3654.8,
+          "rsi14": 85.3,
+          "sma7": 3645.101429,
+          "sma25": 3587.2008,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.994,
+          "atr": 33.832857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 10.520908
+          },
+          "bollinger": {
+            "lower": 3509.4612,
+            "middle": 3593.7015,
+            "upper": 3677.9418,
+            "width_pct": 4.688
+          }
+        },
+        "SOLUSDC": {
+          "price": 178.05,
+          "change_pct_1h": 0.349,
+          "change_pct_24h": 0.519,
+          "volume_usdc": 34417.92,
+          "high_24h": 178.78,
+          "low_24h": 177.32,
+          "rsi14": 61.7,
+          "sma7": 177.814286,
+          "sma25": 177.1792,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.82,
+          "atr": 1.447857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.15745
+          },
+          "bollinger": {
+            "lower": 175.8,
+            "middle": 177.2605,
+            "upper": 178.721,
+            "width_pct": 1.648
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.4437,
+          "change_pct_1h": 0.728,
+          "change_pct_24h": -0.689,
+          "volume_usdc": 2781769.7,
+          "high_24h": 3.4601,
+          "low_24h": 3.4185,
+          "rsi14": 55.5,
+          "sma7": 3.4252,
+          "sma25": 3.423988,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.208,
+          "atr": 0.029957,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002588
+          },
+          "bollinger": {
+            "lower": 3.3868,
+            "middle": 3.4205,
+            "upper": 3.4541,
+            "width_pct": 1.968
+          }
+        },
+        "BNBUSDC": {
+          "price": 745.08,
+          "change_pct_1h": 0.33,
+          "change_pct_24h": 1.659,
+          "volume_usdc": 759.613,
+          "high_24h": 745.93,
+          "low_24h": 742.01,
+          "rsi14": 77.4,
+          "sma7": 742.637143,
+          "sma25": 736.0212,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.526,
+          "atr": 4.368571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 1.406362
+          },
+          "bollinger": {
+            "lower": 725.8239,
+            "middle": 736.5,
+            "upper": 747.1761,
+            "width_pct": 2.899
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8455,
+          "change_pct_1h": 1.185,
+          "change_pct_24h": 2.361,
+          "volume_usdc": 1865322.4,
+          "high_24h": 0.85,
+          "low_24h": 0.8357,
+          "rsi14": 72.4,
+          "sma7": 0.838043,
+          "sma25": 0.829108,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.691,
+          "atr": 0.010479,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.00218
+          },
+          "bollinger": {
+            "lower": 0.8147,
+            "middle": 0.8298,
+            "upper": 0.8449,
+            "width_pct": 3.639
+          }
+        },
+        "AVAXUSDC": {
+          "price": 24.73,
+          "change_pct_1h": 0.488,
+          "change_pct_24h": 4.214,
+          "volume_usdc": 16000.58,
+          "high_24h": 24.86,
+          "low_24h": 24.61,
+          "rsi14": 69.8,
+          "sma7": 24.61,
+          "sma25": 24.1692,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.011,
+          "atr": 0.377143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.031574
+          },
+          "bollinger": {
+            "lower": 23.4105,
+            "middle": 24.309,
+            "upper": 25.2075,
+            "width_pct": 7.392
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.25159,
+          "change_pct_1h": 0.191,
+          "change_pct_24h": -0.91,
+          "volume_usdc": 7881705.0,
+          "high_24h": 0.25307,
+          "low_24h": 0.25111,
+          "rsi14": 68.7,
+          "sma7": 0.252609,
+          "sma25": 0.24706,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.779,
+          "atr": 0.004191,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000638
+          },
+          "bollinger": {
+            "lower": 0.2355,
+            "middle": 0.246,
+            "upper": 0.2564,
+            "width_pct": 8.496
+          }
+        },
+        "LINKUSDC": {
+          "price": 18.82,
+          "change_pct_1h": 1.074,
+          "change_pct_24h": 4.73,
+          "volume_usdc": 75316.35,
+          "high_24h": 18.97,
+          "low_24h": 18.61,
+          "rsi14": 80.2,
+          "sma7": 18.651429,
+          "sma25": 18.2252,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.913,
+          "atr": 0.244286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.054921
+          },
+          "bollinger": {
+            "lower": 17.6531,
+            "middle": 18.3105,
+            "upper": 18.9679,
+            "width_pct": 7.181
+          }
+        },
+        "POLUSDC": {
+          "price": 0.243,
+          "change_pct_1h": 0.206,
+          "change_pct_24h": 2.705,
+          "volume_usdc": 245071.7,
+          "high_24h": 0.245,
+          "low_24h": 0.2424,
+          "rsi14": 85.4,
+          "sma7": 0.241729,
+          "sma25": 0.23784,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.07,
+          "atr": 0.002379,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000767
+          },
+          "bollinger": {
+            "lower": 0.2314,
+            "middle": 0.2383,
+            "upper": 0.2453,
+            "width_pct": 5.833
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T08:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118224.07,
+          "change_pct_1h": 0.118,
+          "change_pct_24h": 0.039,
+          "volume_usdc": 128.194,
+          "high_24h": 118320.28,
+          "low_24h": 118085.09,
+          "rsi14": 62.0,
+          "sma7": 118031.347143,
+          "sma25": 118052.422,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.199,
+          "atr": 326.441429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 33.405616
+          },
+          "bollinger": {
+            "lower": 117703.1024,
+            "middle": 117979.9675,
+            "upper": 118256.8326,
+            "width_pct": 0.469
+          }
+        },
+        "ETHUSDC": {
+          "price": 3713.07,
+          "change_pct_1h": 1.164,
+          "change_pct_24h": 4.399,
+          "volume_usdc": 45319.8465,
+          "high_24h": 3719.23,
+          "low_24h": 3670.39,
+          "rsi14": 87.6,
+          "sma7": 3660.297143,
+          "sma25": 3592.7516,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.315,
+          "atr": 35.740714,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 12.463026
+          },
+          "bollinger": {
+            "lower": 3503.4624,
+            "middle": 3601.1625,
+            "upper": 3698.8626,
+            "width_pct": 5.426
+          }
+        },
+        "SOLUSDC": {
+          "price": 180.81,
+          "change_pct_1h": 1.55,
+          "change_pct_24h": 2.645,
+          "volume_usdc": 39175.612,
+          "high_24h": 180.81,
+          "low_24h": 178.05,
+          "rsi14": 71.1,
+          "sma7": 178.221429,
+          "sma25": 177.3264,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.526,
+          "atr": 1.548571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.320001
+          },
+          "bollinger": {
+            "lower": 175.2999,
+            "middle": 177.429,
+            "upper": 179.5581,
+            "width_pct": 2.4
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.5007,
+          "change_pct_1h": 1.655,
+          "change_pct_24h": 1.747,
+          "volume_usdc": 2715814.3,
+          "high_24h": 3.5019,
+          "low_24h": 3.4441,
+          "rsi14": 68.5,
+          "sma7": 3.436043,
+          "sma25": 3.425312,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.651,
+          "atr": 0.032171,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.006723
+          },
+          "bollinger": {
+            "lower": 3.3762,
+            "middle": 3.4246,
+            "upper": 3.4731,
+            "width_pct": 2.83
+          }
+        },
+        "BNBUSDC": {
+          "price": 751.12,
+          "change_pct_1h": 0.811,
+          "change_pct_24h": 2.748,
+          "volume_usdc": 1751.744,
+          "high_24h": 751.25,
+          "low_24h": 745.01,
+          "rsi14": 80.5,
+          "sma7": 744.367143,
+          "sma25": 736.7492,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.831,
+          "atr": 4.547857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 1.690699
+          },
+          "bollinger": {
+            "lower": 724.7246,
+            "middle": 736.942,
+            "upper": 749.1594,
+            "width_pct": 3.316
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8572,
+          "change_pct_1h": 1.384,
+          "change_pct_24h": 3.853,
+          "volume_usdc": 2123005.1,
+          "high_24h": 0.8575,
+          "low_24h": 0.8449,
+          "rsi14": 76.6,
+          "sma7": 0.841571,
+          "sma25": 0.830356,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.47,
+          "atr": 0.010664,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002873
+          },
+          "bollinger": {
+            "lower": 0.8119,
+            "middle": 0.8312,
+            "upper": 0.8505,
+            "width_pct": 4.644
+          }
+        },
+        "AVAXUSDC": {
+          "price": 25.04,
+          "change_pct_1h": 1.254,
+          "change_pct_24h": 6.282,
+          "volume_usdc": 19509.82,
+          "high_24h": 25.04,
+          "low_24h": 24.72,
+          "rsi14": 65.4,
+          "sma7": 24.684286,
+          "sma25": 24.2216,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.278,
+          "atr": 0.352857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.04519
+          },
+          "bollinger": {
+            "lower": 23.4423,
+            "middle": 24.3685,
+            "upper": 25.2947,
+            "width_pct": 7.602
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.25472,
+          "change_pct_1h": 1.244,
+          "change_pct_24h": 0.604,
+          "volume_usdc": 12672638.0,
+          "high_24h": 0.25498,
+          "low_24h": 0.25159,
+          "rsi14": 73.8,
+          "sma7": 0.253021,
+          "sma25": 0.247093,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.331,
+          "atr": 0.004311,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000644
+          },
+          "bollinger": {
+            "lower": 0.2352,
+            "middle": 0.2464,
+            "upper": 0.2575,
+            "width_pct": 9.05
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.12,
+          "change_pct_1h": 1.594,
+          "change_pct_24h": 6.816,
+          "volume_usdc": 73300.52,
+          "high_24h": 19.12,
+          "low_24h": 18.82,
+          "rsi14": 82.9,
+          "sma7": 18.737143,
+          "sma25": 18.2712,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.569,
+          "atr": 0.244286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.069513
+          },
+          "bollinger": {
+            "lower": 17.6636,
+            "middle": 18.374,
+            "upper": 19.0844,
+            "width_pct": 7.733
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2451,
+          "change_pct_1h": 0.864,
+          "change_pct_24h": 4.121,
+          "volume_usdc": 226695.8,
+          "high_24h": 0.2455,
+          "low_24h": 0.2432,
+          "rsi14": 86.3,
+          "sma7": 0.2425,
+          "sma25": 0.23818,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.938,
+          "atr": 0.002429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000803
+          },
+          "bollinger": {
+            "lower": 0.2314,
+            "middle": 0.2388,
+            "upper": 0.2462,
+            "width_pct": 6.198
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T09:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 117983.2,
+          "change_pct_1h": -0.204,
+          "change_pct_24h": -0.283,
+          "volume_usdc": 114.72891,
+          "high_24h": 118352.94,
+          "low_24h": 117959.04,
+          "rsi14": 46.6,
+          "sma7": 118021.362857,
+          "sma25": 118044.63,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.334,
+          "atr": 316.332857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 22.44507
+          },
+          "bollinger": {
+            "lower": 117722.5416,
+            "middle": 117965.669,
+            "upper": 118208.7964,
+            "width_pct": 0.412
+          }
+        },
+        "ETHUSDC": {
+          "price": 3708.8,
+          "change_pct_1h": -0.115,
+          "change_pct_24h": 4.163,
+          "volume_usdc": 44465.2996,
+          "high_24h": 3729.73,
+          "low_24h": 3696.33,
+          "rsi14": 84.0,
+          "sma7": 3673.224286,
+          "sma25": 3598.8396,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.901,
+          "atr": 35.216429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 12.657715
+          },
+          "bollinger": {
+            "lower": 3502.2063,
+            "middle": 3608.5725,
+            "upper": 3714.9387,
+            "width_pct": 5.895
+          }
+        },
+        "SOLUSDC": {
+          "price": 179.85,
+          "change_pct_1h": -0.531,
+          "change_pct_24h": 1.719,
+          "volume_usdc": 49703.52,
+          "high_24h": 181.67,
+          "low_24h": 179.75,
+          "rsi14": 63.6,
+          "sma7": 178.538571,
+          "sma25": 177.4744,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.068,
+          "atr": 1.552857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.343664
+          },
+          "bollinger": {
+            "lower": 175.1667,
+            "middle": 177.5435,
+            "upper": 179.9203,
+            "width_pct": 2.677
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.4904,
+          "change_pct_1h": -0.294,
+          "change_pct_24h": 0.987,
+          "volume_usdc": 7057663.5,
+          "high_24h": 3.5363,
+          "low_24h": 3.4779,
+          "rsi14": 63.5,
+          "sma7": 3.447886,
+          "sma25": 3.427304,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.673,
+          "atr": 0.034814,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.008474
+          },
+          "bollinger": {
+            "lower": 3.3727,
+            "middle": 3.4285,
+            "upper": 3.4844,
+            "width_pct": 3.258
+          }
+        },
+        "BNBUSDC": {
+          "price": 749.29,
+          "change_pct_1h": -0.244,
+          "change_pct_24h": 2.199,
+          "volume_usdc": 1224.529,
+          "high_24h": 751.13,
+          "low_24h": 747.61,
+          "rsi14": 73.2,
+          "sma7": 745.388571,
+          "sma25": 737.4796,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.47,
+          "atr": 4.337143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 1.651688
+          },
+          "bollinger": {
+            "lower": 724.2551,
+            "middle": 737.595,
+            "upper": 750.9349,
+            "width_pct": 3.617
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8513,
+          "change_pct_1h": -0.688,
+          "change_pct_24h": 2.209,
+          "volume_usdc": 3346085.2,
+          "high_24h": 0.8627,
+          "low_24h": 0.8486,
+          "rsi14": 67.2,
+          "sma7": 0.844214,
+          "sma25": 0.831392,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.656,
+          "atr": 0.010629,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002767
+          },
+          "bollinger": {
+            "lower": 0.8116,
+            "middle": 0.8325,
+            "upper": 0.8535,
+            "width_pct": 5.033
+          }
+        },
+        "AVAXUSDC": {
+          "price": 24.94,
+          "change_pct_1h": -0.399,
+          "change_pct_24h": 5.947,
+          "volume_usdc": 25027.5,
+          "high_24h": 25.14,
+          "low_24h": 24.87,
+          "rsi14": 48.8,
+          "sma7": 24.741429,
+          "sma25": 24.2768,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.083,
+          "atr": 0.312857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.043765
+          },
+          "bollinger": {
+            "lower": 23.5368,
+            "middle": 24.433,
+            "upper": 25.3292,
+            "width_pct": 7.336
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.25073,
+          "change_pct_1h": -1.566,
+          "change_pct_24h": -1.003,
+          "volume_usdc": 22120551.0,
+          "high_24h": 0.25595,
+          "low_24h": 0.25068,
+          "rsi14": 62.8,
+          "sma7": 0.252954,
+          "sma25": 0.246995,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.102,
+          "atr": 0.004389,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000346
+          },
+          "bollinger": {
+            "lower": 0.2356,
+            "middle": 0.2468,
+            "upper": 0.2579,
+            "width_pct": 9.036
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.5,
+          "change_pct_1h": 1.987,
+          "change_pct_24h": 8.756,
+          "volume_usdc": 175778.85,
+          "high_24h": 19.66,
+          "low_24h": 19.07,
+          "rsi14": 85.0,
+          "sma7": 18.875714,
+          "sma25": 18.3352,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 3.026,
+          "atr": 0.262857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.098309
+          },
+          "bollinger": {
+            "lower": 17.6531,
+            "middle": 18.461,
+            "upper": 19.2689,
+            "width_pct": 8.753
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2457,
+          "change_pct_1h": 0.245,
+          "change_pct_24h": 4.022,
+          "volume_usdc": 391421.5,
+          "high_24h": 0.2472,
+          "low_24h": 0.2443,
+          "rsi14": 83.8,
+          "sma7": 0.243357,
+          "sma25": 0.238592,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.18,
+          "atr": 0.00235,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000817
+          },
+          "bollinger": {
+            "lower": 0.2317,
+            "middle": 0.2394,
+            "upper": 0.247,
+            "width_pct": 6.391
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T10:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 117959.98,
+          "change_pct_1h": -0.02,
+          "change_pct_24h": -0.461,
+          "volume_usdc": 95.94734,
+          "high_24h": 118063.39,
+          "low_24h": 117944.0,
+          "rsi14": 58.9,
+          "sma7": 118011.072857,
+          "sma25": 118030.3096,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.101,
+          "atr": 292.251429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 13.630874
+          },
+          "bollinger": {
+            "lower": 117754.4776,
+            "middle": 117976.2685,
+            "upper": 118198.0594,
+            "width_pct": 0.376
+          }
+        },
+        "ETHUSDC": {
+          "price": 3701.51,
+          "change_pct_1h": -0.197,
+          "change_pct_24h": 3.975,
+          "volume_usdc": 21182.7268,
+          "high_24h": 3716.41,
+          "low_24h": 3695.87,
+          "rsi14": 87.2,
+          "sma7": 3679.125714,
+          "sma25": 3604.4776,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.555,
+          "atr": 34.541429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 11.465387
+          },
+          "bollinger": {
+            "lower": 3509.069,
+            "middle": 3616.96,
+            "upper": 3724.851,
+            "width_pct": 5.966
+          }
+        },
+        "SOLUSDC": {
+          "price": 179.69,
+          "change_pct_1h": -0.089,
+          "change_pct_24h": 1.245,
+          "volume_usdc": 18044.379,
+          "high_24h": 180.55,
+          "low_24h": 179.52,
+          "rsi14": 61.2,
+          "sma7": 178.77,
+          "sma25": 177.5896,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.573,
+          "atr": 1.51,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.328483
+          },
+          "bollinger": {
+            "lower": 175.4888,
+            "middle": 177.771,
+            "upper": 180.0532,
+            "width_pct": 2.568
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.5113,
+          "change_pct_1h": 0.599,
+          "change_pct_24h": 2.355,
+          "volume_usdc": 2544709.3,
+          "high_24h": 3.5269,
+          "low_24h": 3.4875,
+          "rsi14": 71.6,
+          "sma7": 3.458586,
+          "sma25": 3.429504,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.122,
+          "atr": 0.035564,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.010541
+          },
+          "bollinger": {
+            "lower": 3.3777,
+            "middle": 3.436,
+            "upper": 3.4943,
+            "width_pct": 3.393
+          }
+        },
+        "BNBUSDC": {
+          "price": 745.6,
+          "change_pct_1h": -0.492,
+          "change_pct_24h": 1.255,
+          "volume_usdc": 1376.947,
+          "high_24h": 750.01,
+          "low_24h": 745.58,
+          "rsi14": 68.9,
+          "sma7": 745.725714,
+          "sma25": 737.9768,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.594,
+          "atr": 4.442857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 1.289067
+          },
+          "bollinger": {
+            "lower": 725.2134,
+            "middle": 738.412,
+            "upper": 751.6106,
+            "width_pct": 3.575
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8488,
+          "change_pct_1h": -0.294,
+          "change_pct_24h": 2.524,
+          "volume_usdc": 1648769.9,
+          "high_24h": 0.8557,
+          "low_24h": 0.8483,
+          "rsi14": 64.9,
+          "sma7": 0.845343,
+          "sma25": 0.832028,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.872,
+          "atr": 0.010679,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002367
+          },
+          "bollinger": {
+            "lower": 0.8144,
+            "middle": 0.8343,
+            "upper": 0.8543,
+            "width_pct": 4.782
+          }
+        },
+        "AVAXUSDC": {
+          "price": 24.94,
+          "change_pct_1h": 0.0,
+          "change_pct_24h": 5.633,
+          "volume_usdc": 12884.07,
+          "high_24h": 25.06,
+          "low_24h": 24.92,
+          "rsi14": 52.9,
+          "sma7": 24.791429,
+          "sma25": 24.3328,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.561,
+          "atr": 0.292143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.038441
+          },
+          "bollinger": {
+            "lower": 23.7448,
+            "middle": 24.513,
+            "upper": 25.2812,
+            "width_pct": 6.268
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.25123,
+          "change_pct_1h": 0.199,
+          "change_pct_24h": -0.183,
+          "volume_usdc": 5417486.0,
+          "high_24h": 0.25235,
+          "low_24h": 0.25056,
+          "rsi14": 67.7,
+          "sma7": 0.252363,
+          "sma25": 0.246913,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.712,
+          "atr": 0.004332,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000157
+          },
+          "bollinger": {
+            "lower": 0.2365,
+            "middle": 0.2473,
+            "upper": 0.2582,
+            "width_pct": 8.775
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.34,
+          "change_pct_1h": -0.821,
+          "change_pct_24h": 8.166,
+          "volume_usdc": 94515.72,
+          "high_24h": 19.6,
+          "low_24h": 19.31,
+          "rsi14": 77.1,
+          "sma7": 18.97,
+          "sma25": 18.3916,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.499,
+          "atr": 0.269286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.099078
+          },
+          "bollinger": {
+            "lower": 17.7466,
+            "middle": 18.5465,
+            "upper": 19.3464,
+            "width_pct": 8.626
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2462,
+          "change_pct_1h": 0.204,
+          "change_pct_24h": 4.146,
+          "volume_usdc": 213139.0,
+          "high_24h": 0.2469,
+          "low_24h": 0.2456,
+          "rsi14": 83.5,
+          "sma7": 0.244086,
+          "sma25": 0.238992,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.528,
+          "atr": 0.002286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000801
+          },
+          "bollinger": {
+            "lower": 0.2329,
+            "middle": 0.2401,
+            "upper": 0.2474,
+            "width_pct": 6.039
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T11:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 117935.99,
+          "change_pct_1h": -0.02,
+          "change_pct_24h": -0.392,
+          "volume_usdc": 117.04011,
+          "high_24h": 118146.87,
+          "low_24h": 117873.98,
+          "rsi14": 57.9,
+          "sma7": 117999.355714,
+          "sma25": 118007.5084,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.231,
+          "atr": 271.124286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 5.278394
+          },
+          "bollinger": {
+            "lower": 117754.8311,
+            "middle": 117967.067,
+            "upper": 118179.3029,
+            "width_pct": 0.36
+          }
+        },
+        "ETHUSDC": {
+          "price": 3757.81,
+          "change_pct_1h": 1.521,
+          "change_pct_24h": 5.719,
+          "volume_usdc": 61083.6263,
+          "high_24h": 3770.23,
+          "low_24h": 3697.79,
+          "rsi14": 89.9,
+          "sma7": 3693.632857,
+          "sma25": 3612.39,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.928,
+          "atr": 37.121429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 13.473694
+          },
+          "bollinger": {
+            "lower": 3507.1332,
+            "middle": 3627.1455,
+            "upper": 3747.1578,
+            "width_pct": 6.617
+          }
+        },
+        "SOLUSDC": {
+          "price": 180.52,
+          "change_pct_1h": 0.462,
+          "change_pct_24h": 2.162,
+          "volume_usdc": 24282.588,
+          "high_24h": 181.1,
+          "low_24h": 179.41,
+          "rsi14": 74.9,
+          "sma7": 179.175714,
+          "sma25": 177.7112,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.936,
+          "atr": 1.437857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.351606
+          },
+          "bollinger": {
+            "lower": 175.3511,
+            "middle": 177.9225,
+            "upper": 180.4939,
+            "width_pct": 2.89
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.5,
+          "change_pct_1h": -0.322,
+          "change_pct_24h": 3.087,
+          "volume_usdc": 2110239.5,
+          "high_24h": 3.5145,
+          "low_24h": 3.4863,
+          "rsi14": 71.8,
+          "sma7": 3.469357,
+          "sma25": 3.432284,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.806,
+          "atr": 0.0345,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.01062
+          },
+          "bollinger": {
+            "lower": 3.377,
+            "middle": 3.4404,
+            "upper": 3.5038,
+            "width_pct": 3.686
+          }
+        },
+        "BNBUSDC": {
+          "price": 749.06,
+          "change_pct_1h": 0.464,
+          "change_pct_24h": 1.629,
+          "volume_usdc": 980.182,
+          "high_24h": 750.52,
+          "low_24h": 745.05,
+          "rsi14": 76.7,
+          "sma7": 746.695714,
+          "sma25": 738.4848,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.73,
+          "atr": 4.253571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 1.189123
+          },
+          "bollinger": {
+            "lower": 725.7786,
+            "middle": 739.3085,
+            "upper": 752.8384,
+            "width_pct": 3.66
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8512,
+          "change_pct_1h": 0.283,
+          "change_pct_24h": 3.868,
+          "volume_usdc": 1586770.4,
+          "high_24h": 0.857,
+          "low_24h": 0.8486,
+          "rsi14": 70.7,
+          "sma7": 0.847271,
+          "sma25": 0.83296,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.987,
+          "atr": 0.01025,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002105
+          },
+          "bollinger": {
+            "lower": 0.8154,
+            "middle": 0.8358,
+            "upper": 0.8562,
+            "width_pct": 4.882
+          }
+        },
+        "AVAXUSDC": {
+          "price": 25.15,
+          "change_pct_1h": 0.842,
+          "change_pct_24h": 6.523,
+          "volume_usdc": 25939.56,
+          "high_24h": 25.28,
+          "low_24h": 24.93,
+          "rsi14": 82.9,
+          "sma7": 24.867143,
+          "sma25": 24.3944,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.392,
+          "atr": 0.262857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.044021
+          },
+          "bollinger": {
+            "lower": 23.8779,
+            "middle": 24.5875,
+            "upper": 25.2971,
+            "width_pct": 5.772
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.2517,
+          "change_pct_1h": 0.187,
+          "change_pct_24h": 2.68,
+          "volume_usdc": 7374555.0,
+          "high_24h": 0.25325,
+          "low_24h": 0.25039,
+          "rsi14": 67.8,
+          "sma7": 0.251951,
+          "sma25": 0.246914,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.136,
+          "atr": 0.004251,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 4.8e-05
+          },
+          "bollinger": {
+            "lower": 0.2371,
+            "middle": 0.2478,
+            "upper": 0.2585,
+            "width_pct": 8.636
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.41,
+          "change_pct_1h": 0.362,
+          "change_pct_24h": 9.414,
+          "volume_usdc": 73408.43,
+          "high_24h": 19.53,
+          "low_24h": 19.24,
+          "rsi14": 84.0,
+          "sma7": 19.075714,
+          "sma25": 18.4528,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.494,
+          "atr": 0.266429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.097183
+          },
+          "bollinger": {
+            "lower": 17.7892,
+            "middle": 18.6205,
+            "upper": 19.4518,
+            "width_pct": 8.929
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2484,
+          "change_pct_1h": 0.894,
+          "change_pct_24h": 5.837,
+          "volume_usdc": 400149.2,
+          "high_24h": 0.2488,
+          "low_24h": 0.2463,
+          "rsi14": 86.0,
+          "sma7": 0.244943,
+          "sma25": 0.239472,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.006,
+          "atr": 0.002243,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000878
+          },
+          "bollinger": {
+            "lower": 0.2333,
+            "middle": 0.2408,
+            "upper": 0.2484,
+            "width_pct": 6.271
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T12:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118142.0,
+          "change_pct_1h": 0.175,
+          "change_pct_24h": -0.141,
+          "volume_usdc": 211.087,
+          "high_24h": 118224.0,
+          "low_24h": 117782.83,
+          "rsi14": 62.1,
+          "sma7": 118031.924286,
+          "sma25": 117997.1884,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.373,
+          "atr": 279.772857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 11.706985
+          },
+          "bollinger": {
+            "lower": 117748.5125,
+            "middle": 117972.5775,
+            "upper": 118196.6425,
+            "width_pct": 0.38
+          }
+        },
+        "ETHUSDC": {
+          "price": 3749.2,
+          "change_pct_1h": -0.229,
+          "change_pct_24h": 5.201,
+          "volume_usdc": 48207.6944,
+          "high_24h": 3758.0,
+          "low_24h": 3726.67,
+          "rsi14": 86.4,
+          "sma7": 3707.904286,
+          "sma25": 3620.1768,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.836,
+          "atr": 37.282857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 13.19587
+          },
+          "bollinger": {
+            "lower": 3509.3761,
+            "middle": 3636.5305,
+            "upper": 3763.6849,
+            "width_pct": 6.993
+          }
+        },
+        "SOLUSDC": {
+          "price": 181.87,
+          "change_pct_1h": 0.748,
+          "change_pct_24h": 2.497,
+          "volume_usdc": 32384.739,
+          "high_24h": 182.03,
+          "low_24h": 180.05,
+          "rsi14": 76.9,
+          "sma7": 179.745714,
+          "sma25": 177.918,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.089,
+          "atr": 1.485,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.428214
+          },
+          "bollinger": {
+            "lower": 175.048,
+            "middle": 178.135,
+            "upper": 181.222,
+            "width_pct": 3.466
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.4918,
+          "change_pct_1h": -0.234,
+          "change_pct_24h": 2.165,
+          "volume_usdc": 1483578.6,
+          "high_24h": 3.5051,
+          "low_24h": 3.4794,
+          "rsi14": 66.6,
+          "sma7": 3.479529,
+          "sma25": 3.436148,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.736,
+          "atr": 0.033886,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.009453
+          },
+          "bollinger": {
+            "lower": 3.3755,
+            "middle": 3.4427,
+            "upper": 3.51,
+            "width_pct": 3.907
+          }
+        },
+        "BNBUSDC": {
+          "price": 747.81,
+          "change_pct_1h": -0.167,
+          "change_pct_24h": 0.745,
+          "volume_usdc": 749.26,
+          "high_24h": 749.3,
+          "low_24h": 746.3,
+          "rsi14": 72.3,
+          "sma7": 747.227143,
+          "sma25": 738.9152,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.401,
+          "atr": 4.213571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.945668
+          },
+          "bollinger": {
+            "lower": 726.4508,
+            "middle": 740.0775,
+            "upper": 753.7042,
+            "width_pct": 3.683
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8539,
+          "change_pct_1h": 0.317,
+          "change_pct_24h": 3.016,
+          "volume_usdc": 1958664.7,
+          "high_24h": 0.8563,
+          "low_24h": 0.8469,
+          "rsi14": 71.7,
+          "sma7": 0.849071,
+          "sma25": 0.834336,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.101,
+          "atr": 0.0103,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.001916
+          },
+          "bollinger": {
+            "lower": 0.8158,
+            "middle": 0.8372,
+            "upper": 0.8585,
+            "width_pct": 5.1
+          }
+        },
+        "AVAXUSDC": {
+          "price": 25.02,
+          "change_pct_1h": -0.517,
+          "change_pct_24h": 4.906,
+          "volume_usdc": 36511.79,
+          "high_24h": 25.14,
+          "low_24h": 24.87,
+          "rsi14": 74.4,
+          "sma7": 24.918571,
+          "sma25": 24.4508,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.079,
+          "atr": 0.26,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.033796
+          },
+          "bollinger": {
+            "lower": 24.0113,
+            "middle": 24.648,
+            "upper": 25.2847,
+            "width_pct": 5.166
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.25325,
+          "change_pct_1h": 0.616,
+          "change_pct_24h": 2.651,
+          "volume_usdc": 6617562.0,
+          "high_24h": 0.25325,
+          "low_24h": 0.25069,
+          "rsi14": 70.8,
+          "sma7": 0.252047,
+          "sma25": 0.247238,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.011,
+          "atr": 0.004261,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 5e-05
+          },
+          "bollinger": {
+            "lower": 0.2376,
+            "middle": 0.2483,
+            "upper": 0.2591,
+            "width_pct": 8.659
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.3,
+          "change_pct_1h": -0.567,
+          "change_pct_24h": 8.123,
+          "volume_usdc": 49739.88,
+          "high_24h": 19.41,
+          "low_24h": 19.19,
+          "rsi14": 78.9,
+          "sma7": 19.158571,
+          "sma25": 18.5152,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.14,
+          "atr": 0.274286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.081186
+          },
+          "bollinger": {
+            "lower": 17.8408,
+            "middle": 18.682,
+            "upper": 19.5232,
+            "width_pct": 9.005
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2484,
+          "change_pct_1h": 0.0,
+          "change_pct_24h": 5.344,
+          "volume_usdc": 368092.7,
+          "high_24h": 0.2493,
+          "low_24h": 0.2475,
+          "rsi14": 86.0,
+          "sma7": 0.245614,
+          "sma25": 0.24002,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.725,
+          "atr": 0.002264,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000857
+          },
+          "bollinger": {
+            "lower": 0.234,
+            "middle": 0.2416,
+            "upper": 0.2491,
+            "width_pct": 6.25
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T13:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118455.83,
+          "change_pct_1h": 0.266,
+          "change_pct_24h": 0.158,
+          "volume_usdc": 157.61865,
+          "high_24h": 118465.42,
+          "low_24h": 118134.41,
+          "rsi14": 68.8,
+          "sma7": 118112.31,
+          "sma25": 118003.054,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.279,
+          "atr": 289.706429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 34.548296
+          },
+          "bollinger": {
+            "lower": 117699.0449,
+            "middle": 118001.67,
+            "upper": 118304.2951,
+            "width_pct": 0.513
+          }
+        },
+        "ETHUSDC": {
+          "price": 3750.5,
+          "change_pct_1h": 0.035,
+          "change_pct_24h": 5.333,
+          "volume_usdc": 46373.212,
+          "high_24h": 3759.83,
+          "low_24h": 3737.51,
+          "rsi14": 85.5,
+          "sma7": 3721.602857,
+          "sma25": 3627.6428,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.595,
+          "atr": 37.109286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 12.140837
+          },
+          "bollinger": {
+            "lower": 3517.7189,
+            "middle": 3646.81,
+            "upper": 3775.9011,
+            "width_pct": 7.08
+          }
+        },
+        "SOLUSDC": {
+          "price": 183.09,
+          "change_pct_1h": 0.671,
+          "change_pct_24h": 3.114,
+          "volume_usdc": 35952.704,
+          "high_24h": 183.25,
+          "low_24h": 181.67,
+          "rsi14": 78.4,
+          "sma7": 180.554286,
+          "sma25": 178.144,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.863,
+          "atr": 1.535714,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.527965
+          },
+          "bollinger": {
+            "lower": 174.8086,
+            "middle": 178.469,
+            "upper": 182.1294,
+            "width_pct": 4.102
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.5244,
+          "change_pct_1h": 0.934,
+          "change_pct_24h": 3.294,
+          "volume_usdc": 2268659.2,
+          "high_24h": 3.527,
+          "low_24h": 3.4886,
+          "rsi14": 70.8,
+          "sma7": 3.494614,
+          "sma25": 3.440412,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.09,
+          "atr": 0.035193,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.010202
+          },
+          "bollinger": {
+            "lower": 3.3721,
+            "middle": 3.4476,
+            "upper": 3.5232,
+            "width_pct": 4.383
+          }
+        },
+        "BNBUSDC": {
+          "price": 749.65,
+          "change_pct_1h": 0.246,
+          "change_pct_24h": 1.823,
+          "volume_usdc": 812.747,
+          "high_24h": 750.05,
+          "low_24h": 747.44,
+          "rsi14": 73.3,
+          "sma7": 748.23,
+          "sma25": 739.21,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.348,
+          "atr": 4.220714,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.851416
+          },
+          "bollinger": {
+            "lower": 727.7817,
+            "middle": 741.09,
+            "upper": 754.3983,
+            "width_pct": 3.592
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8669,
+          "change_pct_1h": 1.522,
+          "change_pct_24h": 5.041,
+          "volume_usdc": 2002056.3,
+          "high_24h": 0.8674,
+          "low_24h": 0.8529,
+          "rsi14": 74.9,
+          "sma7": 0.853543,
+          "sma25": 0.835856,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.673,
+          "atr": 0.010786,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002479
+          },
+          "bollinger": {
+            "lower": 0.8157,
+            "middle": 0.8394,
+            "upper": 0.8632,
+            "width_pct": 5.659
+          }
+        },
+        "AVAXUSDC": {
+          "price": 25.25,
+          "change_pct_1h": 0.919,
+          "change_pct_24h": 6.765,
+          "volume_usdc": 25866.32,
+          "high_24h": 25.27,
+          "low_24h": 25.0,
+          "rsi14": 76.2,
+          "sma7": 25.01,
+          "sma25": 24.5068,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.069,
+          "atr": 0.254286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.03845
+          },
+          "bollinger": {
+            "lower": 24.1807,
+            "middle": 24.723,
+            "upper": 25.2653,
+            "width_pct": 4.387
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.25524,
+          "change_pct_1h": 0.786,
+          "change_pct_24h": 5.115,
+          "volume_usdc": 5961874.0,
+          "high_24h": 0.25533,
+          "low_24h": 0.2529,
+          "rsi14": 71.8,
+          "sma7": 0.252637,
+          "sma25": 0.24758,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.952,
+          "atr": 0.004311,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000168
+          },
+          "bollinger": {
+            "lower": 0.2383,
+            "middle": 0.249,
+            "upper": 0.2597,
+            "width_pct": 8.594
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.54,
+          "change_pct_1h": 1.244,
+          "change_pct_24h": 10.023,
+          "volume_usdc": 34145.66,
+          "high_24h": 19.58,
+          "low_24h": 19.26,
+          "rsi14": 80.0,
+          "sma7": 19.29,
+          "sma25": 18.5828,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.638,
+          "atr": 0.276429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.080219
+          },
+          "bollinger": {
+            "lower": 17.8806,
+            "middle": 18.7545,
+            "upper": 19.6284,
+            "width_pct": 9.319
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2499,
+          "change_pct_1h": 0.604,
+          "change_pct_24h": 6.795,
+          "volume_usdc": 377503.6,
+          "high_24h": 0.2504,
+          "low_24h": 0.2482,
+          "rsi14": 86.4,
+          "sma7": 0.246671,
+          "sma25": 0.240584,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.88,
+          "atr": 0.002286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000887
+          },
+          "bollinger": {
+            "lower": 0.2348,
+            "middle": 0.2424,
+            "upper": 0.2499,
+            "width_pct": 6.229
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T14:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118520.02,
+          "change_pct_1h": 0.054,
+          "change_pct_24h": 0.656,
+          "volume_usdc": 382.80899,
+          "high_24h": 118850.26,
+          "low_24h": 118290.8,
+          "rsi14": 68.1,
+          "sma7": 118174.441429,
+          "sma25": 118013.088,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.472,
+          "atr": 304.577143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 50.560129
+          },
+          "bollinger": {
+            "lower": 117655.9286,
+            "middle": 118031.1735,
+            "upper": 118406.4184,
+            "width_pct": 0.636
+          }
+        },
+        "ETHUSDC": {
+          "price": 3769.5,
+          "change_pct_1h": 0.507,
+          "change_pct_24h": 6.671,
+          "volume_usdc": 53749.8096,
+          "high_24h": 3770.12,
+          "low_24h": 3730.77,
+          "rsi14": 87.0,
+          "sma7": 3735.77,
+          "sma25": 3635.9988,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.044,
+          "atr": 38.56,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 11.719426
+          },
+          "bollinger": {
+            "lower": 3525.1742,
+            "middle": 3657.544,
+            "upper": 3789.9138,
+            "width_pct": 7.238
+          }
+        },
+        "SOLUSDC": {
+          "price": 180.95,
+          "change_pct_1h": -1.169,
+          "change_pct_24h": 3.317,
+          "volume_usdc": 59447.811,
+          "high_24h": 183.15,
+          "low_24h": 180.84,
+          "rsi14": 63.3,
+          "sma7": 180.968571,
+          "sma25": 178.2796,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.277,
+          "atr": 1.587143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.420532
+          },
+          "bollinger": {
+            "lower": 174.9348,
+            "middle": 178.672,
+            "upper": 182.4092,
+            "width_pct": 4.183
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.5404,
+          "change_pct_1h": 0.454,
+          "change_pct_24h": 5.291,
+          "volume_usdc": 6848325.0,
+          "high_24h": 3.5512,
+          "low_24h": 3.4916,
+          "rsi14": 72.3,
+          "sma7": 3.508429,
+          "sma25": 3.445548,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.683,
+          "atr": 0.037707,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.011127
+          },
+          "bollinger": {
+            "lower": 3.369,
+            "middle": 3.4536,
+            "upper": 3.5382,
+            "width_pct": 4.899
+          }
+        },
+        "BNBUSDC": {
+          "price": 746.84,
+          "change_pct_1h": -0.375,
+          "change_pct_24h": 2.411,
+          "volume_usdc": 4652.554,
+          "high_24h": 750.08,
+          "low_24h": 744.97,
+          "rsi14": 66.9,
+          "sma7": 748.481429,
+          "sma25": 739.6344,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.684,
+          "atr": 4.384286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.523858
+          },
+          "bollinger": {
+            "lower": 729.226,
+            "middle": 741.888,
+            "upper": 754.55,
+            "width_pct": 3.413
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8651,
+          "change_pct_1h": -0.208,
+          "change_pct_24h": 6.474,
+          "volume_usdc": 5241590.6,
+          "high_24h": 0.8714,
+          "low_24h": 0.8541,
+          "rsi14": 74.3,
+          "sma7": 0.856343,
+          "sma25": 0.837448,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.0,
+          "atr": 0.011443,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002523
+          },
+          "bollinger": {
+            "lower": 0.8163,
+            "middle": 0.8415,
+            "upper": 0.8666,
+            "width_pct": 5.977
+          }
+        },
+        "AVAXUSDC": {
+          "price": 25.19,
+          "change_pct_1h": -0.238,
+          "change_pct_24h": 7.926,
+          "volume_usdc": 76764.18,
+          "high_24h": 25.31,
+          "low_24h": 24.97,
+          "rsi14": 76.2,
+          "sma7": 25.075714,
+          "sma25": 24.5684,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.35,
+          "atr": 0.26,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.032483
+          },
+          "bollinger": {
+            "lower": 24.2107,
+            "middle": 24.764,
+            "upper": 25.3173,
+            "width_pct": 4.469
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.25355,
+          "change_pct_1h": -0.662,
+          "change_pct_24h": 5.827,
+          "volume_usdc": 22559098.0,
+          "high_24h": 0.25527,
+          "low_24h": 0.25013,
+          "rsi14": 62.4,
+          "sma7": 0.252917,
+          "sma25": 0.248009,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.027,
+          "atr": 0.004125,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 9.8e-05
+          },
+          "bollinger": {
+            "lower": 0.2394,
+            "middle": 0.2496,
+            "upper": 0.2599,
+            "width_pct": 8.213
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.5,
+          "change_pct_1h": -0.205,
+          "change_pct_24h": 10.607,
+          "volume_usdc": 52847.02,
+          "high_24h": 19.56,
+          "low_24h": 19.33,
+          "rsi14": 78.0,
+          "sma7": 19.387143,
+          "sma25": 18.6524,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.179,
+          "atr": 0.275,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.06975
+          },
+          "bollinger": {
+            "lower": 17.927,
+            "middle": 18.8195,
+            "upper": 19.712,
+            "width_pct": 9.485
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2495,
+          "change_pct_1h": -0.16,
+          "change_pct_24h": 7.915,
+          "volume_usdc": 382910.3,
+          "high_24h": 0.2499,
+          "low_24h": 0.2458,
+          "rsi14": 85.7,
+          "sma7": 0.2476,
+          "sma25": 0.241204,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.643,
+          "atr": 0.002436,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000813
+          },
+          "bollinger": {
+            "lower": 0.2355,
+            "middle": 0.243,
+            "upper": 0.2506,
+            "width_pct": 6.214
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T15:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118730.0,
+          "change_pct_1h": 0.177,
+          "change_pct_24h": 0.516,
+          "volume_usdc": 143.68409,
+          "high_24h": 118826.65,
+          "low_24h": 118334.77,
+          "rsi14": 72.3,
+          "sma7": 118246.717143,
+          "sma25": 118052.3684,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.414,
+          "atr": 322.417857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 70.90814
+          },
+          "bollinger": {
+            "lower": 117580.4526,
+            "middle": 118063.9935,
+            "upper": 118547.5344,
+            "width_pct": 0.819
+          }
+        },
+        "ETHUSDC": {
+          "price": 3787.68,
+          "change_pct_1h": 0.482,
+          "change_pct_24h": 6.572,
+          "volume_usdc": 66897.9024,
+          "high_24h": 3792.18,
+          "low_24h": 3750.05,
+          "rsi14": 87.2,
+          "sma7": 3746.428571,
+          "sma25": 3646.1556,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.112,
+          "atr": 38.912143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 11.580685
+          },
+          "bollinger": {
+            "lower": 3529.1221,
+            "middle": 3667.936,
+            "upper": 3806.7499,
+            "width_pct": 7.569
+          }
+        },
+        "SOLUSDC": {
+          "price": 182.06,
+          "change_pct_1h": 0.613,
+          "change_pct_24h": 2.575,
+          "volume_usdc": 29250.143,
+          "high_24h": 182.11,
+          "low_24h": 180.19,
+          "rsi14": 65.8,
+          "sma7": 181.147143,
+          "sma25": 178.5564,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.055,
+          "atr": 1.572143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.387035
+          },
+          "bollinger": {
+            "lower": 174.9774,
+            "middle": 178.919,
+            "upper": 182.8606,
+            "width_pct": 4.406
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.5198,
+          "change_pct_1h": -0.582,
+          "change_pct_24h": 3.165,
+          "volume_usdc": 2971493.9,
+          "high_24h": 3.5423,
+          "low_24h": 3.5125,
+          "rsi14": 67.9,
+          "sma7": 3.511157,
+          "sma25": 3.45184,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.847,
+          "atr": 0.037693,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.009533
+          },
+          "bollinger": {
+            "lower": 3.3691,
+            "middle": 3.4579,
+            "upper": 3.5466,
+            "width_pct": 5.133
+          }
+        },
+        "BNBUSDC": {
+          "price": 751.28,
+          "change_pct_1h": 0.595,
+          "change_pct_24h": 2.756,
+          "volume_usdc": 1186.026,
+          "high_24h": 752.13,
+          "low_24h": 746.17,
+          "rsi14": 66.9,
+          "sma7": 748.504286,
+          "sma25": 740.5152,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.793,
+          "atr": 4.300714,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.515356
+          },
+          "bollinger": {
+            "lower": 729.8467,
+            "middle": 742.7085,
+            "upper": 755.5703,
+            "width_pct": 3.463
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8714,
+          "change_pct_1h": 0.728,
+          "change_pct_24h": 5.984,
+          "volume_usdc": 2417287.3,
+          "high_24h": 0.8738,
+          "low_24h": 0.8594,
+          "rsi14": 75.2,
+          "sma7": 0.858371,
+          "sma25": 0.839804,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.653,
+          "atr": 0.011614,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002716
+          },
+          "bollinger": {
+            "lower": 0.8159,
+            "middle": 0.8436,
+            "upper": 0.8712,
+            "width_pct": 6.555
+          }
+        },
+        "AVAXUSDC": {
+          "price": 25.42,
+          "change_pct_1h": 0.913,
+          "change_pct_24h": 7.439,
+          "volume_usdc": 20309.34,
+          "high_24h": 25.46,
+          "low_24h": 25.12,
+          "rsi14": 78.5,
+          "sma7": 25.13,
+          "sma25": 24.6516,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.338,
+          "atr": 0.267857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.038069
+          },
+          "bollinger": {
+            "lower": 24.1688,
+            "middle": 24.786,
+            "upper": 25.4032,
+            "width_pct": 4.98
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.25427,
+          "change_pct_1h": 0.284,
+          "change_pct_24h": 4.854,
+          "volume_usdc": 9848645.0,
+          "high_24h": 0.25477,
+          "low_24h": 0.25116,
+          "rsi14": 55.2,
+          "sma7": 0.252853,
+          "sma25": 0.248596,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.42,
+          "atr": 0.003584,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 6.3e-05
+          },
+          "bollinger": {
+            "lower": 0.2402,
+            "middle": 0.2502,
+            "upper": 0.2601,
+            "width_pct": 7.954
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.72,
+          "change_pct_1h": 1.128,
+          "change_pct_24h": 9.983,
+          "volume_usdc": 149998.17,
+          "high_24h": 20.0,
+          "low_24h": 19.3,
+          "rsi14": 79.4,
+          "sma7": 19.472857,
+          "sma25": 18.736,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 3.55,
+          "atr": 0.311429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.069846
+          },
+          "bollinger": {
+            "lower": 17.9367,
+            "middle": 18.8865,
+            "upper": 19.8363,
+            "width_pct": 10.058
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2501,
+          "change_pct_1h": 0.24,
+          "change_pct_24h": 6.743,
+          "volume_usdc": 374616.8,
+          "high_24h": 0.2507,
+          "low_24h": 0.2489,
+          "rsi14": 88.2,
+          "sma7": 0.248314,
+          "sma25": 0.24196,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.72,
+          "atr": 0.002429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000729
+          },
+          "bollinger": {
+            "lower": 0.2359,
+            "middle": 0.2436,
+            "upper": 0.2514,
+            "width_pct": 6.363
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T16:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118620.79,
+          "change_pct_1h": -0.092,
+          "change_pct_24h": 0.499,
+          "volume_usdc": 200.74129,
+          "high_24h": 118910.0,
+          "low_24h": 118517.99,
+          "rsi14": 66.9,
+          "sma7": 118337.801429,
+          "sma25": 118072.3992,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.33,
+          "atr": 330.879286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 73.682061
+          },
+          "bollinger": {
+            "lower": 117585.0147,
+            "middle": 118106.3475,
+            "upper": 118627.6803,
+            "width_pct": 0.883
+          }
+        },
+        "ETHUSDC": {
+          "price": 3810.79,
+          "change_pct_1h": 0.61,
+          "change_pct_24h": 7.0,
+          "volume_usdc": 93670.7469,
+          "high_24h": 3826.0,
+          "low_24h": 3764.52,
+          "rsi14": 87.8,
+          "sma7": 3760.998571,
+          "sma25": 3656.4232,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.613,
+          "atr": 41.275714,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 12.065066
+          },
+          "bollinger": {
+            "lower": 3536.4748,
+            "middle": 3680.195,
+            "upper": 3823.9152,
+            "width_pct": 7.81
+          }
+        },
+        "SOLUSDC": {
+          "price": 182.19,
+          "change_pct_1h": 0.071,
+          "change_pct_24h": 2.573,
+          "volume_usdc": 47076.649,
+          "high_24h": 183.33,
+          "low_24h": 181.76,
+          "rsi14": 67.9,
+          "sma7": 181.481429,
+          "sma25": 178.7444,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.862,
+          "atr": 1.616429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.348401
+          },
+          "bollinger": {
+            "lower": 175.0239,
+            "middle": 179.1535,
+            "upper": 183.2831,
+            "width_pct": 4.61
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.5182,
+          "change_pct_1h": -0.045,
+          "change_pct_24h": 2.125,
+          "volume_usdc": 3481391.6,
+          "high_24h": 3.5378,
+          "low_24h": 3.5029,
+          "rsi14": 72.1,
+          "sma7": 3.515129,
+          "sma25": 3.456096,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.992,
+          "atr": 0.037464,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.007788
+          },
+          "bollinger": {
+            "lower": 3.3724,
+            "middle": 3.4629,
+            "upper": 3.5534,
+            "width_pct": 5.227
+          }
+        },
+        "BNBUSDC": {
+          "price": 755.32,
+          "change_pct_1h": 0.538,
+          "change_pct_24h": 3.125,
+          "volume_usdc": 1846.214,
+          "high_24h": 756.66,
+          "low_24h": 750.98,
+          "rsi14": 67.7,
+          "sma7": 749.365714,
+          "sma25": 741.4828,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.752,
+          "atr": 4.404286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.712749
+          },
+          "bollinger": {
+            "lower": 730.6286,
+            "middle": 743.818,
+            "upper": 757.0074,
+            "width_pct": 3.546
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8723,
+          "change_pct_1h": 0.103,
+          "change_pct_24h": 5.567,
+          "volume_usdc": 3345723.7,
+          "high_24h": 0.8766,
+          "low_24h": 0.8657,
+          "rsi14": 75.4,
+          "sma7": 0.861371,
+          "sma25": 0.841808,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.25,
+          "atr": 0.0119,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002692
+          },
+          "bollinger": {
+            "lower": 0.8162,
+            "middle": 0.8457,
+            "upper": 0.8752,
+            "width_pct": 6.976
+          }
+        },
+        "AVAXUSDC": {
+          "price": 25.35,
+          "change_pct_1h": -0.275,
+          "change_pct_24h": 6.468,
+          "volume_usdc": 33486.48,
+          "high_24h": 25.56,
+          "low_24h": 25.25,
+          "rsi14": 74.8,
+          "sma7": 25.188571,
+          "sma25": 24.7192,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.223,
+          "atr": 0.274286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.032158
+          },
+          "bollinger": {
+            "lower": 24.1468,
+            "middle": 24.811,
+            "upper": 25.4752,
+            "width_pct": 5.354
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.26505,
+          "change_pct_1h": 4.24,
+          "change_pct_24h": 9.092,
+          "volume_usdc": 69293299.0,
+          "high_24h": 0.26855,
+          "low_24h": 0.2543,
+          "rsi14": 70.5,
+          "sma7": 0.254899,
+          "sma25": 0.249498,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 5.376,
+          "atr": 0.004346,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000714
+          },
+          "bollinger": {
+            "lower": 0.2405,
+            "middle": 0.2514,
+            "upper": 0.2623,
+            "width_pct": 8.671
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.71,
+          "change_pct_1h": -0.051,
+          "change_pct_24h": 9.076,
+          "volume_usdc": 68901.13,
+          "high_24h": 19.81,
+          "low_24h": 19.49,
+          "rsi14": 78.9,
+          "sma7": 19.502857,
+          "sma25": 18.8072,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.624,
+          "atr": 0.322143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.062517
+          },
+          "bollinger": {
+            "lower": 17.9671,
+            "middle": 18.9525,
+            "upper": 19.9379,
+            "width_pct": 10.399
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2544,
+          "change_pct_1h": 1.719,
+          "change_pct_24h": 8.811,
+          "volume_usdc": 686431.8,
+          "high_24h": 0.2553,
+          "low_24h": 0.2501,
+          "rsi14": 91.1,
+          "sma7": 0.249557,
+          "sma25": 0.242764,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.044,
+          "atr": 0.002714,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000897
+          },
+          "bollinger": {
+            "lower": 0.2357,
+            "middle": 0.2444,
+            "upper": 0.2532,
+            "width_pct": 7.16
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T17:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118071.99,
+          "change_pct_1h": -0.463,
+          "change_pct_24h": 0.168,
+          "volume_usdc": 179.78927,
+          "high_24h": 118618.01,
+          "low_24h": 118011.8,
+          "rsi14": 50.9,
+          "sma7": 118353.802857,
+          "sma25": 118074.0072,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.513,
+          "atr": 341.175714,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 36.958816
+          },
+          "bollinger": {
+            "lower": 117623.3692,
+            "middle": 118121.553,
+            "upper": 118619.7368,
+            "width_pct": 0.844
+          }
+        },
+        "ETHUSDC": {
+          "price": 3740.78,
+          "change_pct_1h": -1.837,
+          "change_pct_24h": 5.525,
+          "volume_usdc": 84726.236,
+          "high_24h": 3810.79,
+          "low_24h": 3731.86,
+          "rsi14": 64.2,
+          "sma7": 3766.608571,
+          "sma25": 3663.5944,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.11,
+          "atr": 40.750714,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 6.962833
+          },
+          "bollinger": {
+            "lower": 3551.3474,
+            "middle": 3688.564,
+            "upper": 3825.7806,
+            "width_pct": 7.44
+          }
+        },
+        "SOLUSDC": {
+          "price": 180.66,
+          "change_pct_1h": -0.84,
+          "change_pct_24h": 2.409,
+          "volume_usdc": 47488.037,
+          "high_24h": 182.18,
+          "low_24h": 180.36,
+          "rsi14": 59.4,
+          "sma7": 181.62,
+          "sma25": 178.866,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.007,
+          "atr": 1.633571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.204658
+          },
+          "bollinger": {
+            "lower": 175.477,
+            "middle": 179.387,
+            "upper": 183.297,
+            "width_pct": 4.359
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.5014,
+          "change_pct_1h": -0.478,
+          "change_pct_24h": 2.198,
+          "volume_usdc": 3746655.3,
+          "high_24h": 3.5268,
+          "low_24h": 3.4845,
+          "rsi14": 63.7,
+          "sma7": 3.513714,
+          "sma25": 3.458352,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.208,
+          "atr": 0.037857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.005268
+          },
+          "bollinger": {
+            "lower": 3.3797,
+            "middle": 3.4677,
+            "upper": 3.5556,
+            "width_pct": 5.073
+          }
+        },
+        "BNBUSDC": {
+          "price": 747.88,
+          "change_pct_1h": -0.985,
+          "change_pct_24h": 2.534,
+          "volume_usdc": 2289.174,
+          "high_24h": 756.65,
+          "low_24h": 747.31,
+          "rsi14": 55.3,
+          "sma7": 749.691429,
+          "sma25": 742.1008,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.249,
+          "atr": 4.693571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.312643
+          },
+          "bollinger": {
+            "lower": 732.8123,
+            "middle": 744.6705,
+            "upper": 756.5287,
+            "width_pct": 3.185
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8588,
+          "change_pct_1h": -1.548,
+          "change_pct_24h": 4.528,
+          "volume_usdc": 4459414.6,
+          "high_24h": 0.8737,
+          "low_24h": 0.8576,
+          "rsi14": 60.8,
+          "sma7": 0.8628,
+          "sma25": 0.843108,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.875,
+          "atr": 0.012043,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.001635
+          },
+          "bollinger": {
+            "lower": 0.8189,
+            "middle": 0.8474,
+            "upper": 0.8759,
+            "width_pct": 6.726
+          }
+        },
+        "AVAXUSDC": {
+          "price": 25.05,
+          "change_pct_1h": -1.183,
+          "change_pct_24h": 5.474,
+          "volume_usdc": 54421.29,
+          "high_24h": 25.44,
+          "low_24h": 24.97,
+          "rsi14": 62.2,
+          "sma7": 25.204286,
+          "sma25": 24.7688,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.876,
+          "atr": 0.285,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.005118
+          },
+          "bollinger": {
+            "lower": 24.2115,
+            "middle": 24.8465,
+            "upper": 25.4815,
+            "width_pct": 5.111
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.26282,
+          "change_pct_1h": -0.841,
+          "change_pct_24h": 8.684,
+          "volume_usdc": 33611014.0,
+          "high_24h": 0.26777,
+          "low_24h": 0.25792,
+          "rsi14": 61.7,
+          "sma7": 0.256554,
+          "sma25": 0.250292,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 3.748,
+          "atr": 0.004695,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000941
+          },
+          "bollinger": {
+            "lower": 0.2415,
+            "middle": 0.2525,
+            "upper": 0.2634,
+            "width_pct": 8.673
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.39,
+          "change_pct_1h": -1.624,
+          "change_pct_24h": 7.186,
+          "volume_usdc": 65403.33,
+          "high_24h": 19.72,
+          "low_24h": 19.39,
+          "rsi14": 66.1,
+          "sma7": 19.51,
+          "sma25": 18.86,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.702,
+          "atr": 0.322857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.031503
+          },
+          "bollinger": {
+            "lower": 18.06,
+            "middle": 19.009,
+            "upper": 19.958,
+            "width_pct": 9.985
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2503,
+          "change_pct_1h": -1.612,
+          "change_pct_24h": 6.829,
+          "volume_usdc": 1050423.7,
+          "high_24h": 0.2552,
+          "low_24h": 0.2501,
+          "rsi14": 72.3,
+          "sma7": 0.250143,
+          "sma25": 0.243424,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.038,
+          "atr": 0.002836,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.00067
+          },
+          "bollinger": {
+            "lower": 0.2362,
+            "middle": 0.245,
+            "upper": 0.2537,
+            "width_pct": 7.143
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T18:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118416.01,
+          "change_pct_1h": 0.291,
+          "change_pct_24h": 0.412,
+          "volume_usdc": 86.0381,
+          "high_24h": 118500.0,
+          "low_24h": 118072.0,
+          "rsi14": 57.8,
+          "sma7": 118422.377143,
+          "sma25": 118095.6884,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.361,
+          "atr": 354.977143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 34.117049
+          },
+          "bollinger": {
+            "lower": 117651.5237,
+            "middle": 118149.6295,
+            "upper": 118647.7353,
+            "width_pct": 0.843
+          }
+        },
+        "ETHUSDC": {
+          "price": 3751.78,
+          "change_pct_1h": 0.294,
+          "change_pct_24h": 5.541,
+          "volume_usdc": 60749.0707,
+          "high_24h": 3759.75,
+          "low_24h": 3732.36,
+          "rsi14": 66.5,
+          "sma7": 3765.747143,
+          "sma25": 3671.8692,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.73,
+          "atr": 40.312143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 3.667078
+          },
+          "bollinger": {
+            "lower": 3567.1848,
+            "middle": 3697.2225,
+            "upper": 3827.2602,
+            "width_pct": 7.034
+          }
+        },
+        "SOLUSDC": {
+          "price": 182.32,
+          "change_pct_1h": 0.919,
+          "change_pct_24h": 3.07,
+          "volume_usdc": 25130.877,
+          "high_24h": 182.67,
+          "low_24h": 180.3,
+          "rsi14": 65.3,
+          "sma7": 181.877143,
+          "sma25": 179.1024,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.3,
+          "atr": 1.726429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.196352
+          },
+          "bollinger": {
+            "lower": 175.8004,
+            "middle": 179.677,
+            "upper": 183.5536,
+            "width_pct": 4.315
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.5354,
+          "change_pct_1h": 0.971,
+          "change_pct_24h": 3.314,
+          "volume_usdc": 3521211.8,
+          "high_24h": 3.536,
+          "low_24h": 3.4973,
+          "rsi14": 71.3,
+          "sma7": 3.518771,
+          "sma25": 3.462724,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.095,
+          "atr": 0.038414,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.005325
+          },
+          "bollinger": {
+            "lower": 3.3831,
+            "middle": 3.4733,
+            "upper": 3.5635,
+            "width_pct": 5.194
+          }
+        },
+        "BNBUSDC": {
+          "price": 750.01,
+          "change_pct_1h": 0.285,
+          "change_pct_24h": 2.617,
+          "volume_usdc": 1083.788,
+          "high_24h": 750.3,
+          "low_24h": 746.18,
+          "rsi14": 58.7,
+          "sma7": 749.827143,
+          "sma25": 742.9252,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.549,
+          "atr": 4.762857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.12902
+          },
+          "bollinger": {
+            "lower": 734.7534,
+            "middle": 745.523,
+            "upper": 756.2926,
+            "width_pct": 2.889
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8709,
+          "change_pct_1h": 1.409,
+          "change_pct_24h": 5.705,
+          "volume_usdc": 3136088.5,
+          "high_24h": 0.8709,
+          "low_24h": 0.8567,
+          "rsi14": 68.0,
+          "sma7": 0.865614,
+          "sma25": 0.84508,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.63,
+          "atr": 0.012207,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.001559
+          },
+          "bollinger": {
+            "lower": 0.8213,
+            "middle": 0.8497,
+            "upper": 0.878,
+            "width_pct": 6.673
+          }
+        },
+        "AVAXUSDC": {
+          "price": 25.23,
+          "change_pct_1h": 0.719,
+          "change_pct_24h": 3.529,
+          "volume_usdc": 21601.77,
+          "high_24h": 25.23,
+          "low_24h": 24.93,
+          "rsi14": 65.0,
+          "sma7": 25.215714,
+          "sma25": 24.828,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.189,
+          "atr": 0.290714,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.0054
+          },
+          "bollinger": {
+            "lower": 24.2732,
+            "middle": 24.8895,
+            "upper": 25.5058,
+            "width_pct": 4.952
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.27267,
+          "change_pct_1h": 3.748,
+          "change_pct_24h": 13.08,
+          "volume_usdc": 34779054.0,
+          "high_24h": 0.275,
+          "low_24h": 0.26124,
+          "rsi14": 72.1,
+          "sma7": 0.25955,
+          "sma25": 0.251526,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 5.046,
+          "atr": 0.005296,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.001649
+          },
+          "bollinger": {
+            "lower": 0.2413,
+            "middle": 0.2541,
+            "upper": 0.2669,
+            "width_pct": 10.075
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.33,
+          "change_pct_1h": -0.309,
+          "change_pct_24h": 6.209,
+          "volume_usdc": 72441.6,
+          "high_24h": 19.51,
+          "low_24h": 19.18,
+          "rsi14": 64.6,
+          "sma7": 19.498571,
+          "sma25": 18.9096,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.707,
+          "atr": 0.332143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002999
+          },
+          "bollinger": {
+            "lower": 18.1694,
+            "middle": 19.0625,
+            "upper": 19.9556,
+            "width_pct": 9.37
+          }
+        },
+        "POLUSDC": {
+          "price": 0.254,
+          "change_pct_1h": 1.478,
+          "change_pct_24h": 7.81,
+          "volume_usdc": 508510.9,
+          "high_24h": 0.2544,
+          "low_24h": 0.2504,
+          "rsi14": 75.2,
+          "sma7": 0.250943,
+          "sma25": 0.244212,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.575,
+          "atr": 0.002957,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000695
+          },
+          "bollinger": {
+            "lower": 0.2366,
+            "middle": 0.2457,
+            "upper": 0.2549,
+            "width_pct": 7.448
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T19:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118213.14,
+          "change_pct_1h": -0.171,
+          "change_pct_24h": 0.118,
+          "volume_usdc": 75.11533,
+          "high_24h": 118617.66,
+          "low_24h": 118213.14,
+          "rsi14": 55.7,
+          "sma7": 118432.54,
+          "sma25": 118107.016,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.342,
+          "atr": 370.958571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 16.984453
+          },
+          "bollinger": {
+            "lower": 117677.3279,
+            "middle": 118164.4165,
+            "upper": 118651.5051,
+            "width_pct": 0.824
+          }
+        },
+        "ETHUSDC": {
+          "price": 3751.69,
+          "change_pct_1h": -0.002,
+          "change_pct_24h": 4.8,
+          "volume_usdc": 42593.8463,
+          "high_24h": 3775.61,
+          "low_24h": 3746.66,
+          "rsi14": 68.1,
+          "sma7": 3766.102857,
+          "sma25": 3679.744,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.772,
+          "atr": 40.465714,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.860242
+          },
+          "bollinger": {
+            "lower": 3582.104,
+            "middle": 3705.1015,
+            "upper": 3828.099,
+            "width_pct": 6.639
+          }
+        },
+        "SOLUSDC": {
+          "price": 182.09,
+          "change_pct_1h": -0.126,
+          "change_pct_24h": 2.806,
+          "volume_usdc": 40330.4,
+          "high_24h": 183.8,
+          "low_24h": 181.75,
+          "rsi14": 63.9,
+          "sma7": 181.908571,
+          "sma25": 179.3104,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.126,
+          "atr": 1.809286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.15443
+          },
+          "bollinger": {
+            "lower": 176.1075,
+            "middle": 179.9275,
+            "upper": 183.7475,
+            "width_pct": 4.246
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.525,
+          "change_pct_1h": -0.294,
+          "change_pct_24h": 2.665,
+          "volume_usdc": 2863385.7,
+          "high_24h": 3.56,
+          "low_24h": 3.523,
+          "rsi14": 69.6,
+          "sma7": 3.523514,
+          "sma25": 3.466844,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.05,
+          "atr": 0.03945,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.004181
+          },
+          "bollinger": {
+            "lower": 3.388,
+            "middle": 3.4782,
+            "upper": 3.5684,
+            "width_pct": 5.187
+          }
+        },
+        "BNBUSDC": {
+          "price": 753.23,
+          "change_pct_1h": 0.429,
+          "change_pct_24h": 2.498,
+          "volume_usdc": 1178.143,
+          "high_24h": 755.33,
+          "low_24h": 749.88,
+          "rsi14": 59.9,
+          "sma7": 750.601429,
+          "sma25": 743.8192,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.724,
+          "atr": 4.806429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.165396
+          },
+          "bollinger": {
+            "lower": 736.7312,
+            "middle": 746.505,
+            "upper": 756.2788,
+            "width_pct": 2.619
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8712,
+          "change_pct_1h": 0.034,
+          "change_pct_24h": 5.002,
+          "volume_usdc": 3388204.6,
+          "high_24h": 0.879,
+          "low_24h": 0.8695,
+          "rsi14": 66.9,
+          "sma7": 0.868086,
+          "sma25": 0.846972,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.09,
+          "atr": 0.012093,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.00134
+          },
+          "bollinger": {
+            "lower": 0.8233,
+            "middle": 0.8517,
+            "upper": 0.8801,
+            "width_pct": 6.669
+          }
+        },
+        "AVAXUSDC": {
+          "price": 25.28,
+          "change_pct_1h": 0.198,
+          "change_pct_24h": 1.201,
+          "volume_usdc": 17712.17,
+          "high_24h": 25.49,
+          "low_24h": 25.24,
+          "rsi14": 65.2,
+          "sma7": 25.252857,
+          "sma25": 24.8644,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.989,
+          "atr": 0.290714,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.013854
+          },
+          "bollinger": {
+            "lower": 24.317,
+            "middle": 24.9285,
+            "upper": 25.54,
+            "width_pct": 4.906
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.27403,
+          "change_pct_1h": 0.499,
+          "change_pct_24h": 12.853,
+          "volume_usdc": 34208019.0,
+          "high_24h": 0.27838,
+          "low_24h": 0.27166,
+          "rsi14": 76.7,
+          "sma7": 0.262519,
+          "sma25": 0.252842,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.452,
+          "atr": 0.005517,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002063
+          },
+          "bollinger": {
+            "lower": 0.2415,
+            "middle": 0.2557,
+            "upper": 0.2699,
+            "width_pct": 11.107
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.45,
+          "change_pct_1h": 0.621,
+          "change_pct_24h": 5.822,
+          "volume_usdc": 38286.24,
+          "high_24h": 19.55,
+          "low_24h": 19.32,
+          "rsi14": 65.7,
+          "sma7": 19.52,
+          "sma25": 18.9596,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.183,
+          "atr": 0.336429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.01158
+          },
+          "bollinger": {
+            "lower": 18.2613,
+            "middle": 19.115,
+            "upper": 19.9687,
+            "width_pct": 8.932
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2545,
+          "change_pct_1h": 0.197,
+          "change_pct_24h": 6.843,
+          "volume_usdc": 452418.6,
+          "high_24h": 0.2564,
+          "low_24h": 0.254,
+          "rsi14": 74.3,
+          "sma7": 0.251814,
+          "sma25": 0.244968,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.943,
+          "atr": 0.002893,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000665
+          },
+          "bollinger": {
+            "lower": 0.2369,
+            "middle": 0.2464,
+            "upper": 0.256,
+            "width_pct": 7.752
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T20:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118140.01,
+          "change_pct_1h": -0.062,
+          "change_pct_24h": 0.311,
+          "volume_usdc": 119.07738,
+          "high_24h": 118322.0,
+          "low_24h": 117913.62,
+          "rsi14": 54.6,
+          "sma7": 118387.422857,
+          "sma25": 118109.6724,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.346,
+          "atr": 391.172143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 1.729745
+          },
+          "bollinger": {
+            "lower": 117688.8061,
+            "middle": 118170.9195,
+            "upper": 118653.0329,
+            "width_pct": 0.816
+          }
+        },
+        "ETHUSDC": {
+          "price": 3741.9,
+          "change_pct_1h": -0.261,
+          "change_pct_24h": 4.944,
+          "volume_usdc": 55854.8811,
+          "high_24h": 3756.35,
+          "low_24h": 3717.89,
+          "rsi14": 65.2,
+          "sma7": 3764.874286,
+          "sma25": 3686.2264,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.028,
+          "atr": 41.593571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -1.939189
+          },
+          "bollinger": {
+            "lower": 3599.9563,
+            "middle": 3712.536,
+            "upper": 3825.1157,
+            "width_pct": 6.065
+          }
+        },
+        "SOLUSDC": {
+          "price": 181.3,
+          "change_pct_1h": -0.434,
+          "change_pct_24h": 2.141,
+          "volume_usdc": 37511.648,
+          "high_24h": 182.36,
+          "low_24h": 180.59,
+          "rsi14": 62.5,
+          "sma7": 181.652857,
+          "sma25": 179.4776,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.976,
+          "atr": 1.874286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.057938
+          },
+          "bollinger": {
+            "lower": 176.3774,
+            "middle": 180.105,
+            "upper": 183.8326,
+            "width_pct": 4.139
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.5106,
+          "change_pct_1h": -0.409,
+          "change_pct_24h": 2.712,
+          "volume_usdc": 2644911.9,
+          "high_24h": 3.5274,
+          "low_24h": 3.4928,
+          "rsi14": 66.5,
+          "sma7": 3.521543,
+          "sma25": 3.469928,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.986,
+          "atr": 0.040486,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002172
+          },
+          "bollinger": {
+            "lower": 3.394,
+            "middle": 3.4823,
+            "upper": 3.5706,
+            "width_pct": 5.071
+          }
+        },
+        "BNBUSDC": {
+          "price": 753.32,
+          "change_pct_1h": 0.012,
+          "change_pct_24h": 2.754,
+          "volume_usdc": 1002.808,
+          "high_24h": 757.59,
+          "low_24h": 749.9,
+          "rsi14": 61.9,
+          "sma7": 751.125714,
+          "sma25": 744.5572,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.021,
+          "atr": 5.181429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.157745
+          },
+          "bollinger": {
+            "lower": 738.9165,
+            "middle": 747.4435,
+            "upper": 755.9705,
+            "width_pct": 2.282
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8714,
+          "change_pct_1h": 0.023,
+          "change_pct_24h": 5.064,
+          "volume_usdc": 4461291.1,
+          "high_24h": 0.8787,
+          "low_24h": 0.86,
+          "rsi14": 71.5,
+          "sma7": 0.868729,
+          "sma25": 0.84864,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.146,
+          "atr": 0.012993,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.001071
+          },
+          "bollinger": {
+            "lower": 0.8262,
+            "middle": 0.8538,
+            "upper": 0.8814,
+            "width_pct": 6.465
+          }
+        },
+        "AVAXUSDC": {
+          "price": 25.16,
+          "change_pct_1h": -0.475,
+          "change_pct_24h": 1.247,
+          "volume_usdc": 17237.18,
+          "high_24h": 25.34,
+          "low_24h": 25.03,
+          "rsi14": 63.0,
+          "sma7": 25.24,
+          "sma25": 24.8716,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.232,
+          "atr": 0.300714,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.029061
+          },
+          "bollinger": {
+            "lower": 24.3886,
+            "middle": 24.9645,
+            "upper": 25.5404,
+            "width_pct": 4.614
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.27095,
+          "change_pct_1h": -1.124,
+          "change_pct_24h": 12.516,
+          "volume_usdc": 36608554.0,
+          "high_24h": 0.27478,
+          "low_24h": 0.26927,
+          "rsi14": 73.7,
+          "sma7": 0.264763,
+          "sma25": 0.253968,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.034,
+          "atr": 0.005652,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.002007
+          },
+          "bollinger": {
+            "lower": 0.2419,
+            "middle": 0.2569,
+            "upper": 0.2719,
+            "width_pct": 11.678
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.37,
+          "change_pct_1h": -0.411,
+          "change_pct_24h": 5.329,
+          "volume_usdc": 24027.73,
+          "high_24h": 19.51,
+          "low_24h": 19.31,
+          "rsi14": 66.2,
+          "sma7": 19.495714,
+          "sma25": 18.9992,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.033,
+          "atr": 0.336429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.028174
+          },
+          "bollinger": {
+            "lower": 18.3626,
+            "middle": 19.162,
+            "upper": 19.9614,
+            "width_pct": 8.344
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2542,
+          "change_pct_1h": -0.118,
+          "change_pct_24h": 6.404,
+          "volume_usdc": 331917.4,
+          "high_24h": 0.2555,
+          "low_24h": 0.2518,
+          "rsi14": 77.5,
+          "sma7": 0.252429,
+          "sma25": 0.245608,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.456,
+          "atr": 0.003021,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000562
+          },
+          "bollinger": {
+            "lower": 0.2375,
+            "middle": 0.2471,
+            "upper": 0.2568,
+            "width_pct": 7.811
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T21:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 118055.94,
+          "change_pct_1h": -0.071,
+          "change_pct_24h": 0.245,
+          "volume_usdc": 92.18202,
+          "high_24h": 118217.98,
+          "low_24h": 117893.65,
+          "rsi14": 49.4,
+          "sma7": 118321.125714,
+          "sma25": 118120.9616,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.275,
+          "atr": 386.509286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -13.316115
+          },
+          "bollinger": {
+            "lower": 117693.7613,
+            "middle": 118173.2165,
+            "upper": 118652.6717,
+            "width_pct": 0.811
+          }
+        },
+        "ETHUSDC": {
+          "price": 3772.0,
+          "change_pct_1h": 0.804,
+          "change_pct_24h": 5.558,
+          "volume_usdc": 44457.9426,
+          "high_24h": 3774.89,
+          "low_24h": 3729.11,
+          "rsi14": 66.8,
+          "sma7": 3765.231429,
+          "sma25": 3694.482,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.214,
+          "atr": 42.242857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -2.075123
+          },
+          "bollinger": {
+            "lower": 3616.5518,
+            "middle": 3720.801,
+            "upper": 3825.0502,
+            "width_pct": 5.604
+          }
+        },
+        "SOLUSDC": {
+          "price": 182.42,
+          "change_pct_1h": 0.618,
+          "change_pct_24h": 3.654,
+          "volume_usdc": 18585.367,
+          "high_24h": 182.44,
+          "low_24h": 180.72,
+          "rsi14": 63.7,
+          "sma7": 181.862857,
+          "sma25": 179.6744,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.943,
+          "atr": 1.892857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.059937
+          },
+          "bollinger": {
+            "lower": 176.6067,
+            "middle": 180.328,
+            "upper": 184.0493,
+            "width_pct": 4.127
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.507,
+          "change_pct_1h": -0.103,
+          "change_pct_24h": 2.971,
+          "volume_usdc": 1857532.6,
+          "high_24h": 3.5154,
+          "low_24h": 3.4858,
+          "rsi14": 62.3,
+          "sma7": 3.516771,
+          "sma25": 3.473492,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.844,
+          "atr": 0.039629,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000411
+          },
+          "bollinger": {
+            "lower": 3.4016,
+            "middle": 3.4864,
+            "upper": 3.5712,
+            "width_pct": 4.865
+          }
+        },
+        "BNBUSDC": {
+          "price": 759.54,
+          "change_pct_1h": 0.826,
+          "change_pct_24h": 3.928,
+          "volume_usdc": 1766.021,
+          "high_24h": 760.27,
+          "low_24h": 748.0,
+          "rsi14": 64.9,
+          "sma7": 752.94,
+          "sma25": 745.6136,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.615,
+          "atr": 5.777857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.515358
+          },
+          "bollinger": {
+            "lower": 739.3303,
+            "middle": 748.47,
+            "upper": 757.6097,
+            "width_pct": 2.442
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8738,
+          "change_pct_1h": 0.275,
+          "change_pct_24h": 5.902,
+          "volume_usdc": 3044757.1,
+          "high_24h": 0.874,
+          "low_24h": 0.8599,
+          "rsi14": 68.7,
+          "sma7": 0.869971,
+          "sma25": 0.850416,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.614,
+          "atr": 0.012971,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000923
+          },
+          "bollinger": {
+            "lower": 0.8288,
+            "middle": 0.8559,
+            "upper": 0.883,
+            "width_pct": 6.333
+          }
+        },
+        "AVAXUSDC": {
+          "price": 25.24,
+          "change_pct_1h": 0.318,
+          "change_pct_24h": 3.698,
+          "volume_usdc": 15312.58,
+          "high_24h": 25.25,
+          "low_24h": 24.98,
+          "rsi14": 62.3,
+          "sma7": 25.247143,
+          "sma25": 24.8872,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.07,
+          "atr": 0.302143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.034076
+          },
+          "bollinger": {
+            "lower": 24.4508,
+            "middle": 25.0005,
+            "upper": 25.5502,
+            "width_pct": 4.398
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.27226,
+          "change_pct_1h": 0.483,
+          "change_pct_24h": 12.882,
+          "volume_usdc": 11709920.0,
+          "high_24h": 0.27291,
+          "low_24h": 0.26669,
+          "rsi14": 74.2,
+          "sma7": 0.267436,
+          "sma25": 0.255226,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.285,
+          "atr": 0.005956,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.001924
+          },
+          "bollinger": {
+            "lower": 0.2417,
+            "middle": 0.2579,
+            "upper": 0.2741,
+            "width_pct": 12.563
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.47,
+          "change_pct_1h": 0.516,
+          "change_pct_24h": 6.627,
+          "volume_usdc": 38224.62,
+          "high_24h": 19.48,
+          "low_24h": 19.22,
+          "rsi14": 64.7,
+          "sma7": 19.491429,
+          "sma25": 19.0424,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.335,
+          "atr": 0.329286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.033533
+          },
+          "bollinger": {
+            "lower": 18.4568,
+            "middle": 19.2095,
+            "upper": 19.9622,
+            "width_pct": 7.837
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2549,
+          "change_pct_1h": 0.275,
+          "change_pct_24h": 6.608,
+          "volume_usdc": 398576.7,
+          "high_24h": 0.2556,
+          "low_24h": 0.2515,
+          "rsi14": 77.7,
+          "sma7": 0.2532,
+          "sma25": 0.246248,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.608,
+          "atr": 0.003129,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000479
+          },
+          "bollinger": {
+            "lower": 0.2383,
+            "middle": 0.2479,
+            "upper": 0.2575,
+            "width_pct": 7.745
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T22:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 117551.92,
+          "change_pct_1h": -0.427,
+          "change_pct_24h": -0.257,
+          "volume_usdc": 450.84173,
+          "high_24h": 118100.3,
+          "low_24h": 116517.76,
+          "rsi14": 38.6,
+          "sma7": 118152.828571,
+          "sma25": 118112.3232,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.346,
+          "atr": 482.748571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -54.268155
+          },
+          "bollinger": {
+            "lower": 117598.9027,
+            "middle": 118148.158,
+            "upper": 118697.4133,
+            "width_pct": 0.93
+          }
+        },
+        "ETHUSDC": {
+          "price": 3749.49,
+          "change_pct_1h": -0.597,
+          "change_pct_24h": 4.775,
+          "volume_usdc": 61105.0077,
+          "high_24h": 3773.76,
+          "low_24h": 3683.09,
+          "rsi14": 56.5,
+          "sma7": 3759.775714,
+          "sma25": 3701.5256,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.418,
+          "atr": 45.226429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -3.834671
+          },
+          "bollinger": {
+            "lower": 3633.7676,
+            "middle": 3727.36,
+            "upper": 3820.9524,
+            "width_pct": 5.022
+          }
+        },
+        "SOLUSDC": {
+          "price": 180.6,
+          "change_pct_1h": -0.998,
+          "change_pct_24h": 2.311,
+          "volume_usdc": 106576.915,
+          "high_24h": 182.46,
+          "low_24h": 177.85,
+          "rsi14": 49.3,
+          "sma7": 181.654286,
+          "sma25": 179.8588,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.553,
+          "atr": 2.025,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.065981
+          },
+          "bollinger": {
+            "lower": 176.9667,
+            "middle": 180.4765,
+            "upper": 183.9863,
+            "width_pct": 3.889
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.4568,
+          "change_pct_1h": -1.431,
+          "change_pct_24h": 0.976,
+          "volume_usdc": 6620158.2,
+          "high_24h": 3.5095,
+          "low_24h": 3.4054,
+          "rsi14": 41.3,
+          "sma7": 3.507771,
+          "sma25": 3.475532,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 3.011,
+          "atr": 0.042907,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.004098
+          },
+          "bollinger": {
+            "lower": 3.4108,
+            "middle": 3.4889,
+            "upper": 3.5669,
+            "width_pct": 4.474
+          }
+        },
+        "BNBUSDC": {
+          "price": 755.84,
+          "change_pct_1h": -0.487,
+          "change_pct_24h": 3.122,
+          "volume_usdc": 4016.596,
+          "high_24h": 761.77,
+          "low_24h": 745.23,
+          "rsi14": 55.1,
+          "sma7": 753.591429,
+          "sma25": 746.614,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.188,
+          "atr": 6.513571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.448687
+          },
+          "bollinger": {
+            "lower": 739.9622,
+            "middle": 749.155,
+            "upper": 758.3478,
+            "width_pct": 2.454
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8582,
+          "change_pct_1h": -1.785,
+          "change_pct_24h": 3.949,
+          "volume_usdc": 6881629.5,
+          "high_24h": 0.8747,
+          "low_24h": 0.8375,
+          "rsi14": 50.6,
+          "sma7": 0.868086,
+          "sma25": 0.85174,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 4.335,
+          "atr": 0.014729,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.000285
+          },
+          "bollinger": {
+            "lower": 0.8322,
+            "middle": 0.8572,
+            "upper": 0.8821,
+            "width_pct": 5.821
+          }
+        },
+        "AVAXUSDC": {
+          "price": 25.02,
+          "change_pct_1h": -0.872,
+          "change_pct_24h": 2.667,
+          "volume_usdc": 66176.95,
+          "high_24h": 25.26,
+          "low_24h": 24.52,
+          "rsi14": 49.5,
+          "sma7": 25.19,
+          "sma25": 24.9144,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.958,
+          "atr": 0.332143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.052094
+          },
+          "bollinger": {
+            "lower": 24.517,
+            "middle": 25.0245,
+            "upper": 25.532,
+            "width_pct": 4.056
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.27395,
+          "change_pct_1h": 0.621,
+          "change_pct_24h": 13.871,
+          "volume_usdc": 33683638.0,
+          "high_24h": 0.277,
+          "low_24h": 0.26223,
+          "rsi14": 73.3,
+          "sma7": 0.270247,
+          "sma25": 0.256536,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 5.391,
+          "atr": 0.006769,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.001855
+          },
+          "bollinger": {
+            "lower": 0.2418,
+            "middle": 0.2591,
+            "upper": 0.2764,
+            "width_pct": 13.354
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.32,
+          "change_pct_1h": -0.77,
+          "change_pct_24h": 5.805,
+          "volume_usdc": 109378.97,
+          "high_24h": 19.48,
+          "low_24h": 18.89,
+          "rsi14": 54.9,
+          "sma7": 19.434286,
+          "sma25": 19.0848,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 3.054,
+          "atr": 0.35,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.047474
+          },
+          "bollinger": {
+            "lower": 18.5631,
+            "middle": 19.249,
+            "upper": 19.9349,
+            "width_pct": 7.127
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2512,
+          "change_pct_1h": -1.452,
+          "change_pct_24h": 5.061,
+          "volume_usdc": 1247301.1,
+          "high_24h": 0.2549,
+          "low_24h": 0.2468,
+          "rsi14": 63.2,
+          "sma7": 0.253357,
+          "sma25": 0.246732,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 3.225,
+          "atr": 0.003529,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.000134
+          },
+          "bollinger": {
+            "lower": 0.2396,
+            "middle": 0.2485,
+            "upper": 0.2574,
+            "width_pct": 7.163
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    },
+    {
+      "timestamp": "2025-07-20T23:00:00+00:00",
+      "market": {
+        "BTCUSDC": {
+          "price": 117324.01,
+          "change_pct_1h": -0.194,
+          "change_pct_24h": -0.503,
+          "volume_usdc": 136.26808,
+          "high_24h": 117626.66,
+          "low_24h": 117020.25,
+          "rsi14": 38.8,
+          "sma7": 117967.574286,
+          "sma25": 118091.1044,
+          "trend": "baissier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.517,
+          "atr": 497.927857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -92.029124
+          },
+          "bollinger": {
+            "lower": 117457.1555,
+            "middle": 118112.758,
+            "upper": 118768.3605,
+            "width_pct": 1.11
+          }
+        },
+        "ETHUSDC": {
+          "price": 3758.87,
+          "change_pct_1h": 0.25,
+          "change_pct_24h": 4.584,
+          "volume_usdc": 20279.3061,
+          "high_24h": 3771.76,
+          "low_24h": 3735.73,
+          "rsi14": 58.7,
+          "sma7": 3752.358571,
+          "sma25": 3708.736,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.959,
+          "atr": 45.414286,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -4.633815
+          },
+          "bollinger": {
+            "lower": 3643.0822,
+            "middle": 3732.2935,
+            "upper": 3821.5048,
+            "width_pct": 4.781
+          }
+        },
+        "SOLUSDC": {
+          "price": 181.55,
+          "change_pct_1h": 0.526,
+          "change_pct_24h": 2.524,
+          "volume_usdc": 29776.436,
+          "high_24h": 181.76,
+          "low_24h": 179.53,
+          "rsi14": 55.7,
+          "sma7": 181.562857,
+          "sma25": 180.06,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.228,
+          "atr": 2.047143,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.091826
+          },
+          "bollinger": {
+            "lower": 177.2935,
+            "middle": 180.6505,
+            "upper": 184.0075,
+            "width_pct": 3.717
+          }
+        },
+        "XRPUSDC": {
+          "price": 3.4556,
+          "change_pct_1h": -0.035,
+          "change_pct_24h": 0.858,
+          "volume_usdc": 1613053.2,
+          "high_24h": 3.4667,
+          "low_24h": 3.4335,
+          "rsi14": 42.8,
+          "sma7": 3.498829,
+          "sma25": 3.47682,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 0.961,
+          "atr": 0.041107,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.006942
+          },
+          "bollinger": {
+            "lower": 3.4139,
+            "middle": 3.4898,
+            "upper": 3.5657,
+            "width_pct": 4.35
+          }
+        },
+        "BNBUSDC": {
+          "price": 757.38,
+          "change_pct_1h": 0.204,
+          "change_pct_24h": 3.243,
+          "volume_usdc": 1193.968,
+          "high_24h": 760.91,
+          "low_24h": 753.22,
+          "rsi14": 58.8,
+          "sma7": 753.885714,
+          "sma25": 747.5908,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.015,
+          "atr": 6.811429,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.430023
+          },
+          "bollinger": {
+            "lower": 740.4259,
+            "middle": 749.862,
+            "upper": 759.2981,
+            "width_pct": 2.517
+          }
+        },
+        "ADAUSDC": {
+          "price": 0.8585,
+          "change_pct_1h": 0.035,
+          "change_pct_24h": 3.409,
+          "volume_usdc": 2198124.6,
+          "high_24h": 0.8638,
+          "low_24h": 0.8516,
+          "rsi14": 54.9,
+          "sma7": 0.866114,
+          "sma25": 0.853056,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.421,
+          "atr": 0.014593,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.001105
+          },
+          "bollinger": {
+            "lower": 0.8343,
+            "middle": 0.858,
+            "upper": 0.8818,
+            "width_pct": 5.536
+          }
+        },
+        "AVAXUSDC": {
+          "price": 25.05,
+          "change_pct_1h": 0.12,
+          "change_pct_24h": 2.245,
+          "volume_usdc": 24989.93,
+          "high_24h": 25.16,
+          "low_24h": 24.87,
+          "rsi14": 52.9,
+          "sma7": 25.147143,
+          "sma25": 24.9416,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.158,
+          "atr": 0.333571,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.062157
+          },
+          "bollinger": {
+            "lower": 24.5808,
+            "middle": 25.0475,
+            "upper": 25.5142,
+            "width_pct": 3.727
+          }
+        },
+        "DOGEUSDC": {
+          "price": 0.27397,
+          "change_pct_1h": 0.007,
+          "change_pct_24h": 13.422,
+          "volume_usdc": 19753884.0,
+          "high_24h": 0.27756,
+          "low_24h": 0.27073,
+          "rsi14": 81.2,
+          "sma7": 0.271521,
+          "sma25": 0.257872,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 2.493,
+          "atr": 0.006881,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": 0.001678
+          },
+          "bollinger": {
+            "lower": 0.2416,
+            "middle": 0.26,
+            "upper": 0.2784,
+            "width_pct": 14.154
+          }
+        },
+        "LINKUSDC": {
+          "price": 19.29,
+          "change_pct_1h": -0.155,
+          "change_pct_24h": 4.837,
+          "volume_usdc": 31507.7,
+          "high_24h": 19.4,
+          "low_24h": 19.19,
+          "rsi14": 43.9,
+          "sma7": 19.374286,
+          "sma25": 19.126,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.089,
+          "atr": 0.322857,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -0.059134
+          },
+          "bollinger": {
+            "lower": 18.6452,
+            "middle": 19.2795,
+            "upper": 19.9138,
+            "width_pct": 6.58
+          }
+        },
+        "POLUSDC": {
+          "price": 0.2524,
+          "change_pct_1h": 0.478,
+          "change_pct_24h": 5.035,
+          "volume_usdc": 277642.3,
+          "high_24h": 0.2531,
+          "low_24h": 0.2495,
+          "rsi14": 64.1,
+          "sma7": 0.253071,
+          "sma25": 0.247264,
+          "trend": "haussier",
+          "trend_1d": "haussier",
+          "range_pct_24h": 1.426,
+          "atr": 0.003579,
+          "macd": {
+            "macd": null,
+            "signal": null,
+            "histogram": -5.2e-05
+          },
+          "bollinger": {
+            "lower": 0.2407,
+            "middle": 0.249,
+            "upper": 0.2574,
+            "width_pct": 6.707
+          }
+        }
+      },
+      "fear_greed": {
+        "value": 72,
+        "label": "Greed"
+      },
+      "btc_dominance": null
+    }
+  ],
+  "note": "Euphoria 1d (greed+bull)"
+}

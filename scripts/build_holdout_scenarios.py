@@ -32,7 +32,7 @@ from hellocrypto.eval.scenario import Cycle, Scenario, save  # noqa: E402
 
 log = logging.getLogger("build_holdout")
 
-HOLDOUT_DIR = Path("data/scenarios/holdout")
+HOLDOUT_DIR = Path("eval/scenarios/holdout")
 
 # Two suites of the same three regime windows, at different lengths:
 #   - "compact" : 24 cycles each (1 day). Fast bench, free-tier friendly.
@@ -199,7 +199,7 @@ def main() -> int:
     parser.add_argument("--name",  help="Output filename stem (no extension)")
     parser.add_argument("--note",  default="")
     parser.add_argument("--subdir", default="",
-                        help="Optional subdirectory under data/scenarios/holdout/")
+                        help="Optional subdirectory under eval/scenarios/holdout/")
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args()
 

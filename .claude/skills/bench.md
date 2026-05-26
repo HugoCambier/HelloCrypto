@@ -27,7 +27,7 @@ Ne PAS invoquer pour : refactor cosmétique, JS/CSS, doc, lint, bug fix non-stra
 
 1. **Préflight checks** (rapide, avant de lancer):
    - Vérifier que `.env` a `GEMINI_API_KEY` (sinon le bench échoue immédiatement)
-   - Vérifier que `data/scenarios/holdout/compact/` contient bien 3 fichiers
+   - Vérifier que `eval/scenarios/holdout/compact/` contient bien 3 fichiers
      (sinon : `make bench-scenarios` pour les régénérer)
    - Vérifier que le playbook + behavior sont à jour en DB :
      `poetry run python -c "from db.store import get_state; print('pb' if get_state('playbook') else 'NO PB'); print('bh' if get_state('behavior') else 'NO BH')"`
@@ -43,7 +43,7 @@ Ne PAS invoquer pour : refactor cosmétique, JS/CSS, doc, lint, bug fix non-stra
 3. **Pendant que ça tourne** : continuer à répondre aux autres demandes user (ne pas
    bloquer la conversation).
 
-4. **À la complétion** : lire le rapport JSON dans `data/eval_reports/bench/bench_*.json`
+4. **À la complétion** : lire le rapport JSON dans `eval/reports/bench/bench_*.json`
    et présenter à l'utilisateur :
    - Le verdict global (SHIP / MIXED / HOLD)
    - Le delta `full_learning - baseline` sur les métriques clés
@@ -73,7 +73,7 @@ Ne PAS invoquer pour : refactor cosmétique, JS/CSS, doc, lint, bug fix non-stra
   le prompt donc tous les variants sont identiques — normal mais inutile pour la
   mesure).
 
-- **Le rapport JSON est conservé** dans `data/eval_reports/bench/` même après
+- **Le rapport JSON est conservé** dans `eval/reports/bench/` même après
   fermeture du terminal. L'utilisateur peut y revenir.
 
 ## Cost notes

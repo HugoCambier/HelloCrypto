@@ -2,8 +2,8 @@
 """Compare two eval reports side-by-side.
 
 Usage:
-  python scripts/compare.py data/eval_reports/v0__demo__X.json \
-                            data/eval_reports/v1__demo__Y.json
+  python scripts/compare.py eval/reports/v0__demo__X.json \
+                            eval/reports/v1__demo__Y.json
 """
 from __future__ import annotations
 
