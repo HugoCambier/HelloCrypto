@@ -19,6 +19,10 @@ data/
 eval/llm_cache/
 eval/reports/_progress.json
 
+# Bench reports are scratch by default — commit milestones explicitly with
+# `git add -f eval/reports/bench/<file>.json`. Already-tracked reports stay.
+eval/reports/bench/
+
 # macOS
 .DS_Store
 
