@@ -25,6 +25,15 @@ _USE_FIRESTORE = bool(_CLOUD_PROJECT) and not _DATABASE_URL and not _USE_POSTGRE
 
 def _db_path() -> Path:
     url = os.getenv("DATABASE_URL", "data/hellocrypto.db")
+    # Guard: a Postgres URL is not a filesystem path. Without this, the
+    # mkdir below would materialise a junk directory tree named after the
+    # connection string (leaking the password into a path). If we get here
+    # with Postgres configured, the SQLite backend was selected by mistake.
+    if url.startswith(("postgresql://", "postgres://")):
+        raise RuntimeError(
+            "_db_path() called while DATABASE_URL points to Postgres — "
+            "the SQLite backend must not be used in this configuration."
+        )
     p = Path(url.replace("sqlite:///", ""))
     p.parent.mkdir(parents=True, exist_ok=True)
     return p
