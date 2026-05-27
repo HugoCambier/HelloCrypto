@@ -1,0 +1,189 @@
+{
+  "generated_at": "2026-05-27T06:59:10.205086+00:00",
+  "variants": {
+    "baseline": {
+      "enable_playbook": false,
+      "enable_behavior": false,
+      "enable_confidence_calibration": false,
+      "enable_regime_aware_thresholds": false,
+      "description": "Pre-learning state — no playbook/behavior/calibration"
+    },
+    "playbook": {
+      "enable_playbook": true,
+      "enable_behavior": false,
+      "enable_confidence_calibration": false,
+      "enable_regime_aware_thresholds": false,
+      "description": "+ playbook section in prompt (no behavior, no calibration)"
+    },
+    "full_prompt": {
+      "enable_playbook": true,
+      "enable_behavior": true,
+      "enable_confidence_calibration": false,
+      "enable_regime_aware_thresholds": false,
+      "description": "+ behavior section in prompt (no calibration)"
+    },
+    "calibrated": {
+      "enable_playbook": true,
+      "enable_behavior": true,
+      "enable_confidence_calibration": true,
+      "enable_regime_aware_thresholds": false,
+      "description": "+ confidence auto-calibration"
+    },
+    "full_learning": {
+      "enable_playbook": true,
+      "enable_behavior": true,
+      "enable_confidence_calibration": true,
+      "enable_regime_aware_thresholds": true,
+      "description": "+ regime-aware min_confidence (final layer)"
+    }
+  },
+  "results": {
+    "holdout_greed_bull_7d": {
+      "baseline": {
+        "version": "baseline",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "ollama",
+          "model": "mistral:7b",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 996.75,
+          "return_pct": -0.325,
+          "btc_return_pct": -0.0362,
+          "alpha_vs_btc_pct": -0.2888,
+          "max_drawdown_pct": -4.5253,
+          "sharpe": -0.5576,
+          "win_rate_pct": null,
+          "num_trades": 63,
+          "total_fees": 0.981,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 63
+      },
+      "playbook": {
+        "version": "playbook",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "ollama",
+          "model": "mistral:7b",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1007.05,
+          "return_pct": 0.705,
+          "btc_return_pct": -0.0362,
+          "alpha_vs_btc_pct": 0.7412,
+          "max_drawdown_pct": -5.0028,
+          "sharpe": 1.0109,
+          "win_rate_pct": 50.0,
+          "num_trades": 57,
+          "total_fees": 1.1472,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 57
+      },
+      "full_prompt": {
+        "version": "full_prompt",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "ollama",
+          "model": "mistral:7b",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1007.05,
+          "return_pct": 0.705,
+          "btc_return_pct": -0.0362,
+          "alpha_vs_btc_pct": 0.7412,
+          "max_drawdown_pct": -5.0028,
+          "sharpe": 1.0109,
+          "win_rate_pct": 50.0,
+          "num_trades": 57,
+          "total_fees": 1.1472,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 57
+      },
+      "calibrated": {
+        "version": "calibrated",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "ollama",
+          "model": "mistral:7b",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1007.05,
+          "return_pct": 0.705,
+          "btc_return_pct": -0.0362,
+          "alpha_vs_btc_pct": 0.7412,
+          "max_drawdown_pct": -5.0028,
+          "sharpe": 1.0109,
+          "win_rate_pct": 50.0,
+          "num_trades": 57,
+          "total_fees": 1.1472,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 57
+      },
+      "full_learning": {
+        "version": "full_learning",
+        "config": {
+          "budget": 1000.0,
+          "risk_level": 5,
+          "stop_loss": 21.0,
+          "trail_stop": 10.0,
+          "provider": "ollama",
+          "model": "mistral:7b",
+          "temperature": 0.0
+        },
+        "metrics": {
+          "initial_value": 1000.0,
+          "final_value": 1007.05,
+          "return_pct": 0.705,
+          "btc_return_pct": -0.0362,
+          "alpha_vs_btc_pct": 0.7412,
+          "max_drawdown_pct": -5.0028,
+          "sharpe": 1.0109,
+          "win_rate_pct": 50.0,
+          "num_trades": 57,
+          "total_fees": 1.1472,
+          "tokens_in": 0,
+          "tokens_out": 0,
+          "tokens_total": 0
+        },
+        "cycles_run": 168,
+        "num_trades": 57
+      }
+    }
+  }
+}
