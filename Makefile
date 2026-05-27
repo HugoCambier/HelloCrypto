@@ -1,4 +1,4 @@
-.PHONY: install hooks agent dashboard simulation shell deploy clean backtest bench bench-full bench-scenarios bench-ollama bench-ollama-full bench-ollama-overnight bench-progress
+.PHONY: install hooks agent dashboard simulation shell deploy clean backtest bench bench-full bench-scenarios bench-ollama bench-ollama-full bench-ollama-overnight bench-progress propose
 
 install:     ## Install dependencies (Gemini + PostgreSQL)
 	poetry install --extras gemini --extras postgres
@@ -61,6 +61,9 @@ bench-ollama-overnight: ## Bench 7j + caffeinate (empêche le sleep macOS). WORK
 		--provider ollama --model $${OLLAMA_MODEL:-qwen2.5:14b} \
 		--temperature 0.0 --min-confidence 0.5 \
 		--workers $${WORKERS:-3}
+
+propose:     ## Proposer-agent: search params on TRAIN, gate winner on HOLDOUT, write report (rules decider, free). ARGS="--num-candidates 20 --seed 7"
+	poetry run python -m scripts.propose $(ARGS)
 
 clean:       ## Remove Python cache files
 	find . -type d -name __pycache__ -exec rm -rf {} +

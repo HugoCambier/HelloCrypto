@@ -36,3 +36,6 @@ eval/reports/_progress.json
 # Claude Code — user-local state ignored, project skills tracked
 .claude/*
 !.claude/skills/
+
+# Trader-agent PR worktrees (transient)
+.worktrees/
