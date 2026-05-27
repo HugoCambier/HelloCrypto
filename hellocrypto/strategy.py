@@ -138,6 +138,7 @@ def apply_paper_actions(
     *,
     min_confidence: float = 0.0,
     confidence_calibration: dict | None = None,
+    cash_floor_pct: float = 0.0,
 ) -> tuple[float, float, list[PaperTrade]]:
     """Apply a list of LLM-emitted actions in paper-trading mode.
 
@@ -157,6 +158,16 @@ def apply_paper_actions(
     """
     fees_total = 0.0
     trades: list[PaperTrade] = []
+
+    # Regime cash floor: keep at least cash_floor_pct of total portfolio value
+    # in cash. A BUY is clamped (or skipped) so it never breaches the floor.
+    # Computed once from total value (cash + mark-to-market holdings) — a buy
+    # converts cash to asset, leaving total ~unchanged, so a single snapshot
+    # is enough. 0.0 (default) = no floor.
+    cash_floor_usd = 0.0
+    if cash_floor_pct > 0:
+        holdings_val = sum(h["qty"] * prices.get(s, h["avg_price"]) for s, h in holdings.items())
+        cash_floor_usd = (cash + holdings_val) * cash_floor_pct / 100.0
 
     for action in actions:
         atype = action.get("type", "")
@@ -194,6 +205,17 @@ def apply_paper_actions(
             if conf is not None:
                 base_amt *= max(0.5, min(1.0, float(conf)))
             amount = compute_position_size(base_amt, cash, risk_level, rsi)
+            # Clamp to the regime cash floor — never spend below the reserve.
+            if cash_floor_usd > 0:
+                spendable = cash - cash_floor_usd
+                if amount > spendable:
+                    if spendable < 10:
+                        log.info("[STRAT] skip BUY %s — cash floor %.0f%% atteint (réserve $%.2f)",
+                                 sym, cash_floor_pct, cash_floor_usd)
+                        continue
+                    log.info("[STRAT] clamp BUY %s $%.2f → $%.2f (cash floor %.0f%%)",
+                             sym, amount, spendable, cash_floor_pct)
+                    amount = spendable
             if amount >= 10:
                 res = paper_buy(sym, amount, prices[sym], holdings)
                 cash -= amount

@@ -82,6 +82,14 @@ VARIANTS: dict[str, dict[str, Any]] = {
         "enable_confidence_calibration": True,
         "enable_regime_aware_thresholds": True,
     },
+    "regime_adaptive": {
+        "description":     "+ regime stance (cash floor + conf gate + prompt overlay)",
+        "enable_playbook":               True,
+        "enable_behavior":               True,
+        "enable_confidence_calibration": True,
+        "enable_regime_aware_thresholds": False,  # superseded by the stance
+        "enable_regime_stance":          True,
+    },
 }
 
 

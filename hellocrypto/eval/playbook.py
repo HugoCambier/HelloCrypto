@@ -372,6 +372,101 @@ def regime_aware_min_confidence(
     return base_min
 
 
+# Alt-season heuristic: below this BTC-dominance level (and only in a bull
+# regime) we let the universe widen to altcoins. Coarse — dominance trend
+# would be better than an absolute level, but we only have a snapshot.
+_ALT_SEASON_DOMINANCE_PCT = 50.0
+
+
+def regime_stance(
+    fng_bucket: str | None,
+    btc_trend: str | None,
+    btc_dominance: float | None = None,
+    base_min_confidence: float = 0.5,
+) -> dict:
+    """Translate the macro regime into a concrete trading stance.
+
+    ``risk_level`` (set by the user) governs per-trade sizing and base
+    universe; the *regime* governs how much cash to deploy and how
+    demanding to be. The BTC daily trend is the dominant green/red axis:
+    a confirmed uptrend means deploy (low cash floor) even for a prudent
+    profile; a downtrend means preserve capital. Fear/Greed and BTC
+    dominance modulate around that.
+
+    Returns a dict with:
+      - ``cash_floor_pct``  : minimum % of total value to keep in cash
+      - ``min_confidence``  : regime-adjusted confidence gate (clamped 0-1)
+      - ``label``           : short stance name (DÉPLOIEMENT / SÉLECTIF / PRÉSERVATION)
+      - ``overlay``         : prompt-ready instruction block
+    """
+    # ── Base stance from BTC daily trend ──────────────────────────────────
+    if btc_trend == "bull":
+        cash_floor, conf_delta, label = 5.0, -0.05, "DÉPLOIEMENT"
+        base_line = "Marché haussier (BTC daily ↑) : investis, ne garde que ~5% cash. Pas de cash mort."
+    elif btc_trend == "bear":
+        cash_floor, conf_delta, label = 55.0, +0.10, "PRÉSERVATION"
+        base_line = "Marché baissier (BTC daily ↓) : priorité capital, ~55% cash, force relative uniquement."
+    else:  # range or unknown
+        cash_floor, conf_delta, label = 30.0, 0.0, "SÉLECTIF"
+        base_line = "Marché sans direction : ~30% cash, ne trade que les setups clairs."
+
+    # ── Fear/Greed modulation ─────────────────────────────────────────────
+    notes: list[str] = []
+    if fng_bucket == "greed" and btc_trend == "bull":
+        notes.append("greed + haussier → euphorie possible : laisse courir mais sorties vives (guette euphoria_top).")
+    elif fng_bucket == "greed" and btc_trend == "bear":
+        cash_floor, conf_delta = 65.0, +0.15
+        base_line = "Marché baissier + greed (bull trap / distribution) : priorité capital, ~65% cash."
+        notes.append("greed + baissier → méfiance sur les rebonds, ne pas courir après le marché.")
+    elif fng_bucket == "fear" and btc_trend == "bear":
+        notes.append("fear + baissier → préservation max, mais guette oversold_reversal (rebond capitulation).")
+    elif fng_bucket == "fear" and btc_trend == "bull":
+        notes.append("fear + haussier → mur d'inquiétude : déploie sur la force relative confirmée.")
+
+    # ── Universe tilt via BTC dominance (alt season) ──────────────────────
+    if (btc_trend == "bull" and btc_dominance is not None
+            and btc_dominance < _ALT_SEASON_DOMINANCE_PCT):
+        universe = f"altcoins autorisés (dominance BTC {btc_dominance:.0f}% < {_ALT_SEASON_DOMINANCE_PCT:.0f}% = alt season)"
+    else:
+        universe = "majors + force relative (actifs en trend daily ↑ malgré le marché)"
+
+    min_conf = max(0.0, min(1.0, base_min_confidence + conf_delta))
+
+    regime_key = f"{fng_bucket or 'na'}+{btc_trend or 'na'}"
+    lines = [
+        f"AJUSTEMENT RÉGIME [{regime_key}] — stance: {label}",
+        f"- {base_line}",
+        f"- Univers : {universe}.",
+    ]
+    lines += [f"- {n}" for n in notes]
+    lines.append(f"- Seuil de conviction effectif : min_confidence = {min_conf:.2f}.")
+
+    return {
+        "cash_floor_pct": cash_floor,
+        "min_confidence": min_conf,
+        "label":          label,
+        "overlay":        "\n".join(lines),
+    }
+
+
+def stance_for_cycle(
+    fear_greed: dict | None,
+    market_raw: dict | None,
+    btc_dominance: float | None = None,
+    base_min_confidence: float = 0.5,
+) -> dict:
+    """Convenience entry point: derive buckets from raw inputs → regime_stance."""
+    btc_trend_1d = None
+    if market_raw and "BTCUSDC" in market_raw:
+        btc_trend_1d = market_raw["BTCUSDC"].get("trend_1d")
+    return regime_stance(
+        fng_bucket(fear_greed.get("value") if fear_greed else None),
+        btc_trend_bucket(btc_trend_1d),
+        btc_dominance,
+        base_min_confidence,
+    )
+
+
 def section_for_cycle(
     fear_greed: dict | None,
     market_raw: dict | None,

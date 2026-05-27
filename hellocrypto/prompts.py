@@ -69,6 +69,7 @@ def build_analysis(
     cycle: int = 0,
     playbook_section: str | None = None,
     behavior_section: str | None = None,
+    regime_overlay: str | None = None,
 ) -> str:
     """Return the user-turn prompt for a market analysis cycle.
 
@@ -239,6 +240,9 @@ def build_analysis(
     playbook_block = f"\n{playbook_section}\n" if playbook_section else ""
     # Behavior lessons (from the agent's own past trades in this regime)
     behavior_block = f"\n{behavior_section}\n" if behavior_section else ""
+    # Regime stance overlay — modulates the static risk profile by macro regime
+    # (deploy in bull, preserve in bear). Placed right after the profile block.
+    regime_block = f"\n{regime_overlay}\n" if regime_overlay else ""
 
     # ── Pre-computed scores ──────────────────────────────────────────────────
     if scores:
@@ -267,7 +271,7 @@ POSITIONS OUVERTES :
 {portfolio_section}{decisions_section}
 PROFIL {profile_name} (risk_level {risk_level}/10) :
 {profile_desc}
-
+{regime_block}
 CONFIDENCE : flottant [0–1] — ton degré de certitude. Sera utilisé pour gater
 les trades (seuil applicatif côté serveur, < 0.5 ignoré par défaut) et pour
 moduler la taille (×confidence). Sois honnête : 0.9 = setup textbook avec ≥3

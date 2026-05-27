@@ -224,6 +224,15 @@ def _execute_cycle(
         playbook_section = _playbook_section(fear_greed, market_data_raw, scores=scores)
         behavior_section = _behavior_section(fear_greed, market_data_raw)
 
+        # Regime-adaptive stance (opt-in via config flag).
+        stance = None
+        if cfg.get("enable_regime_stance", False):
+            from .eval.playbook import stance_for_cycle
+            stance = stance_for_cycle(
+                fear_greed, market_data_raw, btc_dominance,
+                float(cfg.get("min_confidence", 0.5) or 0.0),
+            )
+
         decision = llm_call(
             prompt=build_analysis(
                 market_data, positions, cash, budget, risk_level,
@@ -232,6 +241,7 @@ def _execute_cycle(
                 cooldown_map=cooldown_map, cycle=cycle,
                 playbook_section=playbook_section,
                 behavior_section=behavior_section,
+                regime_overlay=stance["overlay"] if stance else None,
             ),
             system=SYSTEM,
             config={**cfg, "llm": {**cfg.get("llm", {}), "schema": DECISION_SCHEMA}},
@@ -277,6 +287,16 @@ def _execute_cycle(
                 log.info("Regime %s → min_confidence %.2f → %.2f", _regime, min_conf, adjusted)
             min_conf = adjusted
 
+        # Regime stance supersedes the above when enabled: confidence gate +
+        # cash floor (kept in cash, computed from total portfolio value).
+        cash_floor_usd = 0.0
+        if stance is not None:
+            min_conf = stance["min_confidence"]
+            positions_val = sum(p["qty"] * (prices.get(s) or p["avg_price"]) for s, p in positions.items())
+            cash_floor_usd = (cash + positions_val) * stance["cash_floor_pct"] / 100.0
+            log.info("Regime stance %s → min_conf %.2f, cash floor %.0f%% ($%.2f)",
+                     stance["label"], min_conf, stance["cash_floor_pct"], cash_floor_usd)
+
         for action in decision.get("actions", []):
             atype = action.get("type", "")
             sym = action.get("symbol", "")
@@ -308,11 +328,19 @@ def _execute_cycle(
                     continue
 
                 rsi = market_data_raw.get(sym, {}).get("rsi14")
-                base_amt = float(action.get("usdc_amount", 0))
+                base_amt = float(action.get("usdc_amount") or 0)
                 if conf is not None:
                     # Phase E: réduit la taille quand le modèle hésite (×0.5–1.0)
                     base_amt *= max(0.5, min(1.0, float(conf)))
                 amount = compute_position_size(base_amt, cash, risk_level, rsi)
+                # Regime cash floor: never spend below the reserve.
+                if cash_floor_usd > 0 and amount > cash - cash_floor_usd:
+                    spendable = cash - cash_floor_usd
+                    if spendable < 10:
+                        log.info("Skip BUY %s — cash floor atteint (réserve $%.2f)", sym, cash_floor_usd)
+                        continue
+                    log.info("Clamp BUY %s $%.2f → $%.2f (cash floor)", sym, amount, spendable)
+                    amount = spendable
                 if amount >= 10:
                     _, fee, fee_asset = market_buy(sym, amount)
                     price = prices.get(sym) or get_ticker(sym)

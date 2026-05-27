@@ -165,6 +165,9 @@ class StrategyConfig:
     # OFF by default everywhere because overfitting risk is real — turn on
     # only after the bench shows it improves things on held-out scenarios.
     enable_regime_aware_thresholds: bool = False
+    # Regime-adaptive stance: deploy cash in bull / preserve in bear, modulate
+    # the confidence gate by regime, inject a stance overlay into the prompt.
+    enable_regime_stance: bool = False
 
 
 @dataclass
@@ -281,6 +284,16 @@ def run(
 
         # decide
         scores = compute_scores(cyc.market)
+
+        # Regime-adaptive stance (off by default): cash floor + confidence gate
+        # + prompt overlay, all driven by the macro regime.
+        stance = None
+        if cfg.enable_regime_stance:
+            from .playbook import stance_for_cycle
+            stance = stance_for_cycle(
+                cyc.fear_greed, cyc.market, cyc.btc_dominance, cfg.min_confidence,
+            )
+
         if decision_fn is not None:
             decision, usage = decision_fn(cyc.market, scores, holdings, cfg)
         elif cfg.provider == "rules":
@@ -314,6 +327,7 @@ def run(
                 cycle=idx,
                 playbook_section=playbook_section,
                 behavior_section=behavior_section,
+                regime_overlay=stance["overlay"] if stance else None,
             )
             decision, usage = _llm_decision_via_cache(prompt, prompts_mod.SYSTEM, cfg)
 
@@ -328,14 +342,19 @@ def run(
             _bh = _cached_behavior() or {}
             calibration = _bh.get("confidence_calibration")
 
-        # Regime-aware threshold adjustment (off by default).
+        # Confidence gate + cash floor. Precedence: regime_stance (the newer,
+        # comprehensive mechanism) overrides the older regime_aware_thresholds.
         effective_min_conf = cfg.min_confidence
+        cash_floor_pct = 0.0
         if cfg.enable_regime_aware_thresholds:
             from .playbook import _cached_playbook, current_regime, regime_aware_min_confidence
             _pb = _cached_playbook()
             btc_trend_1d = cyc.market.get("BTCUSDC", {}).get("trend_1d") if "BTCUSDC" in cyc.market else None
             _regime = current_regime(cyc.fear_greed, btc_trend_1d)
             effective_min_conf = regime_aware_min_confidence(_pb, _regime, cfg.min_confidence)
+        if stance is not None:
+            effective_min_conf = stance["min_confidence"]
+            cash_floor_pct = stance["cash_floor_pct"]
 
         new_cash, fees, action_trades = strategy.apply_paper_actions(
             actions=decision.get("actions", []),
@@ -346,6 +365,7 @@ def run(
             sell_cooldown_cycles=cfg.sell_cooldown_cycles,
             min_confidence=effective_min_conf,
             confidence_calibration=calibration,
+            cash_floor_pct=cash_floor_pct,
         )
         cash = new_cash
         total_fees += fees

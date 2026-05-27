@@ -393,6 +393,15 @@ def run(
         playbook_section = _playbook_section(fear_greed, market_raw, scores=scores)
         behavior_section = _behavior_section(fear_greed, market_raw)
 
+        # Regime-adaptive stance (opt-in via config flag).
+        stance = None
+        if cfg.get("enable_regime_stance", False):
+            from .eval.playbook import stance_for_cycle
+            stance = stance_for_cycle(
+                fear_greed, market_raw, btc_dominance,
+                float(cfg.get("min_confidence", 0.0) or 0.0),
+            )
+
         # ── LLM decision ──────────────────────────────────────────────────────
         market_data = format_market_data_compact(market_raw, watchlist, scores)
         try:
@@ -405,6 +414,7 @@ def run(
                     cycle=cycle,
                     playbook_section=playbook_section,
                     behavior_section=behavior_section,
+                    regime_overlay=stance["overlay"] if stance else None,
                 ),
                 system=SYSTEM,
                 config={**cfg, "llm": {**cfg.get("llm", {}), "schema": DECISION_SCHEMA}},
@@ -474,13 +484,18 @@ def run(
         _bh = _cached_behavior() or {}
         calibration = _bh.get("confidence_calibration") if cfg.get("enable_confidence_calibration", True) else None
 
-        # Regime-aware min_confidence (opt-in via config flag).
+        # Confidence gate + cash floor. regime_stance (if on) supersedes the
+        # older regime_aware_thresholds.
+        cash_floor_pct = 0.0
         if cfg.get("enable_regime_aware_thresholds", False):
             from .eval.playbook import _cached_playbook, current_regime, regime_aware_min_confidence
             _pb = _cached_playbook()
             btc_trend_1d = market_raw.get("BTCUSDC", {}).get("trend_1d") if "BTCUSDC" in market_raw else None
             _regime = current_regime(fear_greed, btc_trend_1d)
             min_conf = regime_aware_min_confidence(_pb, _regime, min_conf)
+        if stance is not None:
+            min_conf = stance["min_confidence"]
+            cash_floor_pct = stance["cash_floor_pct"]
 
         new_cash, fees, action_trades = strategy.apply_paper_actions(
             actions=decision.get("actions", []),
@@ -491,6 +506,7 @@ def run(
             sell_cooldown_cycles=sell_cooldown_cycles,
             min_confidence=min_conf,
             confidence_calibration=calibration,
+            cash_floor_pct=cash_floor_pct,
         )
         cash = new_cash
         total_fees += fees
