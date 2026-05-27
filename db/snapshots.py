@@ -130,6 +130,8 @@ def _init_postgres() -> None:
                   "ON price_snapshots(regime_fng, regime_btc_trend)")
         c.execute("CREATE INDEX IF NOT EXISTS idx_snap_source "
                   "ON price_snapshots(source)")
+        # Ferme l'exposition via l'API REST Supabase (cf. db/store.py).
+        c.execute("ALTER TABLE price_snapshots ENABLE ROW LEVEL SECURITY")
 
 
 def save_snapshots_batch(rows: list[dict]) -> int:

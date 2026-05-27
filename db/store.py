@@ -240,6 +240,12 @@ def _init_postgres() -> None:
             "CREATE INDEX IF NOT EXISTS idx_analyses_session ON market_analyses(session_id)",
         ):
             c.execute(sql)
+        # Supabase expose toute table `public` via son API REST (PostgREST),
+        # joignable avec la clé anon publique. L'app se connecte en direct
+        # (rôle `postgres`, qui bypass RLS), donc on active RLS sans policy :
+        # ça ferme l'accès anon/authenticated à l'API sans gêner l'app.
+        for table in ("trades", "agent_state", "logs", "sessions", "market_analyses"):
+            c.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
 
 
 def _migrate_postgres() -> None:
