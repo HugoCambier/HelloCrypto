@@ -297,86 +297,6 @@ SYSTEM_ANALYSIS = (
 )
 
 
-def build_market_analysis(
-    market_data: str,
-    fear_greed: dict | None = None,
-    btc_dominance: float | None = None,
-    scores: dict | None = None,
-) -> str:
-    """Return the user-turn prompt for a full market analysis with scenarios."""
-    ctx_parts = []
-    if fear_greed:
-        ctx_parts.append(f"Fear & Greed: {fear_greed['value']}/100 ({fear_greed['label']})")
-    if btc_dominance is not None:
-        ctx_parts.append(f"Dominance BTC: {btc_dominance:.1f}%")
-    ctx_section = ("\nCONTEXTE GLOBAL :\n" + "\n".join(f"- {p}" for p in ctx_parts) + "\n") if ctx_parts else ""
-
-    scores_section = ""
-    if scores:
-        score_lines = [f"  {sym}: {s}/10" for sym, s in scores.items()]
-        scores_section = "\nSCORES TECHNIQUES :\n" + "\n".join(score_lines) + "\n"
-
-    return f"""\
-Effectue une analyse complète de marché pour chacun des actifs suivants.
-
-DONNÉES DE MARCHÉ (prix | Δ1h | Δ24h | volume | RSI(14) | tendance | volatilité) :
-{market_data}
-{ctx_section}{scores_section}
-Pour CHAQUE actif, fournis :
-1. Un sentiment (bullish / neutral / bearish) avec niveau de confiance 1-10
-2. Un résumé de la situation en 1-2 phrases
-3. Les niveaux clés (support / résistance proches)
-4. Jusqu'à 3 scénarios (bear / base / bull) avec :
-   - Probabilité estimée en % (les 3 doivent sommer à 100)
-   - Projection de prix à 24h, 7 jours et 30 jours
-   - Déclencheur principal du scénario (1 phrase)
-
-Réponds UNIQUEMENT en JSON valide (structure exacte) :
-{{
-  "global_sentiment": "bullish|neutral|bearish",
-  "market_summary": "Résumé du marché global en 2 phrases",
-  "analyses": [
-    {{
-      "symbol": "BTCUSDC",
-      "current_price": 95000,
-      "sentiment": "bullish",
-      "confidence": 8,
-      "summary": "Résumé en 1-2 phrases",
-      "support": 90000,
-      "resistance": 100000,
-      "action": "buy|sell|hold",
-      "action_reason": "Justification concise de la recommandation en 1 phrase",
-      "scenarios": [
-        {{
-          "name": "bear",
-          "probability": 25,
-          "price_24h": 90000,
-          "price_7j": 85000,
-          "price_30j": 80000,
-          "trigger": "Rupture du support..."
-        }},
-        {{
-          "name": "base",
-          "probability": 50,
-          "price_24h": 95000,
-          "price_7j": 98000,
-          "price_30j": 105000,
-          "trigger": "Consolidation et reprise..."
-        }},
-        {{
-          "name": "bull",
-          "probability": 25,
-          "price_24h": 100000,
-          "price_7j": 110000,
-          "price_30j": 125000,
-          "trigger": "Breakout décisif au-dessus..."
-        }}
-      ]
-    }}
-  ]
-}}"""
-
-
 def build_market_analysis_single(
     symbol: str,
     data_line: str,
@@ -397,5 +317,11 @@ def build_market_analysis_single(
     return f"""Analyse {symbol}. Données: {data_line}
 Contexte: {ctx_str}
 
-Réponds en JSON valide UNIQUEMENT, structure exacte:
-{{"symbol":"{symbol}","sentiment":"bullish|neutral|bearish","confidence":7,"summary":"1 phrase","support":0,"resistance":0,"action":"buy|sell|hold","action_reason":"justification en 1 phrase","scenarios":[{{"name":"bear","probability":25,"price_24h":0,"price_7j":0,"price_30j":0,"trigger":"..."}},{{"name":"base","probability":50,"price_24h":0,"price_7j":0,"price_30j":0,"trigger":"..."}},{{"name":"bull","probability":25,"price_24h":0,"price_7j":0,"price_30j":0,"trigger":"..."}}]}}"""
+Tu DOIS produire les 3 scénarios (bear/base/bull) avec des prix projetés
+réalistes basés sur le prix actuel de {symbol} (jamais 0), des probabilités
+qui somment à 100, et des supports / résistances tirés des données. Le
+champ trigger est obligatoire (1 phrase).
+
+Réponds en JSON valide UNIQUEMENT, structure exacte (les nombres ci-dessous
+sont des exemples — remplace-les par tes propres estimations chiffrées) :
+{{"symbol":"{symbol}","sentiment":"bullish|neutral|bearish","confidence":7,"summary":"1 phrase","support":100.0,"resistance":120.0,"action":"buy|sell|hold","action_reason":"justification en 1 phrase","scenarios":[{{"name":"bear","probability":25,"price_24h":98.0,"price_7j":92.0,"price_30j":85.0,"trigger":"..."}},{{"name":"base","probability":50,"price_24h":102.0,"price_7j":105.0,"price_30j":112.0,"trigger":"..."}},{{"name":"bull","probability":25,"price_24h":108.0,"price_7j":118.0,"price_30j":135.0,"trigger":"..."}}]}}"""

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
@@ -17,7 +18,7 @@ from ..api import (
 )
 from ..llm import call as llm_call
 from ..llm import last_usage as llm_last_usage
-from ..prompts import SYSTEM_ANALYSIS, build_market_analysis, build_market_analysis_single
+from ..prompts import SYSTEM_ANALYSIS, build_market_analysis_single
 from ..ratelimit import rate_limit
 
 bp  = Blueprint("analysis", __name__)
@@ -58,94 +59,107 @@ def analysis_start():
             scores        = compute_scores(market_raw)
             fear_greed    = get_fear_and_greed()
             btc_dominance = get_btc_dominance()
-            provider      = cfg.get("llm", {}).get("provider", "gemini").lower()
 
-            if provider == "ollama":
-                market_lines = format_market_data(market_raw, watchlist).splitlines()
-                sym_lines: dict[str, str] = {}
-                for line in market_lines:
-                    for sym in watchlist:
-                        if line.startswith(sym):
-                            sym_lines[sym] = line
-                            break
-                analyses = []
-                call_cfg = {**cfg, "max_tokens": max(int(cfg.get("max_tokens", 1000)), 600)}
+            # One LLM call per symbol — batch mode let the model bâcle les
+            # scénarios pour tout sauf la première crypto (BTC dans l'exemple
+            # du prompt). Per-symbol garantit que chaque actif a son contexte
+            # complet et ses 3 scénarios.
+            market_lines = format_market_data(market_raw, watchlist).splitlines()
+            sym_lines: dict[str, str] = {}
+            for line in market_lines:
                 for sym in watchlist:
-                    if sym not in market_raw:
-                        continue
-                    try:
-                        item = llm_call(
-                            prompt=build_market_analysis_single(
-                                sym, sym_lines.get(sym, sym),
-                                fear_greed, btc_dominance,
-                                scores.get(sym) if scores else None,
-                            ),
-                            system=SYSTEM_ANALYSIS,
-                            config=call_cfg,
-                        )
-                        item["symbol"]        = sym
-                        item["current_price"] = market_raw[sym]["price"]
-                        analyses.append(item)
-                    except Exception as exc:
-                        log.warning("[ANALYSIS] %s failed: %s", sym, exc)
-                        analyses.append({
-                            "symbol":        sym,
-                            "current_price": market_raw[sym]["price"],
-                            "sentiment":     "neutral",
-                            "confidence":    0,
-                            "summary":       f"Erreur LLM : {exc}",
-                            "scenarios":     [],
-                        })
-                result = {
-                    "global_sentiment": "neutral",
-                    "market_summary":   "Analyse par symbole (mode Ollama).",
-                    "analyses":         analyses,
-                    "generated_at":     datetime.utcnow().isoformat(),
+                    if line.startswith(sym):
+                        sym_lines[sym] = line
+                        break
+
+            call_cfg = {**cfg, "max_tokens": max(int(cfg.get("max_tokens", 1000)), 800)}
+            usages: list[dict] = []
+            usages_lock = threading.Lock()
+
+            def _analyze_one(sym: str) -> dict:
+                if sym not in market_raw:
+                    return {
+                        "symbol":        sym,
+                        "current_price": None,
+                        "sentiment":     "neutral",
+                        "confidence":    0,
+                        "summary":       "Données de marché indisponibles.",
+                        "action":        "hold",
+                        "action_reason": "Données de marché manquantes.",
+                        "scenarios":     [],
+                    }
+                try:
+                    item = llm_call(
+                        prompt=build_market_analysis_single(
+                            sym, sym_lines.get(sym, sym),
+                            fear_greed, btc_dominance,
+                            scores.get(sym) if scores else None,
+                        ),
+                        system=SYSTEM_ANALYSIS,
+                        config=call_cfg,
+                    )
+                    u = llm_last_usage()
+                    if u:
+                        with usages_lock:
+                            usages.append(u)
+                except Exception as exc:
+                    log.warning("[ANALYSIS] %s failed: %s", sym, exc)
+                    item = {
+                        "sentiment":     "neutral",
+                        "confidence":    0,
+                        "summary":       f"Erreur LLM : {exc}",
+                        "action":        "hold",
+                        "action_reason": "Analyse indisponible.",
+                        "scenarios":     [],
+                    }
+                item["symbol"]        = sym
+                item["current_price"] = market_raw[sym]["price"]
+                return item
+
+            max_workers = min(len(watchlist), 5) or 1
+            analyses: list[dict] = [None] * len(watchlist)  # type: ignore[list-item]
+            with ThreadPoolExecutor(max_workers=max_workers) as ex:
+                futures = {ex.submit(_analyze_one, sym): i for i, sym in enumerate(watchlist)}
+                for fut in as_completed(futures):
+                    analyses[futures[fut]] = fut.result()
+
+            counts = {"bullish": 0, "neutral": 0, "bearish": 0}
+            for a in analyses:
+                s = str(a.get("sentiment", "neutral")).lower()
+                counts[s if s in counts else "neutral"] += 1
+            dom = max(counts, key=counts.get)
+            global_sentiment = dom if counts[dom] > len(analyses) // 2 else "neutral"
+            market_summary = (
+                f"{counts['bullish']} bullish · {counts['neutral']} neutral · "
+                f"{counts['bearish']} bearish sur {len(analyses)} actifs."
+            )
+
+            agg_usage = None
+            if usages:
+                agg_usage = {
+                    "provider": usages[0].get("provider"),
+                    "model":    usages[0].get("model"),
+                    "in":       sum(u.get("in", 0)    for u in usages),
+                    "out":      sum(u.get("out", 0)   for u in usages),
+                    "total":    sum(u.get("total", 0) for u in usages),
+                    "calls":    len(usages),
                 }
-            else:
-                market_data = format_market_data(market_raw, watchlist)
-                # ~500 tokens per crypto with full scenarios, min 4000
-                needed_tokens = max(4000, 500 * len(watchlist))
-                call_cfg = {**cfg, "max_tokens": max(int(cfg.get("max_tokens", 1000)), needed_tokens)}
-                log.info("[ANALYSIS] max_tokens=%d for %d cryptos", call_cfg["max_tokens"], len(watchlist))
-                result = llm_call(
-                    prompt=build_market_analysis(market_data, fear_greed, btc_dominance, scores),
-                    system=SYSTEM_ANALYSIS,
-                    config=call_cfg,
-                )
-                result["generated_at"] = datetime.utcnow().isoformat()
-                for item in result.get("analyses", []):
-                    sym = item.get("symbol", "")
-                    if sym in market_raw:
-                        item["current_price"] = market_raw[sym]["price"]
 
-            # Backfill any watchlist symbol the model skipped, so all cryptos appear.
-            analyses_out = list(result.get("analyses", []))
-            present = {a.get("symbol") for a in analyses_out if a.get("symbol")}
-            for sym in watchlist:
-                if sym in present:
-                    continue
-                analyses_out.append({
-                    "symbol":        sym,
-                    "current_price": market_raw.get(sym, {}).get("price"),
-                    "sentiment":     "neutral",
-                    "confidence":    0,
-                    "summary":       "Analyse indisponible pour cet actif.",
-                    "action":        "hold",
-                    "action_reason": "Aucune analyse retournée par le modèle.",
-                    "scenarios":     [],
-                })
-            result["analyses"] = analyses_out
+            result = {
+                "global_sentiment": global_sentiment,
+                "market_summary":   market_summary,
+                "analyses":         analyses,
+                "generated_at":     datetime.utcnow().isoformat(),
+            }
 
-            # Persist to DB so GET /api/analyses can find it
             try:
                 from db.store import save_market_analysis
                 save_market_analysis(
-                    sentiment=result.get("global_sentiment") or result.get("sentiment", "neutral"),
-                    summary=result.get("market_summary") or result.get("summary", ""),
-                    analyses=result.get("analyses", []),
+                    sentiment=global_sentiment,
+                    summary=market_summary,
+                    analyses=analyses,
                     mode="real",
-                    usage=llm_last_usage(),
+                    usage=agg_usage,
                 )
             except Exception:
                 log.warning("Impossible de sauvegarder l'analyse en base", exc_info=True)
