@@ -155,8 +155,9 @@ class StrategyConfig:
     model:       str   = ""
     temperature: float = 0.0
     max_tokens:  int   = 1000
-    # Decision threshold for rule-based mode
-    buy_score_min:  int = 7
+    # Decision thresholds for rule-based mode (calibrated for the enriched
+    # compute_score_rules: it saturates higher, so the buy bar sits at 8).
+    buy_score_min:  int = 8
     sell_score_max: int = 3
     # Learning-system toggles — let the bench A/B compare with/without each layer
     enable_playbook: bool = True
@@ -186,6 +187,10 @@ def _rule_based_decision(market: dict, scores: dict, holdings: dict,
     """Deterministic baseline: buy top score above threshold, sell stale low scores."""
     actions = []
     for sym, sc in sorted(scores.items(), key=lambda kv: -kv[1]):
+        # Trend veto: never buy against a bearish daily trend, however high the
+        # score — blocks oversold-reversal buys (falling knife) in a downtrend.
+        if (market.get(sym) or {}).get("trend_1d") == "baissier":
+            continue
         if sc >= cfg.buy_score_min and sym not in holdings:
             actions.append({"type": "buy", "symbol": sym, "usdc_amount": 9999,
                             "score": sc, "horizon": "medium",
@@ -297,7 +302,11 @@ def run(
         if decision_fn is not None:
             decision, usage = decision_fn(cyc.market, scores, holdings, cfg)
         elif cfg.provider == "rules":
-            decision = _rule_based_decision(cyc.market, scores, holdings, cfg)
+            # Deterministic decider reads its own enriched score (MACD + SMA
+            # cross + Bollinger on top of RSI/trend); the LLM keeps `scores`.
+            from ..api import compute_scores_rules
+            rule_scores = compute_scores_rules(cyc.market)
+            decision = _rule_based_decision(cyc.market, rule_scores, holdings, cfg)
             usage = None
         else:
             # Optionally inject playbook + behavior sections so the bench can

@@ -47,6 +47,14 @@ log = logging.getLogger(__name__)
 # ── Variant definitions ───────────────────────────────────────────────────────
 
 VARIANTS: dict[str, dict[str, Any]] = {
+    "rules_only": {
+        "description":     "Deterministic score-threshold decider — no LLM at all",
+        "provider":                      "rules",
+        "enable_playbook":               False,
+        "enable_behavior":               False,
+        "enable_confidence_calibration": False,
+        "enable_regime_aware_thresholds": False,
+    },
     "baseline": {
         "description":     "Pre-learning state — no playbook/behavior/calibration",
         "enable_playbook":               False,
@@ -289,6 +297,9 @@ def _main() -> int:
     parser.add_argument("--workers",   type=int, default=1,
                         help="Parallel scenarios. Bounded by OLLAMA_NUM_PARALLEL "
                              "on the Ollama server. Default 1 (sequential).")
+    parser.add_argument("--variants",  default="",
+                        help="Comma-separated subset of variant names to run "
+                             "(default: all). E.g. 'rules_only' or 'baseline,regime_adaptive'.")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -312,17 +323,27 @@ def _main() -> int:
         min_confidence=args.min_confidence,
     )
 
+    variants = VARIANTS
+    if args.variants:
+        wanted = [v.strip() for v in args.variants.split(",") if v.strip()]
+        unknown = [v for v in wanted if v not in VARIANTS]
+        if unknown:
+            log.error("Unknown variant(s): %s. Available: %s",
+                      unknown, list(VARIANTS.keys()))
+            return 2
+        variants = {k: VARIANTS[k] for k in wanted}
+
     # Seed progress file with run-wide meta (started_at, variants, cycle count)
     # so readers can compute aggregate progress + ETA without rescanning JSON.
     first = load_scenario(scenarios[0])
     progress_init(
         scenario_names=[Path(s).stem for s in scenarios],
-        variants_order=list(VARIANTS.keys()),
+        variants_order=list(variants.keys()),
         n_cycles_per_scenario=first.n_cycles,
     )
 
     try:
-        results = run_bench(scenarios, base_cfg, workers=args.workers)
+        results = run_bench(scenarios, base_cfg, variants=variants, workers=args.workers)
         print_comparison_table(results)
         out_path = write_bench_report(results, Path(args.out_dir))
         log.info("Full bench report → %s", out_path)

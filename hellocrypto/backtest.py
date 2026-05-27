@@ -20,8 +20,11 @@ from pathlib import Path
 import requests
 
 from .api import (
+    _compute_bollinger,
+    _compute_macd,
     _compute_rsi,
     _compute_sma,
+    compute_score_rules,
     format_market_data,
     get_btc_dominance,
     get_fear_and_greed,
@@ -71,31 +74,45 @@ def _start_ms_from(start_date: str | None, days: int) -> int:
 
 # ── Rule-based signal score ───────────────────────────────────────────────────
 
-def _score_from_window(closes: list[float], volumes: list[float]) -> int:
-    """Compute 0-10 signal score from a window of closes/volumes."""
-    score = 5
-    rsi = _compute_rsi(closes, 14)
-    if rsi is not None:
-        if rsi < 25:    score += 3
-        elif rsi < 35:  score += 2
-        elif rsi < 45:  score += 1
-        elif rsi < 65:  pass
-        elif rsi < 75:  score -= 2
-        else:           score -= 3
+def _score_from_window(closes: list[float]) -> tuple[int, str]:
+    """Enriched 0-10 score + daily-trend label from a kline window.
 
+    Reconstructs the indicators ``compute_score_rules`` expects (RSI, SMA7/25,
+    MACD, Bollinger) so the backtest uses the *same* deterministic decider as
+    the eval bench and the live rule path — no more divergent inline scoring.
+    Needs ~35+ candles for MACD; the caller passes a 50-candle window.
+    Returns (score, trend_1d) so the caller can apply the bearish-trend veto.
+    """
+    if not closes:
+        return 5, "neutre"
+    price = closes[-1]
     sma7  = _compute_sma(closes, 7)
     sma25 = _compute_sma(closes, 25)
     if sma7 and sma25:
-        score += 1 if sma7 > sma25 else -1
-
-    if len(closes) >= 24:
-        hi  = max(closes[-24:])
-        lo  = min(closes[-24:])
-        rng = (hi - lo) / lo * 100 if lo else 0
-        if rng < 3:   score += 1
-        elif rng > 8: score -= 1
-
-    return max(0, min(10, score))
+        trend = "haussier" if sma7 > sma25 else "baissier"
+    else:
+        trend = "neutre"
+    # Daily-trend on 1h klines: price vs a slow MA (≈2-day) with a wide ±1.5%
+    # dead band. Comparing to a smoothed average (not a single past close) and
+    # widening the band keeps the label from flipping on hourly noise — the
+    # caller still requires the bearish state to persist before exiting.
+    sma_slow = _compute_sma(closes, min(48, len(closes)))
+    if sma_slow:
+        gap = (price - sma_slow) / sma_slow
+        trend_1d = "haussier" if gap > 0.015 else "baissier" if gap < -0.015 else "neutre"
+    else:
+        trend_1d = "neutre"
+    d = {
+        "price":     price,
+        "rsi14":     _compute_rsi(closes, 14),
+        "trend":     trend,
+        "trend_1d":  trend_1d,
+        "macd":      _compute_macd(closes) or {},
+        "sma7":      sma7,
+        "sma25":     sma25,
+        "bollinger": _compute_bollinger(closes, 20, 2.0) or {},
+    }
+    return compute_score_rules(d), trend_1d
 
 
 # ── Market-data builder from kline windows (for LLM mode) ────────────────────
@@ -240,9 +257,14 @@ def run_live(
     stop_loss_pct: float = 10.0,
     trailing_stop_pct: float = 5.0,
     risk_level: int = 3,
-    buy_threshold: int = 7,
+    buy_threshold: int = 8,
     sell_threshold: int = 3,
     sell_cooldown_cycles: int = 3,
+    min_hold_candles: int = 12,
+    trend_confirm_candles: int = 6,
+    regime_mode: bool = False,
+    decide_every: int = 24,
+    top_n: int = 3,
     llm_mode: bool = False,
     llm_every_n_candles: int = 4,
     on_step=None,
@@ -301,6 +323,8 @@ def run_live(
     holdings: dict = {}
     peak_prices: dict = {}
     cooldown_map: dict = {}
+    entry_idx: dict = {}   # candle index at which each position was opened (min-hold)
+    bear_streak: dict = {} # consecutive bearish-trend candles per symbol (exit confirm)
     history: list = []
     total_fees    = 0.0
     initial_prices: dict = {}
@@ -347,6 +371,7 @@ def run_live(
                 cash        += received
                 total_fees  += fee
                 peak_prices.pop(sym, None)
+                entry_idx.pop(sym, None)
                 cooldown_map[sym] = i
                 dt_str = datetime.utcfromtimestamp(ts / 1000).isoformat()
                 history.append({
@@ -456,15 +481,124 @@ def run_live(
                     llm_last_error = f"Cycle {current_step}: {exc}"
                     log.error("[BT-LLM] %s", llm_last_error, exc_info=True)
 
-        else:
-            # ── Rule-based mode ───────────────────────────────────────────────
-            for sym in symbols:
-                closes  = [float(all_klines[sym][j][4]) for j in range(max(0, i - 26), i + 1)]
-                volumes = [float(all_klines[sym][j][5]) for j in range(max(0, i - 26), i + 1)]
-                score   = _score_from_window(closes, volumes)
-                cur     = prices[sym]
+        elif regime_mode:
+            # ── Approach C: daily regime-gated basket ─────────────────────────
+            # Decide once per `decide_every` candles. Market regime from BTC's
+            # smoothed daily trend: BULL → hold the top-N highest-scoring
+            # symbols (buy & hold, equal-weight); not BULL → go to cash. Rotate
+            # only on these slow decisions; intraday risk is left to the stops
+            # above. Minimal turnover → negligible fees.
+            if (i - warmup) % decide_every == 0:
+                btc_sym    = next((s for s in symbols if "BTC" in s), symbols[0])
+                btc_closes = [float(all_klines[btc_sym][j][4]) for j in range(max(0, i - 49), i + 1)]
+                _, btc_trend = _score_from_window(btc_closes)
+                regime_bull  = btc_trend == "haussier"
 
-                if score >= buy_threshold and sym not in holdings and cash > 10:
+                scores = {}
+                for sym in symbols:
+                    c = [float(all_klines[sym][j][4]) for j in range(max(0, i - 49), i + 1)]
+                    scores[sym] = _score_from_window(c)[0]
+
+                if regime_bull:
+                    ranked = sorted(symbols, key=lambda s: -scores[s])
+                    target = [s for s in ranked if scores[s] >= buy_threshold][:top_n]
+                else:
+                    target = []
+
+                # Exit anything not in the target basket (all of it in a bear).
+                for sym in list(holdings):
+                    if sym in target or sym not in prices:
+                        continue
+                    cur   = prices[sym]
+                    qty   = holdings[sym]["qty"]
+                    entry = holdings[sym]["avg_price"]
+                    sr    = paper_sell(sym, qty, cur, holdings)
+                    total_fees += sr.fee
+                    cash       += sr.received
+                    peak_prices.pop(sym, None)
+                    entry_idx.pop(sym, None)
+                    cooldown_map[sym] = i
+                    history.append({
+                        "cycle":     current_step,
+                        "timestamp": dt_str,
+                        "action":    "SELL",
+                        "symbol":    sym,
+                        "qty":       round(qty, 6),
+                        "amount":    round(sr.received, 2),
+                        "price":     round(cur, 4),
+                        "pnl":       round((cur - entry) * qty - sr.fee, 4),
+                        "fee":       round(sr.fee, 6),
+                        "score":     scores.get(sym),
+                        "reason":    "Régime bear → cash" if not regime_bull else "Rotation hors panier",
+                    })
+
+                # Enter target symbols not yet held, equal-weighting the cash.
+                to_buy = [s for s in target if s not in holdings and s in prices]
+                if to_buy and cash > 10:
+                    alloc = cash / len(to_buy)
+                    for sym in to_buy:
+                        amount = min(alloc, cash)
+                        if amount < 10:
+                            continue
+                        cur     = prices[sym]
+                        br      = paper_buy(sym, amount, cur, holdings)
+                        total_fees += br.fee
+                        cash       -= amount
+                        peak_prices[sym] = cur
+                        entry_idx[sym]   = i
+                        history.append({
+                            "cycle":     current_step,
+                            "timestamp": dt_str,
+                            "action":    "BUY",
+                            "symbol":    sym,
+                            "amount":    round(amount, 2),
+                            "qty":       round(br.qty, 6),
+                            "price":     round(cur, 4),
+                            "fee":       round(br.fee, 6),
+                            "score":     scores[sym],
+                            "reason":    f"Panier top-{top_n} (score {scores[sym]}/10)",
+                        })
+
+        else:
+            # ── Rule-based mode (approach A: decouple entry/exit) ──────────────
+            # ENTER on a strong score in a non-bearish trend. EXIT only on a
+            # daily-trend break — never on score level (that churns). Hard /
+            # trailing stops above always fire first, so a losing position is
+            # still cut immediately, even during the min-hold window.
+            for sym in symbols:
+                closes  = [float(all_klines[sym][j][4]) for j in range(max(0, i - 49), i + 1)]
+                score, trend_1d = _score_from_window(closes)
+                cur     = prices[sym]
+                bear_streak[sym] = bear_streak.get(sym, 0) + 1 if trend_1d == "baissier" else 0
+
+                if sym in holdings:
+                    held = i - entry_idx.get(sym, i)
+                    if bear_streak[sym] >= trend_confirm_candles and held >= min_hold_candles:
+                        qty   = holdings[sym]["qty"]
+                        entry = holdings[sym]["avg_price"]
+                        sr    = paper_sell(sym, qty, cur, holdings)
+                        received, fee = sr.received, sr.fee
+                        total_fees += fee
+                        cash       += received
+                        peak_prices.pop(sym, None)
+                        entry_idx.pop(sym, None)
+                        cooldown_map[sym] = i
+                        history.append({
+                            "cycle":     current_step,
+                            "timestamp": dt_str,
+                            "action":    "SELL",
+                            "symbol":    sym,
+                            "qty":       round(qty, 6),
+                            "amount":    round(received, 2),
+                            "price":     round(cur, 4),
+                            "pnl":       round((cur - entry) * qty - fee, 4),
+                            "fee":       round(fee, 6),
+                            "score":     score,
+                            "reason":    "Trend break (confirmed bearish)",
+                        })
+                    # else: hold — stops/trailing manage downside risk
+
+                elif (score >= buy_threshold and cash > 10 and trend_1d != "baissier"):
                     if i - cooldown_map.get(sym, 0) < sell_cooldown_cycles:
                         continue
                     amount  = min(cash * max_pct, cash)
@@ -474,6 +608,7 @@ def run_live(
                     total_fees += fee
                     cash       -= amount
                     peak_prices[sym] = cur
+                    entry_idx[sym]   = i
                     history.append({
                         "cycle":     current_step,
                         "timestamp": dt_str,
@@ -482,29 +617,6 @@ def run_live(
                         "amount":    round(amount, 2),
                         "qty":       round(qty_got, 6),
                         "price":     round(cur, 4),
-                        "fee":       round(fee, 6),
-                        "score":     score,
-                        "reason":    f"Score {score}/10",
-                    })
-
-                elif score <= sell_threshold and sym in holdings:
-                    qty      = holdings[sym]["qty"]
-                    entry    = holdings[sym]["avg_price"]
-                    sr       = paper_sell(sym, qty, cur, holdings)
-                    received, fee = sr.received, sr.fee
-                    total_fees += fee
-                    cash       += received
-                    peak_prices.pop(sym, None)
-                    cooldown_map[sym] = i
-                    history.append({
-                        "cycle":     current_step,
-                        "timestamp": dt_str,
-                        "action":    "SELL",
-                        "symbol":    sym,
-                        "qty":       round(qty, 6),
-                        "amount":    round(received, 2),
-                        "price":     round(cur, 4),
-                        "pnl":       round((cur - entry) * qty - fee, 4),
                         "fee":       round(fee, 6),
                         "score":     score,
                         "reason":    f"Score {score}/10",
@@ -608,8 +720,18 @@ def main() -> None:
     parser.add_argument("--stop",      type=float, default=float(cfg.get("stop_loss_pct", 10)))
     parser.add_argument("--trailing",  type=float, default=float(cfg.get("trailing_stop_pct", 5)))
     parser.add_argument("--risk",      type=int,   default=int(cfg.get("risk_level", 3)))
-    parser.add_argument("--buy-thr",   type=int,   default=7)
+    parser.add_argument("--buy-thr",   type=int,   default=8)
     parser.add_argument("--sell-thr",  type=int,   default=3)
+    parser.add_argument("--min-hold",  type=int,   default=12,
+                        help="Bougies min. de détention avant sortie sur cassure de tendance "
+                             "(les stops coupent toujours avant, même pendant ce délai)")
+    parser.add_argument("--trend-confirm", type=int, default=6,
+                        help="Bougies baissières consécutives requises pour sortir sur tendance")
+    parser.add_argument("--regime",    action="store_true",
+                        help="Décideur C : panier régime-piloté, décision lente (bull→top-N, bear→cash)")
+    parser.add_argument("--decide-every", type=int, default=24,
+                        help="Bougies entre deux décisions en mode --regime (24 = daily sur 1h)")
+    parser.add_argument("--top-n",     type=int, default=3, help="Taille du panier en mode --regime")
     parser.add_argument("--llm",       action="store_true", help="Utiliser l'agent LLM (réaliste)")
     parser.add_argument("--llm-every", type=int,   default=4, help="Appel LLM toutes les N bougies")
     args = parser.parse_args()
@@ -625,6 +747,11 @@ def main() -> None:
         risk_level           = args.risk,
         buy_threshold        = args.buy_thr,
         sell_threshold       = args.sell_thr,
+        min_hold_candles     = args.min_hold,
+        trend_confirm_candles = args.trend_confirm,
+        regime_mode          = args.regime,
+        decide_every         = args.decide_every,
+        top_n                = args.top_n,
         llm_mode             = args.llm,
         llm_every_n_candles  = args.llm_every,
     )

@@ -269,6 +269,60 @@ def compute_scores(data: dict) -> dict:
     return {sym: compute_score(d) for sym, d in data.items()}
 
 
+def compute_score_rules(d: dict) -> int:
+    """Enriched 0-10 score for the *deterministic* decider only (not the LLM).
+
+    Extends ``compute_score`` (RSI + trends + volatility) with MACD histogram,
+    SMA7/25 cross and Bollinger position, so the rule-based strategy can read
+    momentum/mean-reversion signals the LLM otherwise judges from raw data.
+    Base 5, additive, clamped 0-10. ``compute_score`` stays the LLM-facing one.
+    """
+    score = 5  # neutral base
+    # RSI sub-score (dominant mean-reversion signal)
+    rsi = d.get("rsi14")
+    if rsi is not None:
+        if rsi < 25:   score += 3
+        elif rsi < 35: score += 2
+        elif rsi < 45: score += 1
+        elif rsi < 55: pass
+        elif rsi < 65: score -= 1
+        elif rsi < 75: score -= 2
+        else:          score -= 3
+    # Daily trend (primary direction)
+    trend_1d = d.get("trend_1d")
+    if trend_1d == "haussier":   score += 2
+    elif trend_1d == "baissier": score -= 2
+    # Intraday trend (1h)
+    trend = d.get("trend", "neutre")
+    if trend == "haussier":   score += 1
+    elif trend == "baissier": score -= 1
+    # MACD histogram — momentum confirmation
+    macd = d.get("macd") or {}
+    hist = macd.get("histogram")
+    if hist is not None:
+        if hist > 0:   score += 1
+        elif hist < 0: score -= 1
+    # SMA7 vs SMA25 cross — trend confirmation
+    sma7, sma25 = d.get("sma7"), d.get("sma25")
+    if sma7 is not None and sma25 is not None and sma25 > 0:
+        if sma7 > sma25:   score += 1
+        elif sma7 < sma25: score -= 1
+    # Bollinger position — overbought/oversold relative to the bands
+    bb = d.get("bollinger") or {}
+    lower, upper = bb.get("lower"), bb.get("upper")
+    price = d.get("price")
+    if None not in (lower, upper, price) and upper > lower:
+        bb_pos = (price - lower) / (upper - lower)
+        if bb_pos < 0.2:   score += 1  # near lower band → oversold
+        elif bb_pos > 0.8: score -= 1  # near upper band → overbought
+    return max(0, min(10, score))
+
+
+def compute_scores_rules(data: dict) -> dict:
+    """Return {symbol: enriched_score} for the deterministic decider."""
+    return {sym: compute_score_rules(d) for sym, d in data.items()}
+
+
 def format_market_data(data: dict[str, dict], watchlist: list[str]) -> str:
     """Format enriched market data dict into a prompt-ready string."""
     lines = []
