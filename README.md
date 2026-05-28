@@ -23,16 +23,16 @@ HelloCrypto/
 │   │   ├── playbook.py     # Distille le journal → leçons favored/avoid par régime
 │   │   ├── behavior.py     # Comportement passé : exécutés + occasions ratées + calibration
 │   │   ├── capture.py      # Persiste un snapshot live à chaque cycle
+│   │   ├── bench.py        # A/B bench : compare des variantes sur des scénarios figés
 │   │   └── scenario.py, runner.py, metrics.py, llm_cache.py   # Replay engine
 │   └── routes/
-│       ├── agent.py        # /api/agent/* — cycle de vie de l'agent
 │       ├── simulation.py   # /api/simulation/* — paper trading
 │       ├── backtest.py     # /api/backtest/* — backtest + grid search
 │       ├── analysis.py     # /api/analysis/* — analyse de marché IA
-│       ├── performance.py  # /api/performance + /api/watchlist/*
+│       ├── performance.py  # /api/performance + /api/watchlist/enriched
 │       ├── portfolio.py    # /api/portfolio + ordres manuels
-│       ├── config.py       # /api/config/llm + /api/ollama/*
-│       └── logs.py         # /api/logs/* — SSE + historique base de données
+│       ├── config.py       # /api/config (GET/POST)
+│       └── logs.py         # /api/logs — historique base de données
 ├── db/
 │   ├── store.py         # Persistance trades / sessions / analyses (SQLite / PostgreSQL / Firestore)
 │   ├── snapshots.py     # Table price_snapshots (OHLCV + indicateurs + régime)
@@ -42,6 +42,7 @@ HelloCrypto/
 ├── scripts/
 │   ├── backfill_binance.py  # Bootstrap 12mo d'historique depuis Binance
 │   ├── snapshot_scenario.py # Capture un scénario figé pour replay
+│   ├── propose.py           # Proposer-agent : recherche de params supervisée (voir section dédiée)
 │   └── eval.py, compare.py  # Outils d'évaluation/comparaison
 ├── templates/           # index.html, backtest.html, market.html
 ├── static/js/           # main.js, backtest.js, market.js, analytics.js, orders.js
@@ -80,6 +81,7 @@ make dashboard    # Dashboard web → http://localhost:5000
 make agent        # Agent réel seul (sans interface)
 make simulation   # Paper trading seul (sans interface)
 make backtest ARGS="--days 30 --budget 1000"  # Backtester en ligne de commande
+make propose      # Proposer-agent : recherche de params + gate holdout (voir section dédiée)
 make shell        # Activer le shell Poetry
 make deploy       # Déployer sur GCP (Cloud Run + Firestore + Scheduler)
 ```
@@ -183,3 +185,56 @@ poetry run python -m hellocrypto.eval.playbook --out eval/playbook.json
 # Voir le rapport behavior brut
 poetry run python -m hellocrypto.eval.behavior --mode simulation
 ```
+
+## Proposer-agent — recherche de paramètres supervisée
+
+`scripts/propose.py` est la moitié « recherche » d'une boucle d'amélioration
+**autonome mais supervisée** : il cherche de meilleurs réglages de stratégie, les
+valide sur des scénarios jamais vus pendant la recherche, écrit un rapport, et —
+en option — ouvre une PR. Il ne modifie **jamais** un run live et ne merge **jamais** seul.
+
+```
+propose des candidats → bench sur TRAIN → classe par objectif composite
+   → bench du gagnant sur HOLDOUT → gate anti-overfit → rapport (+ PR optionnelle)
+```
+
+**Propriétés clés :**
+- Réutilise le harness `eval/bench` (chaque candidat = un dict d'overrides sur `StrategyConfig`).
+- Décideur `rules` par défaut → **zéro token, zéro appel API, reproductible** (seed fixe).
+- **Gate anti-overfit** : le gagnant est choisi sur le TRAIN, mais il n'est recommandé
+  (`PROMOTE`) que s'il bat la baseline en alpha sur une **majorité** des scénarios
+  HOLDOUT *sans* dégrader le drawdown — sinon `REJECT`. C'est le garde-fou central
+  contre un réglage qui sur-apprend le passé.
+
+**Séparation TRAIN / HOLDOUT** (globs configurables) :
+- TRAIN = `eval/scenarios/holdout/compact/*.json` (1 jour, rapide — la recherche tourne ici)
+- HOLDOUT = `eval/scenarios/holdout/full/*.json` (7 jours — seul le gagnant y est rejoué)
+
+Ces ensembles partagent les régimes de marché, donc c'est un garde-fou contre
+l'overfitting de seuils, pas un walk-forward strict. Pointe `--train-scenarios` /
+`--holdout-scenarios` sur des régimes disjoints pour un test plus exigeant.
+
+```bash
+make propose                                  # 12 candidats, décideur rules, gratuit
+make propose ARGS="--num-candidates 20 --seed 7"
+make propose ARGS="--provider gemini --model gemini-3.1-flash-lite"  # bench réel (coûte des tokens)
+make propose ARGS="--open-pr"                 # ouvre une PR sur verdict PROMOTE
+```
+
+Le rapport (md + json) atterrit dans `eval/reports/proposer/` : baseline, classement
+TRAIN, params du gagnant, tableau HOLDOUT baseline-vs-gagnant, et le verdict.
+
+**`--open-pr`** (désactivé par défaut) — sur verdict `PROMOTE` uniquement :
+- applique au `config.json` **seulement les leviers décideur-agnostiques** :
+  `stop_loss_pct`, `trailing_stop_pct`, `sell_cooldown_cycles` ;
+- les seuils `buy_score_min` / `sell_score_max` ne pilotent que le décideur `rules`
+  du bench → ils sont **documentés dans la PR mais jamais écrits** dans `config.json` ;
+- la PR est construite dans un **git worktree isolé** (`.worktrees/`, gitignoré) : ne
+  change jamais ta branche courante, marche même avec un working tree sale, **ne merge
+  jamais**, et ne touche **jamais** `enabled` / `mode` (aucun impact sur un run live).
+
+> ⚠️ Si la recherche tourne en `rules`, les stops trouvés sont décideur-agnostiques
+> mais le contexte de décision diffère du live (Gemini/Claude) — re-confirme avec
+> `--provider gemini` avant de merger si tu t'appuies sur le décideur LLM.
+
+La décision finale (merge de la PR, application au live) reste **humaine**.
