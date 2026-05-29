@@ -136,12 +136,12 @@
 
       <div class="grid grid-cols-2 gap-3">
         <div><label class="lbl">Jours</label><input class="fld" type="number" id="bt-days" value="30" min="1" max="365"></div>
-        <div><label class="lbl">Budget ($)</label><input class="fld" type="number" id="bt-budget" value="1000" min="100"></div>
+        <div><label class="lbl">Budget ($)</label><input class="fld" type="number" id="bt-budget" value="{{ cfg_defaults.budget }}" min="100"></div>
       </div>
 
       <div class="grid grid-cols-2 gap-3">
-        <div><label class="lbl">Stop-loss (%)</label><input class="fld" type="number" id="bt-sl" value="10"></div>
-        <div><label class="lbl">Trailing (%)</label><input class="fld" type="number" id="bt-ts" value="5"></div>
+        <div><label class="lbl">Stop-loss (%)</label><input class="fld" type="number" id="bt-sl" value="{{ cfg_defaults.stop_loss_pct }}"></div>
+        <div><label class="lbl">Trailing (%)</label><input class="fld" type="number" id="bt-ts" value="{{ cfg_defaults.trailing_stop_pct }}"></div>
       </div>
 
       <div class="grid grid-cols-2 gap-3">
@@ -150,8 +150,8 @@
       </div>
 
       <div>
-        <label class="lbl">Risque : <span id="bt-risk-val" class="text-blue-400 font-bold">5</span> / 10</label>
-        <input class="w-full accent-blue-500" type="range" id="bt-risk" min="1" max="10" value="5" oninput="document.getElementById('bt-risk-val').textContent = this.value">
+        <label class="lbl">Risque : <span id="bt-risk-val" class="text-blue-400 font-bold">{{ cfg_defaults.risk_level }}</span> / 10</label>
+        <input class="w-full accent-blue-500" type="range" id="bt-risk" min="1" max="10" value="{{ cfg_defaults.risk_level }}" oninput="document.getElementById('bt-risk-val').textContent = this.value">
       </div>
 
       <div>

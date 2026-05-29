@@ -29,6 +29,11 @@
     .fld:focus { outline:none; border-color:#3b82f6; }
     .lbl { font-size:11px; color:#94a3b8; margin-bottom:4px; display:block; letter-spacing:.3px; text-transform:uppercase; }
 
+    .cycle-stepper { display:grid; grid-template-columns: 38px 30px 1fr 30px 38px; gap:4px; align-items:stretch; }
+    .cstep { padding:0 4px; font-size:11px; font-weight:600; color:#94a3b8; background:#0f172a; border:1px solid #334155; border-radius:6px; cursor:pointer; transition:all .15s; }
+    .cstep:hover { background:#1e293b; color:#e2e8f0; border-color:#475569; }
+    .cycle-stepper .fld { text-align:center; }
+
     .chip { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:999px; font-size:12px; cursor:pointer; border:1px solid #334155; background:#0f172a; color:#94a3b8; transition:all .15s; }
     .chip.on { background:#1d4ed8; color:white; border-color:#1d4ed8; }
     .chip:hover { filter:brightness(1.2); }
@@ -115,6 +120,10 @@
     .trade-row { display:grid; grid-template-columns: 110px 80px 60px 80px 90px 80px 1fr; gap:8px; align-items:center; padding:6px 4px; border-bottom:1px solid #1e293b; font-size:12px; }
     .trade-header { font-size:10px; text-transform:uppercase; letter-spacing:.3px; color:#64748b; border-bottom:1px solid #334155; padding-bottom:6px; margin-bottom:4px; font-weight:600; }
 
+    .run-filter { padding:2px 8px; font-size:10px; font-weight:600; letter-spacing:.3px; text-transform:uppercase; border:1px solid transparent; background:transparent; color:#64748b; border-radius:4px; cursor:pointer; transition:all .15s; }
+    .run-filter:hover { color:#cbd5e1; background:#1e293b; }
+    .run-filter.on { background:#1e3a8a; color:#bfdbfe; }
+    .run-filter.on:hover { background:#1e40af; color:#dbeafe; }
     .run-card { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; border:1px solid #1e293b; background:#0f172a; cursor:pointer; transition:all .15s; position:relative; }
     .run-card:hover { border-color:#475569; background:#13203a; }
     .run-card.active { border-color:#3b82f6; background:#172554; }
@@ -227,18 +236,27 @@
         <div class="text-xs text-slate-500">Prochain cycle dans <span id="sim-countdown" class="text-slate-300">—</span><span class="ml-1 text-slate-500 cursor-help" title="Les cycles s'exécutent via GitHub Actions cron, qui ne fire que toutes les 5 min UTC pile (14:00, 14:05, 14:10…). Le 1er cycle aura lieu au prochain boundary après la création du run. Les suivants : au prochain boundary après (cycle précédent + intervalle choisi). GitHub peut delayer un fire de 5-15 min en cas de charge.">ⓘ</span></div>
       </div>
 
-      <!-- New run button -->
+      <!-- 1. New run button -->
       <button onclick="openNewRunModal()"
               class="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 transition-colors font-semibold text-sm flex items-center justify-center gap-2">
         <span class="text-base leading-none">+</span> Nouveau run
       </button>
 
-      <!-- History -->
+      <!-- 2. Activité réelle pinned card -->
+      <div id="pinned-real-card"></div>
+
+      <!-- 3. Historique header (with inline filter pills) -->
       <div>
-        <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center justify-between mb-2 gap-2">
           <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Historique</span>
-          <button onclick="loadRunsList()" class="text-[11px] text-slate-500 hover:text-slate-300">⟳</button>
+          <div class="flex items-center gap-1">
+            <button id="filter-real" class="run-filter on" onclick="toggleRunFilter('real')">Réel</button>
+            <button id="filter-sim"  class="run-filter on" onclick="toggleRunFilter('sim')">Sim</button>
+            <button onclick="loadRunsList()" class="text-[11px] text-slate-500 hover:text-slate-300 ml-1" title="Rafraîchir">⟳</button>
+          </div>
         </div>
+
+        <!-- Mixed history (sorted DESC by start, filtered) -->
         <div id="runs-list" class="space-y-2 text-sm">
           <p class="text-xs text-slate-500">Chargement…</p>
         </div>
@@ -272,10 +290,25 @@
           <input class="fld" type="text" id="nr-name" placeholder="ex: Test stratégie agressive">
         </div>
 
-        <!-- Budget + Cycle -->
-        <div class="grid grid-cols-2 gap-3">
-          <div><label class="lbl">Budget ($)</label><input class="fld" type="number" id="nr-budget" min="10" step="10" value="100"></div>
-          <div><label class="lbl">Cycle (min)</label><input class="fld" type="number" id="nr-cycle" min="5" step="1" value="5"></div>
+        <!-- ─── Paramètres communs ──────────────────────────────────────── -->
+
+        <!-- Budget -->
+        <div>
+          <label class="lbl">Budget ($)</label>
+          <input class="fld" type="number" id="nr-budget" min="10" step="10" value="100">
+        </div>
+
+        <!-- Cycle -->
+        <div>
+          <label class="lbl">Cycle (min)<span class="ml-1 text-slate-500 cursor-help" title="Cadence du runner : toutes les N minutes, le bot tique = refresh prix + check des stops + décision (LLM ou déterministe). Pour décider moins souvent, allonge ce cycle.">ⓘ</span></label>
+          <div class="cycle-stepper">
+            <button type="button" class="cstep" onclick="_nudgeCycle(-60)" title="−1h">−1h</button>
+            <button type="button" class="cstep" onclick="_nudgeCycle(-1)" title="−1 min">−1</button>
+            <input class="fld" type="number" id="nr-cycle" min="5" step="1" value="30" oninput="_renderCycleHint()">
+            <button type="button" class="cstep" onclick="_nudgeCycle(1)" title="+1 min">+1</button>
+            <button type="button" class="cstep" onclick="_nudgeCycle(60)" title="+1h">+1h</button>
+          </div>
+          <p id="nr-cycle-hint" class="text-[11px] text-slate-500 mt-1.5"></p>
         </div>
 
         <!-- Stops -->
@@ -291,8 +324,19 @@
                  oninput="document.getElementById('nr-risk-val').textContent=this.value">
         </div>
 
-        <!-- LLM -->
-        <div class="grid grid-cols-2 gap-3">
+        <!-- ─── Décideur (sim only) ─────────────────────────────────────── -->
+
+        <div id="nr-decider-row">
+          <label class="lbl">Décideur</label>
+          <div class="seg" id="nr-decider-seg" data-val="llm">
+            <button data-val="llm" class="active" onclick="_setNrDecider('llm')">LLM</button>
+            <button data-val="deterministic" onclick="_setNrDecider('deterministic')">Déterministe</button>
+          </div>
+          <p id="nr-decider-hint" class="text-[11px] text-slate-500 mt-1.5">Agent LLM (Claude/Gemini) — comme la prod.</p>
+        </div>
+
+        <!-- LLM params (only visible when decider=llm, or in real mode) -->
+        <div id="nr-llm-row" class="grid grid-cols-2 gap-3">
           <div>
             <label class="lbl">LLM</label>
             <select class="fld" id="nr-llm-provider" onchange="_onNrLlmProviderChange()">
@@ -302,6 +346,13 @@
             </select>
           </div>
           <div><label class="lbl">Modèle</label><select class="fld" id="nr-llm-model"></select></div>
+        </div>
+
+        <!-- Deterministic params (only visible when decider=deterministic) -->
+        <div id="nr-det-params" class="hidden">
+          <label class="lbl">Panier (top-N)</label>
+          <input class="fld" type="number" id="nr-det-topn" min="1" max="10" value="3">
+          <p class="text-[11px] text-slate-500 mt-1.5">Décision à chaque cycle. Pour décider moins souvent, allonge Cycle (min).</p>
         </div>
 
         <!-- Cryptos -->
@@ -375,6 +426,8 @@
       <div class="bg-slate-900 border-b border-slate-800 px-4 flex gap-0 shrink-0">
         <button class="rtab active" data-rtab="cockpit" onclick="switchRTab('cockpit',this)">Cockpit</button>
         <button class="rtab" data-rtab="charts" onclick="switchRTab('charts',this)">Graphiques</button>
+        <button class="rtab" data-rtab="params" onclick="switchRTab('params',this)">Paramètres</button>
+        <button class="rtab hidden" id="rtab-runs-btn" data-rtab="runs" onclick="switchRTab('runs',this)">Runs</button>
         <button class="rtab hidden" id="rtab-orders-btn" data-rtab="orders" onclick="switchRTab('orders',this)">Ordres</button>
       </div>
 
@@ -548,6 +601,53 @@
         </div>
 
         </div><!-- /charts-content -->
+      </div>
+
+      <!-- Tab: Paramètres -->
+      <div id="rtab-params" class="hidden flex-1 overflow-y-auto p-5 space-y-4">
+
+        <!-- Empty state -->
+        <div id="params-empty-state" class="hidden flex flex-col items-center justify-center text-center py-24 px-6 text-slate-500">
+          <div class="text-5xl mb-4 opacity-30">⚙︎</div>
+          <p class="text-base text-slate-300 font-semibold mb-1">Aucun run sélectionné</p>
+          <p class="text-sm">Sélectionne un run dans la liste à gauche pour voir ses paramètres.</p>
+        </div>
+
+        <div id="params-content" class="hidden space-y-4">
+
+        <!-- Header -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
+            <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Paramètres du run</h3>
+            <span id="run-params-summary" class="text-[11px] text-slate-500"></span>
+          </div>
+          <p id="run-params-source" class="text-[11px] text-slate-500">—</p>
+        </div>
+
+        <!-- Grid -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div id="run-params-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-xs"></div>
+        </div>
+
+        <!-- Watchlist -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <h4 class="text-[11px] text-slate-500 uppercase tracking-wider mb-2">Watchlist</h4>
+          <div id="run-params-watchlist" class="text-sm text-slate-300 break-words">—</div>
+        </div>
+
+        </div><!-- /params-content -->
+      </div>
+
+      <!-- Tab: Runs (visible only on the catch-all Activité réelle view) -->
+      <div id="rtab-runs" class="hidden flex-1 overflow-y-auto p-5 space-y-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Historique des runs réels</h3>
+            <span id="runs-tab-count" class="text-[11px] text-slate-500"></span>
+          </div>
+          <div id="runs-tab-list" class="space-y-2"></div>
+          <p id="runs-tab-empty" class="hidden text-center text-slate-500 text-xs mt-2">Aucun run réel enregistré pour le moment.</p>
+        </div>
       </div>
 
       <!-- Tab: Ordres (real mode only) -->

@@ -77,8 +77,43 @@ class SimState:
             }
 
 
-_sim_state      = SimState()
-_sim_stop_event = threading.Event()
+class SimRegistry:
+    """Holds every concurrently-running simulation session, keyed by id.
+
+    Each entry is fully independent — its own SimState, stop_event and thread —
+    so starting/stopping one session never affects the others.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._sessions: dict[str, dict] = {}
+
+    def add(self, session_id: str, state: SimState, stop_event: threading.Event) -> None:
+        with self._lock:
+            self._sessions[session_id] = {"state": state, "stop_event": stop_event}
+
+    def get(self, session_id: str) -> dict | None:
+        with self._lock:
+            return self._sessions.get(session_id)
+
+    def remove(self, session_id: str) -> None:
+        with self._lock:
+            self._sessions.pop(session_id, None)
+
+    def ids(self) -> list[str]:
+        with self._lock:
+            return list(self._sessions)
+
+    def states(self) -> list[dict]:
+        with self._lock:
+            return [e["state"].to_dict() for e in self._sessions.values()]
+
+    def running_ids(self) -> list[str]:
+        with self._lock:
+            return [sid for sid, e in self._sessions.items() if e["state"].running]
+
+
+_sim_registry = SimRegistry()
 
 # Vercel can't run long-lived threads (function dies after each HTTP response).
 # When detected, the dashboard persists a flag in DB; the GitHub Actions runner
@@ -86,21 +121,34 @@ _sim_stop_event = threading.Event()
 _IS_SERVERLESS  = bool(os.getenv("VERCEL"))
 
 
-def _read_active_sim() -> dict | None:
+def _read_active_sims() -> dict:
+    """All serverless-active sessions, keyed by session_id."""
     try:
         from db.store import get_state
-        v = get_state("active_sim")
-        return v if isinstance(v, dict) else None
+        v = get_state("active_sims")
+        return v if isinstance(v, dict) else {}
     except Exception:
-        return None
+        return {}
 
 
-def _write_active_sim(state: dict | None) -> None:
+def _write_active_sims(d: dict) -> None:
     try:
         from db.store import set_state
-        set_state("active_sim", state)
+        set_state("active_sims", d)
     except Exception:
-        log.warning("Impossible d'écrire active_sim", exc_info=True)
+        log.warning("Impossible d'écrire active_sims", exc_info=True)
+
+
+def _upsert_active_sim(entry: dict) -> None:
+    d = _read_active_sims()
+    d[entry["session_id"]] = entry
+    _write_active_sims(d)
+
+
+def _remove_active_sim(session_id: str) -> None:
+    d = _read_active_sims()
+    if d.pop(session_id, None) is not None:
+        _write_active_sims(d)
 
 
 def _compute_next_cycle_at(active_sim: dict, snap_data: dict) -> str | None:
@@ -129,120 +177,87 @@ def _compute_next_cycle_at(active_sim: dict, snap_data: dict) -> str | None:
     return datetime.utcfromtimestamp(aligned_epoch).isoformat()
 
 
-def _serverless_status_dict() -> dict:
-    active = _read_active_sim()
-    try:
-        from db.store import get_state
-        snap_data = get_state("simulation") or {}
-    except Exception:
-        snap_data = {}
-
-    if active:
-        active_sid = active.get("session_id", "")
+def _serverless_status_list() -> list[dict]:
+    """One status dict per serverless-active session (cron model)."""
+    out: list[dict] = []
+    for sid, active in _read_active_sims().items():
+        snap_data = sim_engine._load_state(sid) or {}
         params = active.get("params", {})
-        # Snapshot is only meaningful if it belongs to the current active sim.
-        # Otherwise it's leftover from a previous run — show a fresh state.
-        if snap_data.get("session_id") != active_sid:
+        if snap_data.get("session_id") != sid:
             snap_data = {
-                "cycle":        0,
-                "pnl":          0,
-                "trades":       0,
-                "history":      [],
-                "positions":    [],
-                "holdings":     {},
-                "session_id":   active_sid,
+                "cycle": 0, "pnl": 0, "trades": 0, "history": [], "positions": [],
+                "holdings": {}, "session_id": sid,
                 "session_name": active.get("session_name", ""),
-                "budget":       params.get("budget", 100),
+                "budget": params.get("budget", 100),
             }
-        return {
+        out.append({
             "running":          True,
-            "session_id":       active_sid,
+            "session_id":       sid,
             "session_name":     active.get("session_name", ""),
+            "decider":          active.get("decider", "llm"),
             "cycle_seconds":    int(params.get("cycle_seconds") or 60),
             "cycle_started_at": snap_data.get("saved_at"),
             "next_cycle_at":    _compute_next_cycle_at(active, snap_data),
             "snapshot":         snap_data,
             "error":            None,
-        }
-    return {
-        "running":          False,
-        "session_id":       snap_data.get("session_id", ""),
-        "session_name":     snap_data.get("session_name", ""),
-        "cycle_seconds":    int((snap_data.get("params") or {}).get("cycle_seconds") or 60),
-        "cycle_started_at": snap_data.get("saved_at"),
-        "snapshot":         snap_data,
-        "error":            None,
-    }
-
-# ── Cloud Scheduler keep-alive (keeps container alive during simulation) ──────
-
-_GCP_PROJECT      = os.getenv("GOOGLE_CLOUD_PROJECT")
-_SCHEDULER_REGION = os.getenv("SCHEDULER_REGION", "europe-west1")
-_KEEPALIVE_JOB    = os.getenv("KEEPALIVE_JOB", "hellocrypto-keepalive")
-
-
-def _set_keepalive(enabled: bool) -> None:
-    """Enable or disable the Cloud Scheduler keepalive job."""
-    if not _GCP_PROJECT:
-        return
-    try:
-        import google.auth
-        import google.auth.transport.requests as google_req
-        import requests as _req
-        creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-        creds.refresh(google_req.Request())
-        action = "resume" if enabled else "pause"
-        url = (f"https://cloudscheduler.googleapis.com/v1/projects/{_GCP_PROJECT}"
-               f"/locations/{_SCHEDULER_REGION}/jobs/{_KEEPALIVE_JOB}:{action}")
-        _req.post(url, headers={"Authorization": f"Bearer {creds.token}"}, timeout=10)
-        log.info("[SIM] Keep-alive scheduler → %s", action)
-    except Exception as exc:
-        log.warning("[SIM] Keep-alive scheduler %s échoué: %s",
-                    "resume" if enabled else "pause", exc)
-
+        })
+    return out
 
 # ── Auto-resume on cold start ─────────────────────────────────────────────────
 
-def _try_auto_resume() -> None:
-    """If a simulation was running when the container was killed, restart it."""
-    if _sim_state.running:
-        return
-    saved = sim_engine._load_state()
-    if not saved or not saved.get("session_id") or not saved.get("running"):
-        return
-
-    cfg       = load_config()
-    cycle_sec = int(cfg.get("cycle_seconds", 60))
-    sid       = saved["session_id"]
-    sname     = saved.get("session_name", "auto-resume")
-    budget    = saved.get("budget", float(cfg.get("budget", 100)))
-
-    log.info("[SIM] Auto-resume session %s depuis cycle %d", sid, saved.get("cycle", 0))
-
-    global _sim_stop_event
-    _sim_stop_event = threading.Event()
-    _sim_state.start(sid, sname, cycle_sec)
+def _spawn_session(sid: str, sname: str, budget: float, run_cfg: dict, *,
+                   resume: bool, initial_holdings: dict | None, decider: str) -> None:
+    """Register a session and start its own independent background thread."""
+    cycle_sec  = int(run_cfg.get("cycle_seconds", 60))
+    state      = SimState()
+    stop_event = threading.Event()
+    state.start(sid, sname, cycle_sec)
+    _sim_registry.add(sid, state, stop_event)
 
     def _run():
         try:
             result = sim_engine.run(
                 budget,
-                config=cfg,
-                on_cycle=lambda _c, snap: _sim_state.update_cycle(snap),
-                stop_event=_sim_stop_event,
-                resume=True,
+                config=run_cfg,
+                on_cycle=lambda _c, snap: state.update_cycle(snap),
+                stop_event=stop_event,
+                resume=resume,
+                initial_holdings=initial_holdings if not resume else None,
                 session_id=sid,
                 session_name=sname,
+                decider=decider,
             )
-            _sim_state.finish(result)
+            state.finish(result)
         except Exception as exc:
-            log.exception("[SIM] Crash auto-resume")
-            _sim_state.fail(exc)
-        finally:
-            _set_keepalive(False)
+            log.exception("[SIM] Crash thread session %s", sid)
+            state.fail(exc)
 
-    _set_keepalive(True)
     threading.Thread(target=_run, daemon=True).start()
+
+
+def _try_auto_resume() -> None:
+    """Restart every session that was running when the container was killed."""
+    cfg = load_config()
+    try:
+        from db.store import list_simulation_sessions_v2
+        sessions = list_simulation_sessions_v2()
+    except Exception:
+        sessions = []
+
+    for s in sessions:
+        sid = s.get("session_id") or s.get("id")
+        if not sid or _sim_registry.get(sid):
+            continue
+        saved = sim_engine._load_state(sid)
+        if not saved or not saved.get("running"):
+            continue
+        sname  = saved.get("session_name", "auto-resume")
+        budget = saved.get("budget", float(cfg.get("budget", 100)))
+        params = saved.get("params") or {}
+        run_cfg = {**cfg, **{k: v for k, v in params.items() if v is not None}}
+        log.info("[SIM] Auto-resume session %s depuis cycle %d", sid, saved.get("cycle", 0))
+        _spawn_session(sid, sname, budget, run_cfg, resume=True,
+                       initial_holdings=None, decider=saved.get("decider", "llm"))
 
 
 _auto_resumed = False
@@ -257,18 +272,23 @@ def sim_keepalive():
     if not _auto_resumed:
         _auto_resumed = True
         _try_auto_resume()
-    return jsonify({"running": _sim_state.running})
+    return jsonify({"running": bool(_sim_registry.running_ids())})
 
 
 @bp.get("/api/simulation/status")
 def sim_status():
+    """Status of all sessions. Shape: {"sessions": [<status dict>, ...]}.
+
+    On serverless there's at most one active session (the cron model); we still
+    wrap it in the list so the UI has a single shape to consume.
+    """
     if _IS_SERVERLESS:
-        return jsonify(_serverless_status_dict())
+        return jsonify({"sessions": _serverless_status_list()})
     global _auto_resumed
     if not _auto_resumed:
         _auto_resumed = True
         _try_auto_resume()
-    return jsonify(_sim_state.to_dict())
+    return jsonify({"sessions": _sim_registry.states()})
 
 
 @bp.get("/api/simulation/saved")
@@ -317,13 +337,8 @@ def sim_saved():
 
 @bp.post("/api/simulation/start")
 def sim_start():
-    global _sim_stop_event
-    # On serverless, "running" is tracked via DB flag instead of in-memory state.
-    if _IS_SERVERLESS and _read_active_sim():
-        return jsonify({"error": "Simulation déjà en cours"}), 409
-    if not _IS_SERVERLESS and _sim_state.running:
-        return jsonify({"error": "Simulation déjà en cours"}), 409
-
+    # Multiple independent sessions may run concurrently. On serverless the
+    # cron model advances every active session per fire (see Phase 1c).
     body                 = request.json or {}
     cfg                  = load_config()
     budget               = float(body.get("budget", cfg.get("budget", 100)))
@@ -335,6 +350,10 @@ def sim_start():
     stop_loss_pct        = float(body.get("stop_loss_pct", cfg.get("stop_loss_pct", 10)))
     trailing_stop_pct    = float(body.get("trailing_stop_pct", cfg.get("trailing_stop_pct", 5)))
     sell_cooldown_cycles = max(0, int(body.get("sell_cooldown_cycles", cfg.get("sell_cooldown_cycles", 3))))
+    decider              = "deterministic" if body.get("decider") == "deterministic" else "llm"
+    # Deterministic-decider (approach C) params — only meaningful when chosen.
+    det_keys = ("decide_every_cycles", "top_n", "buy_threshold", "hold_threshold")
+    det_params = {k: body.get(k) for k in det_keys if body.get(k) is not None}
     resume               = bool(body.get("resume", False))
     from_binance         = bool(body.get("from_binance", False))
     raw_holdings = body.get("initial_holdings") or {}
@@ -372,13 +391,18 @@ def sim_start():
         except Exception as exc:
             log.warning("[SIM] from_binance demandé mais auto-fetch a échoué: %s", exc)
 
-    # If resume requested but no saved state → downgrade silently + flag it
+    # Resume targets an existing session by id; a fresh run gets a new id.
+    session_id   = (body.get("session_id") if resume else None) or uuid.uuid4().hex[:8]
+    session_name = body.get("session_name") or datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+
+    # If resume requested but no saved state for that session → downgrade.
     resume_failed = False
-    if resume:
-        from hellocrypto.simulation import _load_state as _sim_load
-        if not _sim_load():
-            resume = False
-            resume_failed = True
+    if resume and not sim_engine._load_state(session_id):
+        resume = False
+        resume_failed = True
+
+    if _sim_registry.get(session_id) and (_sim_registry.get(session_id) or {}).get("state").running:
+        return jsonify({"error": "Cette session tourne déjà"}), 409
 
     # Per-run watchlist: the modal lets the user pick a subset for this run
     # specifically — we keep it isolated from the global cfg.watchlist so
@@ -392,11 +416,7 @@ def sim_start():
     run_cfg      = {**cfg, "risk_level": risk_level, "cycle_seconds": cycle_sec,
                     "stop_loss_pct": stop_loss_pct, "trailing_stop_pct": trailing_stop_pct,
                     "sell_cooldown_cycles": sell_cooldown_cycles,
-                    "watchlist": run_watchlist}
-    session_id   = uuid.uuid4().hex[:8]
-    session_name = body.get("session_name") or datetime.utcnow().strftime("%Y-%m-%d %H:%M")
-    _sim_stop_event = threading.Event()
-    _sim_state.start(session_id, session_name, cycle_sec)
+                    "watchlist": run_watchlist, "decider": decider, **det_params}
 
     try:
         from db.store import upsert_session
@@ -410,16 +430,19 @@ def sim_start():
                            "stop_loss_pct":        stop_loss_pct,
                            "trailing_stop_pct":    trailing_stop_pct,
                            "sell_cooldown_cycles": sell_cooldown_cycles,
+                           "decider":              decider,
+                           **det_params,
                        })
     except Exception:
         log.warning("Impossible de sauvegarder la session dans la base", exc_info=True)
 
     if _IS_SERVERLESS:
-        # Persist the request — the GitHub Actions cron runner will pick it up
-        # and execute one cycle per fire, gated by cycle_seconds.
-        _write_active_sim({
+        # Register the session — the cron runner advances every active session
+        # per fire, each gated by its own cycle_seconds (Phase 1c).
+        _upsert_active_sim({
             "session_id":       session_id,
             "session_name":     session_name,
+            "decider":          decider,
             "params": {
                 "budget":               budget,
                 "risk_level":           risk_level,
@@ -427,6 +450,7 @@ def sim_start():
                 "stop_loss_pct":        stop_loss_pct,
                 "trailing_stop_pct":    trailing_stop_pct,
                 "sell_cooldown_cycles": sell_cooldown_cycles,
+                **det_params,
             },
             "initial_holdings": initial_holdings,
             "resume":           resume,
@@ -435,41 +459,24 @@ def sim_start():
         })
         return jsonify({
             "ok":           True,
+            "session_id":   session_id,
             "budget":       budget,
             "risk_level":   risk_level,
             "cycle_seconds": cycle_sec,
+            "decider":      decider,
             "resume_failed": resume_failed,
             "serverless":   True,
         })
 
-    def _run():
-        try:
-            result = sim_engine.run(
-                budget,
-                config=run_cfg,
-                on_cycle=lambda _cycle, snap: _sim_state.update_cycle(snap),
-                stop_event=_sim_stop_event,
-                resume=resume,
-                max_cycles=None,
-                initial_holdings=initial_holdings if not resume else None,
-                session_id=session_id,
-                session_name=session_name,
-                liquidate_at_end=False,
-            )
-            _sim_state.finish(result)
-        except Exception as exc:
-            log.exception("[SIM] Crash du thread de simulation")
-            _sim_state.fail(exc)
-        finally:
-            _set_keepalive(False)
-
-    _set_keepalive(True)
-    threading.Thread(target=_run, daemon=True).start()
+    _spawn_session(session_id, session_name, budget, run_cfg,
+                   resume=resume, initial_holdings=initial_holdings, decider=decider)
     return jsonify({
         "ok":           True,
+        "session_id":   session_id,
         "budget":       budget,
         "risk_level":   risk_level,
         "cycle_seconds": cycle_sec,
+        "decider":      decider,
         "resume_failed": resume_failed,
     })
 
@@ -521,48 +528,59 @@ def _liquidate_session(session_id: str, params: dict, session_name: str) -> dict
 
 @bp.post("/api/simulation/stop")
 def sim_stop():
-    global _sim_stop_event
+    """Stop ONE session (by id) — others keep running, fully independent."""
+    body = request.json or {}
+    session_id = body.get("session_id") or request.args.get("session_id")
     liquidation_result = None
     cleaned_logs: int | None = None
 
     if _IS_SERVERLESS:
-        active = _read_active_sim()
-        sid_to_clean = active.get("session_id", "") if active else ""
-        if active:
+        active = _read_active_sims()
+        # Default to the only active session if id omitted.
+        if not session_id and len(active) == 1:
+            session_id = next(iter(active))
+        entry = active.get(session_id) if session_id else None
+        if entry:
             try:
                 liquidation_result = _liquidate_session(
-                    session_id=sid_to_clean,
-                    params=active.get("params") or {},
-                    session_name=active.get("session_name", ""),
+                    session_id=session_id,
+                    params=entry.get("params") or {},
+                    session_name=entry.get("session_name", ""),
                 )
             except Exception:
                 log.exception("Liquidation finale échouée")
                 liquidation_result = {"error": "liquidation failed"}
-        _write_active_sim(None)
-        cleaned_logs = _cleanup_sim_technical_logs(sid_to_clean)
+        _remove_active_sim(session_id) if session_id else None
+        cleaned_logs = _cleanup_sim_technical_logs(session_id)
         return jsonify({"ok": True, "liquidation": liquidation_result,
                         "cleaned_technical_logs": cleaned_logs})
 
-    # Local / threaded mode: stop the background loop, wait for it to exit,
-    # then liquidate synchronously using the saved state.
+    # Local / threaded mode: stop that session's loop, wait for exit, liquidate.
     import time as _time
-    sid = _sim_state.session_id
-    sname = _sim_state.session_name
-    cycle_sec = _sim_state.cycle_seconds
-    _sim_stop_event.set()
-    _sim_state.stop()
-    _set_keepalive(False)
+    entry = _sim_registry.get(session_id) if session_id else None
+    if not entry:
+        # Back-compat: if a single session is running and no id given, stop it.
+        running = _sim_registry.running_ids()
+        if not session_id and len(running) == 1:
+            session_id = running[0]
+            entry = _sim_registry.get(session_id)
+    if not entry:
+        return jsonify({"error": "Session introuvable"}), 404
 
-    # Wait up to 15s for the background loop to exit cleanly (it checks
-    # stop_event at the top of each iteration + after each cycle's wait).
+    state = entry["state"]
+    sname = state.session_name
+    cycle_sec = state.cycle_seconds
+    entry["stop_event"].set()
+    state.stop()
+
     deadline = _time.time() + 15
-    while _sim_state.running and _time.time() < deadline:
+    while state.running and _time.time() < deadline:
         _time.sleep(0.2)
 
-    if sid:
+    if session_id:
         try:
             liquidation_result = _liquidate_session(
-                session_id=sid,
+                session_id=session_id,
                 params={"cycle_seconds": cycle_sec},
                 session_name=sname,
             )
@@ -570,7 +588,8 @@ def sim_stop():
             log.exception("Liquidation finale échouée")
             liquidation_result = {"error": "liquidation failed"}
 
-    cleaned_logs = _cleanup_sim_technical_logs(sid)
+    _sim_registry.remove(session_id)
+    cleaned_logs = _cleanup_sim_technical_logs(session_id)
     return jsonify({"ok": True, "liquidation": liquidation_result,
                     "cleaned_technical_logs": cleaned_logs})
 
@@ -613,6 +632,29 @@ def sim_sessions():
         return jsonify({"error": "Erreur lors du chargement des sessions"}), 500
 
 
+@bp.get("/api/real/sessions")
+def real_sessions():
+    """List real-mode sessions (one record per Resume→Stop cycle).
+
+    Also returns the currently active session id (if any) so the frontend
+    can put a green pulse on the right card. Sessions table is the
+    authoritative source; trades pre-dating session-per-run remain visible
+    via the catch-all real history.
+    """
+    try:
+        from db.store import get_state, list_real_sessions
+        sessions = []
+        try:
+            sessions = list_real_sessions()
+        except Exception:
+            log.warning("list_real_sessions a échoué", exc_info=True)
+        active_sid = get_state("active_real_session_id") or None
+        return jsonify({"sessions": sessions, "active_session_id": active_sid})
+    except Exception:
+        log.exception("Erreur real_sessions")
+        return jsonify({"error": "Erreur lors du chargement des sessions réelles"}), 500
+
+
 @bp.patch("/api/simulation/sessions/<session_id>")
 def sim_session_rename(session_id: str):
     body = request.json or {}
@@ -630,9 +672,19 @@ def sim_session_rename(session_id: str):
 
 @bp.delete("/api/simulation/sessions/<session_id>")
 def sim_session_delete(session_id: str):
-    # Protect against deleting the currently running session
-    if _sim_state.running and _sim_state.session_id == session_id:
+    # Protect against deleting a session that's currently running — sim or
+    # real. For real, the source of truth is ``active_real_session_id`` in
+    # the DB; deleting the active record would leave the runner pointing at
+    # a phantom session.
+    entry = _sim_registry.get(session_id)
+    if (entry and entry["state"].running) or session_id in _read_active_sims():
         return jsonify({"error": "Impossible de supprimer la session en cours d'exécution. Arrête-la d'abord."}), 409
+    try:
+        from db.store import get_state as _get_state
+        if (_get_state("active_real_session_id") or None) == session_id:
+            return jsonify({"error": "Cette session réelle est encore armée. Clique Arrêter sur Activité réelle d'abord."}), 409
+    except Exception:
+        pass
     try:
         from db.store import delete_session, set_state
         delete_session(session_id)

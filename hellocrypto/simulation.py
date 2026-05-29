@@ -25,7 +25,7 @@ from .llm import call as llm_call
 from .llm import last_usage as llm_last_usage
 from .prompts import DECISION_SCHEMA, SYSTEM, build_analysis
 from .trading import FEE_RATE as SIM_FEE_RATE
-from .trading import paper_sell
+from .trading import paper_buy, paper_sell
 
 log = logging.getLogger(__name__)
 
@@ -34,25 +34,50 @@ SIM_STATE_FILE = Path("data/simulation_state.json")
 
 # ── Persistence helpers ────────────────────────────────────────────────────────
 
-def _save_state(state: dict) -> None:
+def _state_key(session_id: str | None) -> str:
+    """DB key for a session's persisted state. Per-session so independent
+    simulations never clobber each other; legacy single key when unspecified."""
+    return f"simulation:{session_id}" if session_id else "simulation"
+
+
+def _state_file(session_id: str | None):
+    """JSON fallback path, mirroring the per-session keying."""
+    if not session_id:
+        return SIM_STATE_FILE
+    return SIM_STATE_FILE.with_name(f"{SIM_STATE_FILE.stem}_{session_id}{SIM_STATE_FILE.suffix}")
+
+
+def _save_state(state: dict, session_id: str | None = None, *,
+                update_saved_at: bool = True) -> None:
+    # `saved_at` is the gate the cron uses to space DECISION cycles. Stops-only
+    # ticks (which fire between full cycles) preserve the prior saved_at so the
+    # next cron heartbeat is still gated against the last decision cycle, not
+    # against the most recent stops-only tick.
+    saved_at = (
+        datetime.utcnow().isoformat()
+        if update_saved_at
+        else (state.get("saved_at") or datetime.utcnow().isoformat())
+    )
     try:
         from db.store import set_state
-        set_state("simulation", {**state, "saved_at": datetime.utcnow().isoformat(), "schema_version": 1})
+        set_state(_state_key(session_id),
+                  {**state, "saved_at": saved_at, "schema_version": 1})
         return
     except ImportError:
         pass
     # JSON fallback
     try:
-        SIM_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        SIM_STATE_FILE.write_text(json.dumps({**state, "saved_at": datetime.utcnow().isoformat()}, indent=2))
+        path = _state_file(session_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({**state, "saved_at": saved_at}, indent=2))
     except Exception as exc:
         log.warning("[SIM] Impossible de sauvegarder l'état: %s", exc)
 
 
-def _load_state() -> dict | None:
+def _load_state(session_id: str | None = None) -> dict | None:
     try:
         from db.store import get_state
-        data = get_state("simulation")
+        data = get_state(_state_key(session_id))
         if data and data.get("schema_version", 1) != 1:
             log.warning("[SIM] Version de schéma incompatible — démarrage propre")
             return None
@@ -61,13 +86,97 @@ def _load_state() -> dict | None:
         pass
     # JSON fallback
     try:
-        data = json.loads(SIM_STATE_FILE.read_text())
+        data = json.loads(_state_file(session_id).read_text())
         if data.get("schema_version", 1) != 1:
             log.warning("[SIM] Version de schéma incompatible — démarrage propre")
             return None
         return data
     except Exception:
         return None
+
+
+# ── Stops-only tick (between full decision cycles) ───────────────────────────
+
+def tick_stops_only(session_id: str, config: dict | None = None) -> dict:
+    """Run stop-monitoring on a session WITHOUT consuming a decision cycle.
+
+    The cron heartbeat (~5 min) fires this between full ``sim.run`` cycles so
+    that hard stop-loss and trailing stops keep firing at heartbeat cadence
+    regardless of how slow the user has configured the decision cadence
+    (``cycle_seconds``). The session's ``saved_at`` is preserved so the cron
+    gate still measures elapsed time against the last DECISION cycle.
+
+    Returns a small status dict; mutations are persisted via ``_save_state``.
+    """
+    saved = _load_state(session_id)
+    if not saved:
+        return {"action": "stops_skip", "reason": "no_state"}
+    holdings = saved.get("holdings", {}) or {}
+    if not holdings:
+        return {"action": "stops_skip", "reason": "no_positions"}
+
+    cfg = config or load_config()
+    stop_loss  = float(cfg["stop_loss_pct"]) / 100
+    trail_stop = float(cfg.get("trailing_stop_pct", 5)) / 100
+    cycle_sec  = int(cfg.get("cycle_seconds", 300))
+
+    symbols = list(holdings.keys())
+    try:
+        market_raw = get_enriched_market_data(symbols, cycle_seconds=cycle_sec)
+        prices = {sym: d["price"] for sym, d in market_raw.items() if d.get("price")}
+    except Exception as exc:
+        log.warning("[SIM-STOPS] fetch prix échoué session=%s: %s", session_id, exc)
+        return {"action": "stops_error"}
+    if not prices:
+        return {"action": "stops_skip", "reason": "no_prices"}
+
+    cash         = float(saved.get("cash", 0))
+    peak_prices  = saved.get("peak_prices", {}) or {}
+    cooldown_map = {k: int(v) for k, v in (saved.get("cooldown_map", {}) or {}).items()}
+    history      = saved.get("history", []) or []
+    total_fees   = float(saved.get("total_fees", 0))
+    cycle        = int(saved.get("cycle", 0))
+
+    strategy.update_peak_prices(holdings, prices, peak_prices)
+    recv, fees, stop_trades = strategy.apply_paper_stops(
+        holdings, prices, peak_prices, cooldown_map,
+        stop_loss, trail_stop, cycle,
+    )
+    cash       += recv
+    total_fees += fees
+
+    if stop_trades:
+        session_name = ""
+        try:
+            from db.store import get_session as _get_sess
+            sess = _get_sess(session_id) or {}
+            session_name = sess.get("name") or ""
+        except Exception:
+            pass
+        for t in stop_trades:
+            history.append(t.to_history())
+            try:
+                from db.store import save_trade as _db_save
+                _db_save(action=t.action, symbol=t.symbol, amount=None, price=t.price,
+                         reason=t.reason, fee=t.fee, qty=t.qty, pnl=t.pnl,
+                         mode="simulation", session_id=session_id,
+                         session_name=session_name)
+            except Exception:
+                log.warning("[SIM-STOPS] save_trade échoué", exc_info=True)
+        log.info("[SIM-STOPS] session=%s firé=%d stops", session_id, len(stop_trades))
+
+    new_state = {
+        **saved,
+        "cash":         cash,
+        "holdings":     holdings,
+        "peak_prices":  peak_prices,
+        "cooldown_map": cooldown_map,
+        "history":      history,
+        "total_fees":   total_fees,
+    }
+    _save_state(new_state, session_id, update_saved_at=False)
+    return {"action": "stops_fired" if stop_trades else "stops_ok",
+            "fired": len(stop_trades)}
 
 
 # ── Snapshot builder ───────────────────────────────────────────────────────────
@@ -152,6 +261,7 @@ def run(
     session_id: str | None = None,
     session_name: str | None = None,
     liquidate_at_end: bool = False,
+    decider: str = "llm",
 ) -> dict:
     """Run the paper-trading simulation.
 
@@ -196,9 +306,18 @@ def run(
     cycle: int           = 0
     value_timeseries: list = []  # [{ts, v}] — total_value per cycle
     snap: dict           = {}    # latest computed snapshot (for save state on exit)
+    strat_state: dict    = {}    # per-session deterministic-decider state (cadence, etc.)
+
+    # Deterministic-decider params (only used when decider == "deterministic").
+    det_params = {
+        "decide_every_cycles": cfg.get("decide_every_cycles"),
+        "top_n":               cfg.get("top_n"),
+        "buy_threshold":       cfg.get("buy_threshold"),
+        "hold_threshold":      cfg.get("hold_threshold"),
+    }
 
     if resume:
-        saved = _load_state()
+        saved = _load_state(session_id)
         if saved:
             cycle            = saved.get("cycle", 0)
             cash             = saved.get("cash", budget)
@@ -212,6 +331,7 @@ def run(
             cooldown_map     = {k: int(v) for k, v in saved.get("cooldown_map", {}).items()}
             budget           = saved.get("budget", budget)
             value_timeseries = saved.get("value_timeseries", [])
+            strat_state      = saved.get("strat_state", {}) or {}
             log.info("[SIM] Reprise depuis cycle %d — cash $%.2f", cycle, cash)
         else:
             log.info("[SIM] Aucun état sauvegardé — démarrage propre")
@@ -402,6 +522,111 @@ def run(
                 float(cfg.get("min_confidence", 0.0) or 0.0),
             )
 
+        # ── Deterministic decider (approach C) — isolated from the LLM path ───
+        if decider == "deterministic":
+            from .deciders import regime_decision
+            decision, strat_state = regime_decision(
+                market_raw=market_raw, holdings=holdings, cash=cash,
+                cycle=cycle, strat_state=strat_state, params=det_params,
+            )
+            sentiment = decision.get("market_sentiment", "—")
+            summary   = decision.get("summary", "")
+            log.info("[SIM] Cycle %d | déterministe | %s", cycle, summary)
+            recent_decisions = (recent_decisions + [decision])[-3:]
+            history.append({
+                "cycle": cycle, "timestamp": datetime.utcnow().isoformat(),
+                "action": "ANALYSE", "sentiment": sentiment, "reason": summary,
+                "symbol": "", "qty": None, "amount": None, "price": None,
+                "fee": None, "pnl": None,
+            })
+            try:
+                from db.store import save_market_analysis as _db_analysis
+                _db_analysis(sentiment=sentiment, summary=summary,
+                             analyses=decision.get("actions", []), mode="simulation",
+                             cycle=cycle, session_id=session_id, usage=None, reasoning=None)
+            except Exception:
+                pass
+
+            # Execute directly: sells first (free cash), then equal-weight buys
+            # across the new entries — faithful to the validated backtest sizing.
+            for a in decision.get("actions", []):
+                sym = a.get("symbol")
+                if a.get("type") != "sell" or sym not in holdings or sym not in prices:
+                    continue
+                entry = holdings[sym]["avg_price"]
+                res   = paper_sell(sym, holdings[sym]["qty"], prices[sym], holdings)
+                cash       += res.received
+                total_fees += res.fee
+                peak_prices.pop(sym, None)
+                pnl = round((prices[sym] - entry) * res.qty - res.fee, 4)
+                _t = {"cycle": cycle, "timestamp": datetime.utcnow().isoformat(),
+                      "action": "SELL", "symbol": sym, "qty": res.qty,
+                      "amount": round(res.received, 2), "price": prices[sym],
+                      "fee": round(res.fee, 6), "pnl": pnl, "reason": a.get("reason")}
+                history.append(_t)
+                try:
+                    from db.store import save_trade as _db_save
+                    _db_save(action="SELL", symbol=sym, amount=None, price=prices[sym],
+                             reason=a.get("reason"), fee=res.fee, qty=res.qty, pnl=pnl,
+                             mode="simulation", session_id=session_id, session_name=session_name)
+                except Exception:
+                    pass
+
+            buys = [a for a in decision.get("actions", [])
+                    if a.get("type") == "buy" and a.get("symbol") in prices]
+            if buys and cash > 10:
+                alloc = cash / len(buys)
+                for a in buys:
+                    if alloc < 10:
+                        break
+                    sym = a["symbol"]
+                    res = paper_buy(sym, alloc, prices[sym], holdings)
+                    cash       -= alloc
+                    total_fees += res.fee
+                    peak_prices[sym] = prices[sym]
+                    _t = {"cycle": cycle, "timestamp": datetime.utcnow().isoformat(),
+                          "action": "BUY", "symbol": sym, "qty": res.qty,
+                          "amount": round(alloc, 2), "price": prices[sym],
+                          "fee": round(res.fee, 6), "pnl": None, "reason": a.get("reason")}
+                    history.append(_t)
+                    try:
+                        from db.store import save_trade as _db_save
+                        _db_save(action="BUY", symbol=sym, amount=round(alloc, 2),
+                                 price=prices[sym], reason=a.get("reason"), fee=res.fee,
+                                 qty=res.qty, pnl=None, mode="simulation",
+                                 session_id=session_id, session_name=session_name)
+                    except Exception:
+                        pass
+
+            # Shared end-of-cycle: snapshot, persist, emit, wait.
+            snap = _snapshot(cycle, cash, holdings, prices, history, total_fees,
+                             initial_total_value, initial_prices, cycle_sec)
+            value_timeseries.append({"ts": datetime.utcnow().isoformat(), "v": snap["total_value"]})
+            if len(value_timeseries) > 1000:
+                step = max(1, len(value_timeseries) // 500)
+                value_timeseries = value_timeseries[::step] + [value_timeseries[-1]]
+            snap["value_timeseries"] = list(value_timeseries)
+            if on_cycle:
+                on_cycle(cycle, snap)
+            _save_state({**snap,
+                         "schema_version": 1, "budget": budget, "cycle": cycle, "cash": cash,
+                         "holdings": holdings, "history": history, "total_fees": total_fees,
+                         "initial_prices": initial_prices, "peak_prices": peak_prices,
+                         "cooldown_map": cooldown_map, "recent_decisions": recent_decisions,
+                         "initial_total_value": initial_total_value,
+                         "value_timeseries": value_timeseries, "strat_state": strat_state,
+                         "session_id": session_id, "session_name": session_name,
+                         "running": True, "decider": decider,
+                         "params": {"risk_level": risk_level, "cycle_seconds": cycle_sec,
+                                    "stop_loss_pct": round(stop_loss * 100, 2),
+                                    "trailing_stop_pct": round(trail_stop * 100, 2),
+                                    "sell_cooldown_cycles": sell_cooldown_cycles}}, session_id)
+            if stop_event:
+                stop_event.wait(timeout=cycle_sec)
+            else:
+                time.sleep(cycle_sec)
+            continue
+
         # ── LLM decision ──────────────────────────────────────────────────────
         market_data = format_market_data_compact(market_raw, watchlist, scores)
         try:
@@ -434,7 +659,7 @@ def run(
                          "params": {"risk_level": risk_level, "cycle_seconds": cycle_sec,
                                     "stop_loss_pct": round(stop_loss * 100, 2),
                                     "trailing_stop_pct": round(trail_stop * 100, 2),
-                                    "sell_cooldown_cycles": sell_cooldown_cycles}})
+                                    "sell_cooldown_cycles": sell_cooldown_cycles}}, session_id)
             if stop_event:
                 stop_event.wait(timeout=cycle_sec)
             else:
@@ -540,13 +765,13 @@ def run(
                      "initial_prices": initial_prices, "peak_prices": peak_prices,
                      "cooldown_map": cooldown_map, "recent_decisions": recent_decisions,
                      "initial_total_value": initial_total_value,
-                     "value_timeseries": value_timeseries,
+                     "value_timeseries": value_timeseries, "strat_state": strat_state,
                      "session_id": session_id, "session_name": session_name,
-                     "running": True,
+                     "running": True, "decider": decider,
                      "params": {"risk_level": risk_level, "cycle_seconds": cycle_sec,
                                 "stop_loss_pct": round(stop_loss * 100, 2),
                                 "trailing_stop_pct": round(trail_stop * 100, 2),
-                                "sell_cooldown_cycles": sell_cooldown_cycles}})
+                                "sell_cooldown_cycles": sell_cooldown_cycles}}, session_id)
 
         if stop_event:
             stop_event.wait(timeout=cycle_sec)
@@ -560,12 +785,13 @@ def run(
                  "initial_prices": initial_prices, "peak_prices": peak_prices,
                  "cooldown_map": cooldown_map, "recent_decisions": recent_decisions,
                  "initial_total_value": initial_total_value,
+                 "strat_state": strat_state,
                  "session_id": session_id, "session_name": session_name,
-                 "running": False,
+                 "running": False, "decider": decider,
                  "params": {"risk_level": risk_level, "cycle_seconds": cycle_sec,
                             "stop_loss_pct": round(stop_loss * 100, 2),
                             "trailing_stop_pct": round(trail_stop * 100, 2),
-                            "sell_cooldown_cycles": sell_cooldown_cycles}})
+                            "sell_cooldown_cycles": sell_cooldown_cycles}}, session_id)
 
     if _db_handler is not None:
         logging.getLogger().removeHandler(_db_handler)

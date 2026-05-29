@@ -169,6 +169,16 @@ def _execute_cycle(
     risk_level = int(cfg.get("risk_level", 3))
     sell_cooldown_cyc = int(cfg.get("sell_cooldown_cycles", 3))
 
+    # Tag every trade / market analysis written this cycle with the active
+    # real-mode session id (opened by routes/config.config_set when the
+    # runner is armed). Old data with NULL session_id stays as catch-all.
+    try:
+        from db.store import get_state as _get_state
+        _real_sid   = _get_state("active_real_session_id") or None
+        _real_sname = _get_state("active_real_session_name") or None
+    except Exception:
+        _real_sid, _real_sname = None, None
+
     positions = get_open_positions(watchlist)
     cash = get_balance("USDC")
     market_data_raw = _fetch_market_data(watchlist, cycle_sec)
@@ -202,6 +212,7 @@ def _execute_cycle(
         save_trade(
             f"SELL ({reason_tag})", sym, qty, price,
             f"{reason_tag.replace('-', ' ').title()} déclenché", fee, fee_asset,
+            session_id=_real_sid, session_name=_real_sname,
         )
         peak_prices.pop(sym, None)
         cooldown_map[sym] = cycle
@@ -263,6 +274,7 @@ def _execute_cycle(
                 analyses=decision.get("actions", []),
                 mode="real",
                 cycle=cycle,
+                session_id=_real_sid,
                 usage=llm_last_usage(),
                 reasoning=decision.get("reasoning"),
             )
@@ -344,7 +356,8 @@ def _execute_cycle(
                 if amount >= 10:
                     _, fee, fee_asset = market_buy(sym, amount)
                     price = prices.get(sym) or get_ticker(sym)
-                    save_trade("BUY", sym, amount, price, reason, fee, fee_asset)
+                    save_trade("BUY", sym, amount, price, reason, fee, fee_asset,
+                               session_id=_real_sid, session_name=_real_sname)
                     peak_prices[sym] = price
                     cash -= amount
                     log.info("BUY  $%.2f %s @ $%.4f (RSI=%.0f) [%s]",
@@ -354,7 +367,8 @@ def _execute_cycle(
                 qty = action.get("qty", positions[sym]["qty"])
                 price = prices.get(sym) or get_ticker(sym)
                 _, fee, fee_asset = market_sell(sym, qty)
-                save_trade("SELL", sym, qty, price, reason, fee, fee_asset)
+                save_trade("SELL", sym, qty, price, reason, fee, fee_asset,
+                           session_id=_real_sid, session_name=_real_sname)
                 peak_prices.pop(sym, None)
                 cooldown_map[sym] = cycle
                 log.info("SELL %.6f %s @ $%.4f", qty, sym, price)
@@ -390,11 +404,13 @@ def run_one_cycle() -> None:
     state = _load_state()
     cycle = state.get("cycle", 0) + 1
 
-    # Attach DB log handler for this cycle
+    # Attach DB log handler for this cycle, scoped to the active real session
+    # (if any) so per-session log views can filter by session_id.
     _db_handler = None
     try:
-        from db.store import DBLogHandler
-        _db_handler = DBLogHandler(mode="real")
+        from db.store import DBLogHandler, get_state
+        _real_sid = get_state("active_real_session_id") or None
+        _db_handler = DBLogHandler(mode="real", session_id=_real_sid)
         _db_handler.set_cycle(cycle)
         logging.getLogger().addHandler(_db_handler)
     except ImportError:

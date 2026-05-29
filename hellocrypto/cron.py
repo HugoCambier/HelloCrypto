@@ -26,7 +26,6 @@ def tick(stop_event: threading.Event | None = None) -> dict:
     free tier doesn't fill up.
     """
     import db.store as store
-    from hellocrypto.api import load_config
 
     if stop_event is None:
         stop_event = threading.Event()
@@ -36,21 +35,47 @@ def tick(stop_event: threading.Event | None = None) -> dict:
     # their own daily schedule via /api/cron/learn so a slow rebuild
     # cannot delay a trading decision cycle.
 
-    active_sim = store.get_state("active_sim")
-    if active_sim:
-        return _run_sim_cycle(active_sim, stop_event)
+    # Sims and the real runner can be armed simultaneously and are processed
+    # on the same fire — they share the heartbeat but each gates itself by
+    # its own cycle_seconds (see agent.run_one_cycle / _run_sim_cycle).
+    # Failures are isolated per session/runner: one erroring never blocks
+    # the others. **Real runs first** because it touches money on Binance —
+    # if the cron ever hits a wall clock limit, real must have executed.
+    #
+    # Source of truth for "is real armed?" is ``active_real_session_id`` in
+    # the DB, not ``cfg.enabled`` in config.json. A stale enabled=true in
+    # config.json (e.g. after a server restart, before any UI Resume) must
+    # NOT trigger trading — the user has to explicitly Resume from the UI,
+    # which calls _maybe_toggle_real_session to open the session record.
+    real_result: dict | None = None
+    active_real_sid = store.get_state("active_real_session_id") or None
+    if active_real_sid:
+        try:
+            from hellocrypto.agent import run_one_cycle
+            run_one_cycle()
+            real_result = {"action": "real_cycle", "session_id": active_real_sid}
+        except Exception as exc:
+            log.exception("[REAL] cycle a échoué")
+            real_result = {"action": "real_error", "error": str(exc)}
 
-    cfg = load_config()
-    if not cfg.get("enabled", False):
-        return {"action": "skip", "reason": "config.enabled=false"}
+    sim_results: list = []
+    active_sims = store.get_state("active_sims") or {}
+    if isinstance(active_sims, dict) and active_sims:
+        for entry in list(active_sims.values()):
+            try:
+                sim_results.append(_run_sim_cycle(entry, threading.Event()))
+            except Exception as exc:
+                log.exception("[SIM] cycle session %s a échoué", entry.get("session_id"))
+                sim_results.append({"action": "sim_error", "session_id": entry.get("session_id"),
+                                    "error": str(exc)})
 
-    mode = cfg.get("mode", "simulation")
-    if mode == "real":
-        from hellocrypto.agent import run_one_cycle
-        run_one_cycle()
-        return {"action": "real_cycle"}
-
-    return {"action": "skip", "reason": f"mode={mode}"}
+    if real_result and sim_results:
+        return {"action": "real_and_sim", "real": real_result, "sims": sim_results}
+    if real_result:
+        return real_result
+    if sim_results:
+        return {"action": "sim_cycles", "count": len(sim_results), "results": sim_results}
+    return {"action": "skip", "reason": "no active real session, no active sims"}
 
 
 def _maybe_purge_old_logs() -> None:
@@ -141,31 +166,33 @@ def _run_sim_cycle(active_sim: dict, stop_event: threading.Event) -> dict:
     cycle_seconds  = int(params.get("cycle_seconds") or 300)
     sid            = active_sim.get("session_id", "")
     sname          = active_sim.get("session_name", "")
+    decider        = active_sim.get("decider", "llm")
     is_first_cycle = not active_sim.get("started")
 
-    # Time-gate: skip if the previous cycle (for this session) is too recent.
-    # `saved_at` is when the previous cycle FINISHED, but we want intervals
-    # between cycle STARTS. Without tolerance, a 5-min cycle that finished at
-    # 16:00:20 would block the 16:05:00 fire (elapsed=280s < 300s) and only
-    # run at 16:10:00 — wrong. With a 60s tolerance, 16:05:00 executes
-    # because 280s >= (300 - 60). Tolerance is larger than typical cycle
-    # duration (~20-30s), so cycle_seconds > 300 (10 min, 15 min, ...) still
-    # correctly skip intermediate fires.
+    # Time-gate: between full decision cycles we still run a stops-only tick
+    # so stop-loss / trailing fire at the cron heartbeat (~5 min) regardless
+    # of the decision cadence. Only the LLM/deterministic decider is
+    # throttled by cycle_seconds. `saved_at` is preserved by stops-only ticks
+    # so the gate keeps measuring elapsed time against the last DECISION
+    # cycle. Tolerance (60s) absorbs the cycle's own runtime, so e.g. a
+    # 5-min cycle finishing at 16:00:20 does not block the 16:05:00 fire.
     GATE_TOLERANCE_SEC = 60
-    last_state = store.get_state("simulation") or {}
+    cfg     = load_config()
+    budget  = float(params.get("budget") or cfg.get("budget", 100))
+    run_cfg = {**cfg, **{k: v for k, v in params.items() if v is not None}}
+
+    last_state = sim._load_state(sid) or {}
     if last_state.get("session_id") == sid and last_state.get("saved_at"):
         try:
             elapsed = (datetime.utcnow() - datetime.fromisoformat(last_state["saved_at"])).total_seconds()
             if elapsed < cycle_seconds - GATE_TOLERANCE_SEC:
-                log.info("[SIM] %.0fs since last cycle (need %ds - %ds tolerance) — skip",
-                         elapsed, cycle_seconds, GATE_TOLERANCE_SEC)
-                return {"action": "sim_skip", "elapsed": elapsed, "cycle_seconds": cycle_seconds}
+                res = sim.tick_stops_only(sid, run_cfg)
+                log.info("[SIM] Stops-only tick session=%s elapsed=%.0fs/%ds → %s (fired=%d)",
+                         sid, elapsed, cycle_seconds, res.get("action"), res.get("fired", 0))
+                return {"action": "sim_stops_only", "session_id": sid,
+                        "elapsed": elapsed, "cycle_seconds": cycle_seconds, **res}
         except Exception:
             log.warning("[SIM] Could not parse saved_at, running anyway", exc_info=True)
-
-    cfg     = load_config()
-    budget  = float(params.get("budget") or cfg.get("budget", 100))
-    run_cfg = {**cfg, **{k: v for k, v in params.items() if v is not None}}
     initial_holdings = active_sim.get("initial_holdings") if is_first_cycle else None
 
     # sim.run's max_cycles is an ABSOLUTE counter (compared against the
@@ -196,9 +223,13 @@ def _run_sim_cycle(active_sim: dict, stop_event: threading.Event) -> dict:
         session_id=sid,
         session_name=sname,
         liquidate_at_end=False,
+        decider=decider,
     )
 
     if is_first_cycle:
-        store.set_state("active_sim", {**active_sim, "started": True})
+        active_sims = store.get_state("active_sims") or {}
+        if sid in active_sims:
+            active_sims[sid] = {**active_sims[sid], "started": True}
+            store.set_state("active_sims", active_sims)
 
     return {"action": "sim_cycle", "session_id": sid, "cycle": target_max}

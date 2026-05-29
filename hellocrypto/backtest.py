@@ -263,8 +263,9 @@ def run_live(
     min_hold_candles: int = 12,
     trend_confirm_candles: int = 6,
     regime_mode: bool = False,
-    decide_every: int = 24,
+    decide_every: int = 48,
     top_n: int = 3,
+    hold_threshold: int = 6,
     llm_mode: bool = False,
     llm_every_n_candles: int = 4,
     on_step=None,
@@ -501,7 +502,20 @@ def run_live(
 
                 if regime_bull:
                     ranked = sorted(symbols, key=lambda s: -scores[s])
-                    target = [s for s in ranked if scores[s] >= buy_threshold][:top_n]
+                    rank   = {s: idx for idx, s in enumerate(ranked)}
+                    keep_top = top_n + 2  # wider rank band for held assets
+                    # Hysteresis: keep a held asset while it stays "good enough"
+                    # (score above the looser hold bar AND still in the wide
+                    # band), so a mere #3↔#4 rank swap doesn't churn the basket.
+                    kept = [s for s in holdings
+                            if scores[s] >= hold_threshold and rank[s] < keep_top]
+                    target = list(kept)
+                    # Fill remaining slots with fresh strong entries (strict bar).
+                    for s in ranked:
+                        if len(target) >= top_n:
+                            break
+                        if s not in target and scores[s] >= buy_threshold:
+                            target.append(s)
                 else:
                     target = []
 
@@ -729,9 +743,12 @@ def main() -> None:
                         help="Bougies baissières consécutives requises pour sortir sur tendance")
     parser.add_argument("--regime",    action="store_true",
                         help="Décideur C : panier régime-piloté, décision lente (bull→top-N, bear→cash)")
-    parser.add_argument("--decide-every", type=int, default=24,
-                        help="Bougies entre deux décisions en mode --regime (24 = daily sur 1h)")
+    parser.add_argument("--decide-every", type=int, default=48,
+                        help="Bougies entre deux décisions en mode --regime (48 = tous les 2j sur 1h)")
     parser.add_argument("--top-n",     type=int, default=3, help="Taille du panier en mode --regime")
+    parser.add_argument("--hold-thr",  type=int, default=6,
+                        help="Seuil de maintien (hystérésis) : on garde un actif détenu tant que "
+                             "son score reste >= ce seuil (plus bas que --buy-thr)")
     parser.add_argument("--llm",       action="store_true", help="Utiliser l'agent LLM (réaliste)")
     parser.add_argument("--llm-every", type=int,   default=4, help="Appel LLM toutes les N bougies")
     args = parser.parse_args()
@@ -752,6 +769,7 @@ def main() -> None:
         regime_mode          = args.regime,
         decide_every         = args.decide_every,
         top_n                = args.top_n,
+        hold_threshold       = args.hold_thr,
         llm_mode             = args.llm,
         llm_every_n_candles  = args.llm_every,
     )

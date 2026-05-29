@@ -85,12 +85,17 @@ def main() -> None:
         log.info("Cron tick: %s", result)
         sys.exit(0)
 
-    if not cfg.get("enabled", False):
-        log.info("Config.enabled=false — arrêt immédiat.")
-        sys.exit(0)
-
     mode      = args.mode or cfg.get("mode", "simulation")
     cycle_sec = int(cfg.get("cycle_seconds", 300))
+
+    # Source of truth for arming the real runner is ``active_real_session_id``
+    # in DB, not ``config.enabled``. A stale enabled=true on disk (from a
+    # previous Resume that wasn't followed by a Stop) must NOT cause the
+    # local loop to auto-start — the user clicks Resume from the dashboard.
+    if mode == "real" and not store.get_state("active_real_session_id"):
+        log.info("Mode réel mais aucune session active en DB — arrêt immédiat. "
+                 "Clique Resume sur 'Activité réelle' dans le dashboard pour démarrer.")
+        sys.exit(0)
 
     from datetime import datetime
     store.set_state("last_run_at", datetime.utcnow().isoformat())

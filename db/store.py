@@ -760,6 +760,44 @@ def list_simulation_sessions_v2() -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def list_real_sessions() -> list[dict]:
+    """Return real-mode sessions enriched with trade stats.
+
+    Mirrors ``list_simulation_sessions_v2`` but filters on ``mode='real'``.
+    Trades pre-dating the session-per-real-run model (session_id NULL) are
+    NOT included here — they remain visible under the global ``mode=real``
+    history when no specific session is selected.
+    """
+    if _USE_FIRESTORE:
+        docs = [{"id": doc.id, **doc.to_dict()} for doc in
+                _fs().collection("sessions").where("mode", "==", "real").stream()]
+        return sorted(docs, key=lambda x: x.get("created_at", ""), reverse=True)
+    elif _USE_POSTGRES:
+        with _postgres() as c:
+            c.execute(
+                "SELECT s.id, s.name, s.mode, s.created_at,"
+                " COUNT(t.id) as trade_count,"
+                " MIN(t.timestamp) as start_ts, MAX(t.timestamp) as end_ts"
+                " FROM sessions s"
+                " LEFT JOIN trades t ON t.session_id = s.id AND t.mode = 'real'"
+                " WHERE s.mode = 'real'"
+                " GROUP BY s.id, s.name, s.mode, s.created_at ORDER BY s.created_at DESC"
+            )
+            return [dict(r) for r in c.fetchall()]
+    else:
+        with _sqlite() as c:
+            rows = c.execute(
+                "SELECT s.id, s.name, s.mode, s.created_at,"
+                " COUNT(t.id) as trade_count,"
+                " MIN(t.timestamp) as start_ts, MAX(t.timestamp) as end_ts"
+                " FROM sessions s"
+                " LEFT JOIN trades t ON t.session_id = s.id AND t.mode = 'real'"
+                " WHERE s.mode = 'real'"
+                " GROUP BY s.id ORDER BY s.created_at DESC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+
 def get_session(session_id: str) -> dict | None:
     """Return a single session record by id, or None if not found."""
     if _USE_FIRESTORE:

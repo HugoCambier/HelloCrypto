@@ -40,18 +40,29 @@ def create_app() -> Flask:
     ):
         app.register_blueprint(bp)
 
-    # Single source of truth for the coin universe: config.json's watchlist.
-    # The new-run modal lets the user trade a subset, but never mutates this
-    # list — so the dropdown's option set stays stable across runs.
+    # Single source of truth for the coin universe AND the run defaults
+    # (stop_loss, trailing, risk_level, budget…): config.json. Templates use
+    # these to pre-fill form inputs so the user gets sensible starting values
+    # consistent with what the live/sim runners use.
     @app.context_processor
-    def _inject_coin_universe() -> dict:
+    def _inject_template_context() -> dict:
         try:
             from .api import load_config
-            watchlist = load_config().get("watchlist", []) or []
-            return {"coin_universe": watchlist}
+            cfg = load_config() or {}
+            return {
+                "coin_universe": cfg.get("watchlist", []) or [],
+                "cfg_defaults": {
+                    "budget":            cfg.get("budget", 1000),
+                    "stop_loss_pct":     cfg.get("stop_loss_pct", 10),
+                    "trailing_stop_pct": cfg.get("trailing_stop_pct", 5),
+                    "risk_level":        cfg.get("risk_level", 5),
+                },
+            }
         except Exception:
-            log.exception("Failed to load watchlist for template context")
-            return {"coin_universe": []}
+            log.exception("Failed to load cfg for template context")
+            return {"coin_universe": [],
+                    "cfg_defaults": {"budget": 1000, "stop_loss_pct": 10,
+                                     "trailing_stop_pct": 5, "risk_level": 5}}
 
     @app.get("/")
     def index():

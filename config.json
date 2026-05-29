@@ -1,8 +1,8 @@
 {
   "enabled": false,
-  "mode": "simulation",
+  "mode": "real",
   "budget": 100,
-  "cycle_seconds": 60,
+  "cycle_seconds": 1800,
   "watchlist": [
     "BTCUSDC",
     "ETHUSDC",
@@ -20,7 +20,6 @@
   "risk_level": 7,
   "llm": {
     "provider": "gemini",
-    "model": "gemini-3.1-flash-lite",
-    "temperature": 0.3
+    "model": "gemini-3.1-flash-lite"
   }
 }
