@@ -20,7 +20,11 @@ let _selectedSession = null;         // selected session_id (null = all sim or r
 let _runs         = [];              // list of simulation sessions
 let _realRuns     = [];              // list of real-mode sessions (one per Resume→Stop)
 let _activeRealSessionId = null;     // currently-armed real session, if any
-let _runFilters   = { real: true, sim: true };  // sidebar history filter toggles
+// Sidebar filter toggles, scoped per section (En cours / Historique).
+let _runFilters   = {
+  active:  { real: true, sim: true },
+  history: { real: true, sim: true },
+};
 let _savedResume  = null;            // saved sim state, if any
 let _countdownIv  = null;
 let _simCycleStartedAt = null;
@@ -101,13 +105,14 @@ async function loadRunsList() {
   renderRunsList();
 }
 
-// Toggle the Real/Sim filter pills above the runs list. Both default to on,
-// and we let the user disable both (resulting in an empty list) rather than
-// forcing at least one — keeps the toggle behaviour predictable.
-function toggleRunFilter(kind) {
-  _runFilters[kind] = !_runFilters[kind];
-  const btn = document.getElementById('filter-' + kind);
-  if (btn) btn.classList.toggle('on', _runFilters[kind]);
+// Toggle the Real/Sim filter pills above a runs section (active | history).
+// Both default to on, and we let the user disable both (resulting in an empty
+// list) rather than forcing at least one — keeps the toggle behaviour predictable.
+function toggleRunFilter(section, kind) {
+  if (!_runFilters[section]) return;
+  _runFilters[section][kind] = !_runFilters[section][kind];
+  const btn = document.getElementById(`filter-${section}-${kind}`);
+  if (btn) btn.classList.toggle('on', _runFilters[section][kind]);
   renderRunsList();
 }
 
@@ -142,17 +147,77 @@ function _renderPinnedRealCard() {
   `;
 }
 
+function _runCardHtml(s) {
+  const id = s.id;
+  const name = s.name || id;
+  const trades = s.trade_count ?? 0;
+  const startTs = (s.start_ts || s.created_at || '').replace('T',' ').slice(0,16);
+  const meta = `${trades} trade${trades > 1 ? 's' : ''}${startTs ? ' · ' + startTs : ''}`;
+  const nameJson = JSON.stringify(name).replace(/"/g, '&quot;');
+
+  if (s._kind === 'real') {
+    const isActive = id === _activeRealSessionId;
+    const selected = _selectedMode === 'real' && _selectedSession === id;
+    return `
+      <div class="run-card ${selected ? 'active' : ''}" onclick="selectRun('real', '${id}')">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-0.5">
+            <span class="run-tag tag-real">RÉEL</span>
+            <span class="text-sm font-semibold text-slate-100 truncate">${escHtml(name)}</span>
+            ${isActive ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>' : ''}
+          </div>
+          <div class="text-[11px] text-slate-500">${escHtml(meta)}</div>
+        </div>
+        <div class="run-actions shrink-0">
+          ${isActive
+            ? ''  /* active session: stop via the pinned card */
+            : `<button class="danger" onclick="event.stopPropagation(); deleteRealRun('${id}', ${nameJson}, ${trades})" title="Supprimer (run réel)">×</button>`}
+        </div>
+      </div>
+    `;
+  }
+  const live = _simSessions[id];
+  const isRunning = !!live;
+  const selected  = _selectedMode === 'simulation' && _selectedSession === id;
+  const decider   = live?.decider || s.decider;
+  const decTag = decider === 'deterministic'
+    ? '<span class="run-tag" style="background:#312e81;color:#c7d2fe" title="Décideur déterministe (C)">⚙︎ DÉT</span>'
+    : (decider === 'llm' ? '<span class="run-tag" style="background:#164e63;color:#a5f3fc" title="Décideur LLM">🤖 LLM</span>' : '');
+  return `
+    <div class="run-card ${selected ? 'active' : ''}" onclick="selectRun('simulation', '${id}')">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-0.5">
+          <span class="run-tag tag-sim">SIM</span>
+          ${decTag}
+          <span class="text-sm font-semibold text-slate-100 truncate">${escHtml(name)}</span>
+          ${isRunning ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>' : ''}
+        </div>
+        <div class="text-[11px] text-slate-500">${escHtml(meta)}</div>
+      </div>
+      <div class="run-actions shrink-0">
+        ${isRunning ? `<button onclick="event.stopPropagation(); stopRun('${id}', ${nameJson})" title="Arrêter cette session">■</button>` : ''}
+        <button onclick="event.stopPropagation(); openRenameModal('${id}', ${nameJson})" title="Renommer">✎</button>
+        <button class="danger" onclick="event.stopPropagation(); deleteRun('${id}', ${nameJson})" title="Supprimer">×</button>
+      </div>
+    </div>
+  `;
+}
+
+function _isRunning(s) {
+  return s._kind === 'real'
+    ? s.id === _activeRealSessionId
+    : !!_simSessions[s.id];
+}
+
 function renderRunsList() {
   _renderPinnedRealCard();
 
-  const el = document.getElementById('runs-list');
-  if (!el) return;
+  const activeEl  = document.getElementById('runs-active-list');
+  const historyEl = document.getElementById('runs-history-list');
+  if (!activeEl || !historyEl) return;
 
-  // Merge sim + real (past) sessions into a single timeline ordered by
-  // start. ``_realRuns`` excludes nothing; the active session is shown by
-  // the pinned card above but also appears in the history filter, which is
-  // intentional — it should be reachable when the Sim filter is off and
-  // the user filtered to Real.
+  // Merge sim + real sessions then split by running state. Sort each bucket
+  // by start DESC so the most-recently-started run is at the top.
   const all = [
     ..._runs.map(s => ({ ...s, _kind: 'sim' })),
     ..._realRuns.map(s => ({ ...s, _kind: 'real' })),
@@ -160,74 +225,31 @@ function renderRunsList() {
   const _ts = (s) => s.start_ts || s.created_at || '';
   all.sort((a, b) => _ts(b).localeCompare(_ts(a)));
 
-  const visible = all.filter(s => _runFilters[s._kind]);
-
-  const cards = [];
-  for (const s of visible) {
-    const id = s.id;
-    const name = s.name || id;
-    const trades = s.trade_count ?? 0;
-    const startTs = (s.start_ts || s.created_at || '').replace('T',' ').slice(0,16);
-    const meta = `${trades} trade${trades > 1 ? 's' : ''}${startTs ? ' · ' + startTs : ''}`;
-    const nameJson = JSON.stringify(name).replace(/"/g, '&quot;');
-
-    if (s._kind === 'real') {
-      const isActive = id === _activeRealSessionId;
-      const selected = _selectedMode === 'real' && _selectedSession === id;
-      cards.push(`
-        <div class="run-card ${selected ? 'active' : ''}" onclick="selectRun('real', '${id}')">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-0.5">
-              <span class="run-tag tag-real">RÉEL</span>
-              <span class="text-sm font-semibold text-slate-100 truncate">${escHtml(name)}</span>
-              ${isActive ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>' : ''}
-            </div>
-            <div class="text-[11px] text-slate-500">${escHtml(meta)}</div>
-          </div>
-          <div class="run-actions shrink-0">
-            ${isActive
-              ? ''  /* active session: stop via the pinned card */
-              : `<button class="danger" onclick="event.stopPropagation(); deleteRealRun('${id}', ${nameJson}, ${trades})" title="Supprimer (run réel)">×</button>`}
-          </div>
-        </div>
-      `);
-    } else {
-      const live = _simSessions[id];
-      const isRunning = !!live;
-      const selected  = _selectedMode === 'simulation' && _selectedSession === id;
-      const decider   = live?.decider || s.decider;
-      const decTag = decider === 'deterministic'
-        ? '<span class="run-tag" style="background:#312e81;color:#c7d2fe" title="Décideur déterministe (C)">⚙︎ DÉT</span>'
-        : (decider === 'llm' ? '<span class="run-tag" style="background:#164e63;color:#a5f3fc" title="Décideur LLM">🤖 LLM</span>' : '');
-      cards.push(`
-        <div class="run-card ${selected ? 'active' : ''}" onclick="selectRun('simulation', '${id}')">
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 mb-0.5">
-              <span class="run-tag tag-sim">SIM</span>
-              ${decTag}
-              <span class="text-sm font-semibold text-slate-100 truncate">${escHtml(name)}</span>
-              ${isRunning ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>' : ''}
-            </div>
-            <div class="text-[11px] text-slate-500">${escHtml(meta)}</div>
-          </div>
-          <div class="run-actions shrink-0">
-            ${isRunning ? `<button onclick="event.stopPropagation(); stopRun('${id}', ${nameJson})" title="Arrêter cette session">■</button>` : ''}
-            <button onclick="event.stopPropagation(); openRenameModal('${id}', ${nameJson})" title="Renommer">✎</button>
-            <button class="danger" onclick="event.stopPropagation(); deleteRun('${id}', ${nameJson})" title="Supprimer">×</button>
-          </div>
-        </div>
-      `);
+  const renderBucket = (el, items, filters, emptyMsg) => {
+    const visible = items.filter(s => filters[s._kind]);
+    if (visible.length === 0) {
+      const noneOn = !filters.real && !filters.sim;
+      el.innerHTML = `<p class="text-xs text-slate-500 italic px-2">${
+        noneOn ? 'Aucun filtre activé.' : emptyMsg
+      }</p>`;
+      return;
     }
-  }
+    el.innerHTML = visible.map(_runCardHtml).join('');
+  };
 
-  if (visible.length === 0) {
-    const noneOn = !_runFilters.real && !_runFilters.sim;
-    cards.push(`<p class="text-xs text-slate-500 italic px-2">${
-      noneOn ? 'Aucun filtre activé.' : 'Aucun run enregistré.'
-    }</p>`);
-  }
+  renderBucket(
+    activeEl,
+    all.filter(_isRunning),
+    _runFilters.active,
+    'Aucun run en cours.',
+  );
+  renderBucket(
+    historyEl,
+    all.filter(s => !_isRunning(s)),
+    _runFilters.history,
+    'Aucun run enregistré.',
+  );
 
-  el.innerHTML = cards.join('');
   // Keep the Runs tab in sync (it shows the same _realRuns source) so
   // navigating between tabs doesn't show stale rows.
   renderRunsTab();
@@ -738,7 +760,7 @@ async function stopRun(sessionId, name) {
     toast('Session arrêtée','warn');
     delete _simSessions[sessionId];
     await _pollSimStatus();   // refresh running set + countdown
-    _renderCurrentRunBox();
+    _updateSidebarLiveRail();
     await loadRunsList();
     await _checkResume();
   } catch { toast('Erreur arrêt','err'); }
@@ -769,40 +791,13 @@ function resumeReal() {
   setTimeout(() => _setNrMode('real'), 0);
 }
 
-// Stop the session currently shown in the right panel (header button).
-async function stopCurrentRun() {
-  const sid = _selectedSession && _simSessions[_selectedSession]
-    ? _selectedSession
-    : Object.keys(_simSessions)[0];
-  if (!sid) { toast('Aucune session en cours','warn'); return; }
-  return stopRun(sid, _runs.find(r => r.id === sid)?.name);
-}
-
-// ─── Current-run header rendering ────────────────────────────────────────────
-function _renderCurrentRunBox() {
-  const box = document.getElementById('current-run-box');
-  if (!box) return;
-  if (!_simRunning || !_simSnap) {
-    box.classList.add('hidden');
-    if (typeof updateSidebarRail === 'function') updateSidebarRail({ live: false });
-    return;
-  }
-  box.classList.remove('hidden');
-  if (typeof updateSidebarRail === 'function') {
-    updateSidebarRail({ live: true, tag: 'SIM', mode: 'simulation' });
-  }
-  const matched = _runs.find(r => r.id === _simSessionId);
-  document.getElementById('current-run-name').textContent =
-    matched?.name || _simSnap?.session_name || `Cycle ${_simSnap?.cycle ?? '…'}`;
-
-  const total  = _simSnap?.total ?? _simSnap?.cash ?? 0;
-  const budget = _simSnap?.budget ?? _cfg?.budget ?? 0;
-  const pnl    = _simSnap?.pnl ?? (total - budget);
-  const cycle  = _simSnap?.cycle ?? 0;
-  document.getElementById('current-run-meta').innerHTML =
-    `Cycle <span class="text-slate-300 font-semibold">${cycle}</span> · `
-    + `Total <span class="text-slate-300 font-semibold">$${fmt(total)}</span> · `
-    + `PnL <span class="${pnlClass(pnl)} font-semibold">${fmtPnl(pnl)}</span>`;
+// Reflect "any sim running" into the collapsed-sidebar rail indicator.
+// Replaces the legacy single-run header that was tied to a now-removed card.
+function _updateSidebarLiveRail() {
+  if (typeof updateSidebarRail !== 'function') return;
+  updateSidebarRail(_simRunning
+    ? { live: true, tag: 'SIM', mode: 'simulation' }
+    : { live: false });
 }
 
 // ─── Simulation polling ──────────────────────────────────────────────────────
@@ -838,7 +833,7 @@ async function _pollSimStatus() {
       _stopSimPoll();
     }
 
-    _renderCurrentRunBox();
+    _updateSidebarLiveRail();
     renderRunsList(); // refresh "running" indicator dots (per session)
 
     // Push live updates to the right panel only when viewing a running session.
@@ -1339,7 +1334,7 @@ async function boot() {
     const sel = running[0];
     _simSnap = sel.snapshot || null;
     _simSessionId = sel.session_id || _simSnap?.session_id || null;
-    _renderCurrentRunBox();
+    _updateSidebarLiveRail();
     _startSimPoll();
   }
 
