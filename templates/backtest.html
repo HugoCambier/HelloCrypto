@@ -32,7 +32,14 @@
     .kpi { background:#111827; border:1px solid #1f2937; border-radius:10px; padding:12px 14px; }
     .kpi-label { font-size:10px; color:#6b7280; text-transform:uppercase; letter-spacing:.3px; }
     .kpi-val { font-size:18px; font-weight:700; margin-top:2px; color:#e2e8f0; }
+    /* pnl-pos / pnl-neg have lower specificity than .kpi-val and lose the
+       cascade tie-break. Re-declare with a compound selector so the colour
+       wins on KPI values. */
+    .kpi-val.pnl-pos { color:#34d399; }
+    .kpi-val.pnl-neg { color:#f87171; }
     .kpi-sub { font-size:11px; color:#6b7280; margin-top:1px; }
+    .kpi-sub.pnl-pos { color:#86efac; }
+    .kpi-sub.pnl-neg { color:#fca5a5; }
 
     .cdrop { position:relative; }
     .cdrop-btn { width:100%; padding:7px 10px; font-size:13px; background:#0f172a; border:1px solid #334155; border-radius:6px; color:#e2e8f0; text-align:left; display:flex; align-items:center; justify-content:space-between; cursor:pointer; }
@@ -181,6 +188,8 @@
       <div class="bg-slate-900 border-b border-slate-800 px-4 flex gap-0 shrink-0">
         <button class="rtab active" data-rtab="cockpit" onclick="switchRTab('cockpit',this)">Cockpit</button>
         <button class="rtab" data-rtab="charts" onclick="switchRTab('charts',this)">Graphiques</button>
+        <button class="rtab" data-rtab="params" onclick="switchRTab('params',this)">Paramètres</button>
+        <button class="rtab" data-rtab="recap" onclick="switchRTab('recap',this)">Récap</button>
       </div>
 
       <!-- Tab: Cockpit -->
@@ -287,6 +296,59 @@
           <p id="vol-bars-empty" class="text-center text-slate-500 text-xs mt-2 hidden">Aucun trade</p>
         </div>
 
+      </div>
+
+      <!-- Tab: Paramètres (snapshot of the currently-running backtest) -->
+      <div id="rtab-params" class="hidden flex-1 overflow-y-auto p-5 space-y-4">
+        <div id="bt-params-empty" class="flex flex-col items-center justify-center text-center py-24 px-6 text-slate-500">
+          <div class="text-5xl mb-4 opacity-30">⚙︎</div>
+          <p class="text-base text-slate-300 font-semibold mb-1">Aucun backtest lancé</p>
+          <p class="text-sm">Configure les paramètres à gauche et clique <b>Lancer</b> — ses valeurs s'afficheront ici.</p>
+        </div>
+
+        <div id="bt-params-content" class="hidden space-y-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
+              <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Paramètres du backtest en cours</h3>
+              <span id="bt-params-summary" class="text-[11px] text-slate-500"></span>
+            </div>
+            <p class="text-[11px] text-slate-500">Snapshot figé au moment du clic « Lancer ». Modifier les champs à gauche n'affecte pas le run en cours.</p>
+          </div>
+
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <div id="bt-params-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-xs"></div>
+          </div>
+
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+            <h4 class="text-[11px] text-slate-500 uppercase tracking-wider mb-2">Watchlist</h4>
+            <div id="bt-params-watchlist" class="text-sm text-slate-300 break-words">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Récap (markdown-formatted summary, copy to clipboard) -->
+      <div id="rtab-recap" class="hidden flex-1 overflow-y-auto p-5 space-y-4">
+        <div id="bt-recap-empty" class="flex flex-col items-center justify-center text-center py-24 px-6 text-slate-500">
+          <div class="text-5xl mb-4 opacity-30">📋</div>
+          <p class="text-base text-slate-300 font-semibold mb-1">Pas encore de backtest terminé</p>
+          <p class="text-sm">Le récap apparaîtra ici une fois un run lancé. Copiez-le pour partager le résultat ou itérer sur la stratégie.</p>
+        </div>
+        <div id="bt-recap-content" class="hidden space-y-3">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Récap du backtest</h3>
+            <div class="flex items-center gap-2">
+              <span id="bt-recap-copied" class="text-[11px] text-emerald-400 hidden">Copié ✓</span>
+              <button id="bt-recap-copy-btn" onclick="copyRecapToClipboard()"
+                      class="text-[11px] px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 transition-colors font-semibold">
+                Copier le récap
+              </button>
+            </div>
+          </div>
+          <textarea id="bt-recap-text" readonly
+                    class="w-full h-[28rem] p-3 bg-slate-800/40 border border-slate-700 rounded-lg text-xs text-slate-200 font-mono leading-relaxed resize-y"
+                    onclick="this.select()"></textarea>
+          <p class="text-[11px] text-slate-500">Tu peux ajouter du contexte manuellement (fear/greed, dominance BTC, événement macro…) avant de partager.</p>
+        </div>
       </div>
 
     </main>

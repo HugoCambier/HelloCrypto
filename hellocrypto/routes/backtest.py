@@ -47,7 +47,23 @@ def bt_start():
         llm_every  = max(1, int(body.get("llm_every_n_candles", 4)))
         _bt_speed["value"] = speed
         _bt_stop_event = threading.Event()
-        _bt_state = {"running": True, "loading": True, "snapshot": None}
+        # Stash the launch params so the frontend's "Paramètres" tab can
+        # hydrate from /api/backtest/status (survives page reloads as long
+        # as the server process lives).
+        launch_params = {
+            "symbols":           ",".join(symbols),
+            "days":              days,
+            "start_date":        start_date,
+            "budget":            budget,
+            "stop_loss_pct":     float(body.get("stop_loss_pct",     cfg.get("stop_loss_pct", 10))),
+            "trailing_stop_pct": float(body.get("trailing_stop_pct", cfg.get("trailing_stop_pct", 5))),
+            "risk_level":        risk,
+            "buy_threshold":     buy_thr,
+            "sell_threshold":    sell_thr,
+            "speed":             speed,
+        }
+        _bt_state = {"running": True, "loading": True, "snapshot": None,
+                     "params": launch_params}
 
     def _run():
         global _bt_state
@@ -91,6 +107,11 @@ def bt_speed_update():
     body  = request.json or {}
     speed = max(1.0, min(500.0, float(body.get("speed", 10.0))))
     _bt_speed["value"] = speed
+    # Keep the params snapshot in sync so the Paramètres tab reflects the
+    # actually-applied speed, which the user can tweak live mid-run.
+    with _bt_lock:
+        if isinstance(_bt_state.get("params"), dict):
+            _bt_state["params"]["speed"] = speed
     return jsonify({"speed": speed})
 
 

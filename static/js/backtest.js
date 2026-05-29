@@ -7,6 +7,11 @@ const COIN_UNIVERSE = window.COIN_UNIVERSE || [];
 
 let _btPollIv  = null;
 let _latestSnap = null;
+// Snapshot of the params used to launch the current/last backtest. We only
+// freeze this on a successful POST to /api/backtest/start — that way the
+// "Paramètres" tab keeps showing the run's params even after the user edits
+// the left form for the next run.
+let _btRunParams = null;
 
 // Chart refs (passed to shared renderers)
 const _refs = {
@@ -18,13 +23,168 @@ const _refs = {
 
 // ── Right-panel tabs ─────────────────────────────────────────────────────────
 function switchRTab(name, btn) {
-  ['cockpit','charts'].forEach(t => {
+  ['cockpit','charts','params','recap'].forEach(t => {
     document.getElementById('rtab-'+t)?.classList.toggle('hidden', t !== name);
   });
   document.querySelectorAll('.rtab[data-rtab]').forEach(b => {
     b.classList.toggle('active', b === btn);
   });
-  if (_latestSnap) renderFromSnapshot(_latestSnap);
+  if (name === 'params')      renderRunParamsTab();
+  else if (name === 'recap')  renderRecapTab();
+  else if (_latestSnap)       renderFromSnapshot(_latestSnap);
+}
+
+// Render the cached params of the currently/last-running backtest. The cache
+// (_btRunParams) is populated by startBacktest on a successful POST.
+function renderRunParamsTab() {
+  const empty   = document.getElementById('bt-params-empty');
+  const content = document.getElementById('bt-params-content');
+  const grid    = document.getElementById('bt-params-grid');
+  const wl      = document.getElementById('bt-params-watchlist');
+  const sumEl   = document.getElementById('bt-params-summary');
+  if (!grid || !wl) return;
+
+  if (!_btRunParams) {
+    if (empty)   empty.classList.remove('hidden');
+    if (content) content.classList.add('hidden');
+    return;
+  }
+  if (empty)   empty.classList.add('hidden');
+  if (content) content.classList.remove('hidden');
+
+  const p = _btRunParams;
+  const fmtVal = (v) => (v === null || v === undefined || v === '') ? '—' : v;
+  const items = [
+    ['Période',        p.days ? `${p.days} jour${p.days > 1 ? 's' : ''}` : '—'],
+    ['Date de début',  p.start_date || 'auto'],
+    ['Budget',         p.budget != null ? `$${typeof fmt === 'function' ? fmt(p.budget) : p.budget}` : '—'],
+    ['Stop-loss',      p.stop_loss_pct != null ? `${p.stop_loss_pct}%` : '—'],
+    ['Trailing',       p.trailing_stop_pct != null ? `${p.trailing_stop_pct}%` : '—'],
+    ['Risque',         p.risk_level != null ? `${p.risk_level} / 10` : '—'],
+    ['Seuil achat',    fmtVal(p.buy_threshold)],
+    ['Seuil vente',    fmtVal(p.sell_threshold)],
+    ['Vitesse',        p.speed ? `${p.speed}x` : '—'],
+  ];
+  grid.innerHTML = items.map(([k, v]) => `
+    <div class="bg-slate-800/40 border border-slate-700/50 rounded-lg px-3 py-2">
+      <div class="text-[10px] uppercase tracking-wider text-slate-500">${k}</div>
+      <div class="text-sm text-slate-200 mt-0.5">${v}</div>
+    </div>
+  `).join('');
+
+  const syms = (p.symbols || '').split(',').filter(Boolean);
+  wl.textContent = syms.length ? syms.join(' · ') : '—';
+
+  if (sumEl) {
+    const bits = [
+      p.days ? `${p.days}j` : null,
+      p.budget != null ? `$${p.budget}` : null,
+      syms.length ? `${syms.length} cryptos` : null,
+    ].filter(Boolean);
+    sumEl.textContent = bits.join(' · ');
+  }
+}
+
+// Build a markdown-flavoured recap of the run that the user can copy and
+// paste into a discussion (e.g. to iterate on the deterministic decider).
+// Pulls from the cached launch params + the latest snapshot — no extra
+// server roundtrip.
+function _buildRecapMarkdown() {
+  const p    = _btRunParams || {};
+  const snap = _latestSnap || {};
+  const syms = (p.symbols || '').split(',').filter(Boolean);
+
+  const budget = snap.budget ?? p.budget ?? 0;
+  const total  = snap.total ?? snap.total_value ?? budget;
+  const pnl    = snap.pnl ?? (total - budget);
+  const pnlPct = snap.pnl_pct ?? (budget > 0 ? pnl / budget * 100 : 0);
+  const wr     = snap.win_rate;
+  const tn     = snap.trades_count ?? snap.trades ?? (snap.history || []).filter(t => t.action !== 'ANALYSE').length;
+  const alpha  = snap.alpha;
+  const btcDiff = (snap.pnl != null && snap.btc_bh_pnl != null) ? snap.pnl - snap.btc_bh_pnl : null;
+
+  const sells = (snap.history || []).filter(t => t.pnl != null);
+  const best  = sells.length ? Math.max(...sells.map(t => t.pnl)) : null;
+  const worst = sells.length ? Math.min(...sells.map(t => t.pnl)) : null;
+
+  // Per-crypto breakdown: realised PnL + trade count.
+  const perCrypto = {};
+  for (const t of (snap.history || [])) {
+    const sym = (t.symbol || '').toUpperCase();
+    if (!sym) continue;
+    if (!perCrypto[sym]) perCrypto[sym] = { trades: 0, pnl: 0 };
+    if (t.action !== 'ANALYSE') perCrypto[sym].trades += 1;
+    if (t.pnl != null) perCrypto[sym].pnl += t.pnl;
+  }
+  const perCryptoRows = Object.entries(perCrypto)
+    .sort((a, b) => b[1].pnl - a[1].pnl)
+    .map(([sym, s]) => `- ${sym} : ${s.trades} trade${s.trades > 1 ? 's' : ''}, PnL réalisé ${s.pnl >= 0 ? '+' : ''}$${s.pnl.toFixed(2)}`);
+
+  const fmtNum = (v, d = 2) => (v == null || isNaN(v)) ? '—' : Number(v).toFixed(d);
+  const fmtDollar = (v) => v == null ? '—' : (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(2);
+
+  const startTs = (snap.start_ts || '').replace('T', ' ').slice(0, 16) || (p.start_date || 'auto');
+  const periodLine = p.days ? `${p.days} jour${p.days > 1 ? 's' : ''}${startTs ? ' (à partir du ' + startTs + ')' : ''}` : '—';
+
+  const lines = [
+    '# Backtest — récap',
+    '',
+    '## Paramètres',
+    `- Cryptos : ${syms.length ? syms.join(' · ') : '—'} (${syms.length})`,
+    `- Période : ${periodLine}`,
+    `- Budget initial : $${fmtNum(p.budget)}`,
+    `- Stop-loss : ${fmtNum(p.stop_loss_pct, 1)}% · Trailing : ${fmtNum(p.trailing_stop_pct, 1)}%`,
+    `- Risque : ${p.risk_level ?? '—'}/10`,
+    `- Seuils : achat ${p.buy_threshold ?? '—'} · vente ${p.sell_threshold ?? '—'}`,
+    `- Vitesse de simulation : ${p.speed ?? '—'}x`,
+    '',
+    '## Performance',
+    `- Total final : $${fmtNum(total)} (${fmtDollar(pnl)}, ${pnl >= 0 ? '+' : ''}${fmtNum(pnlPct, 2)}%)`,
+    `- vs Buy & Hold (alpha) : ${alpha != null ? fmtDollar(alpha) : '—'}`,
+    `- vs BTC seul : ${btcDiff != null ? fmtDollar(btcDiff) : '—'}`,
+    `- Win rate : ${wr != null ? fmtNum(wr, 1) + '%' : '—'} sur ${tn} trade${tn > 1 ? 's' : ''}`,
+    `- Best trade : ${best != null ? fmtDollar(best) : '—'} · Worst trade : ${worst != null ? fmtDollar(worst) : '—'}`,
+    '',
+    '## Trades par crypto',
+    perCryptoRows.length ? perCryptoRows.join('\n') : '- Aucun trade enregistré',
+    '',
+    '## Contexte (à compléter)',
+    '- Régime marché : (fear/greed moyen, dominance BTC, événements macro…)',
+    '- Hypothèse testée : (ex: "réduire trailing à 7% sur DOGEUSDC")',
+    '- Observation : (anomalie, pattern remarqué…)',
+  ];
+  return lines.join('\n');
+}
+
+function renderRecapTab() {
+  const empty   = document.getElementById('bt-recap-empty');
+  const content = document.getElementById('bt-recap-content');
+  const ta      = document.getElementById('bt-recap-text');
+  if (!ta) return;
+
+  const hasRun = !!(_btRunParams && _latestSnap);
+  if (empty)   empty.classList.toggle('hidden', hasRun);
+  if (content) content.classList.toggle('hidden', !hasRun);
+  if (!hasRun) return;
+
+  ta.value = _buildRecapMarkdown();
+}
+
+async function copyRecapToClipboard() {
+  const ta = document.getElementById('bt-recap-text');
+  if (!ta) return;
+  try {
+    await navigator.clipboard.writeText(ta.value);
+    const flag = document.getElementById('bt-recap-copied');
+    if (flag) {
+      flag.classList.remove('hidden');
+      setTimeout(() => flag.classList.add('hidden'), 1500);
+    }
+  } catch {
+    // Fallback for old browsers / non-https contexts
+    ta.select();
+    document.execCommand('copy');
+  }
 }
 
 // ── Backtest control ─────────────────────────────────────────────────────────
@@ -52,6 +212,11 @@ async function startBacktest() {
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'failed');
+    // Freeze the params used for this run so the Paramètres tab keeps
+    // reflecting the launched config even if the user edits the form for
+    // a future run.
+    _btRunParams = { ...body };
+    renderRunParamsTab();
     toast('Backtest lancé', 'ok');
     document.getElementById('bt-start-btn').disabled = true;
     document.getElementById('bt-stop-btn').disabled  = false;
@@ -65,6 +230,11 @@ async function stopBacktest() {
 
 async function onSpeedChange(val) {
   document.getElementById('bt-speed-val').textContent = val;
+  // Keep the cached snapshot's speed in sync with what's actually applied.
+  if (_btRunParams) {
+    _btRunParams.speed = Number(val);
+    renderRunParamsTab();
+  }
   try {
     await fetch('/api/backtest/speed', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -83,6 +253,13 @@ async function pollStatus() {
   try {
     const r = await fetch('/api/backtest/status');
     const d = await r.json();
+    // Hydrate the run-params cache from the server. The backend stashes the
+    // launch params into _bt_state at start, so a page reload mid-run still
+    // shows the running config in the Paramètres tab.
+    if (d.params && !_btRunParams) {
+      _btRunParams = d.params;
+      renderRunParamsTab();
+    }
     renderStatus(d);
     if (!d.running && d.snapshot && _btPollIv) {
       clearInterval(_btPollIv); _btPollIv = null;
@@ -220,6 +397,10 @@ function renderKpis(snap) {
   try {
     const r = await fetch('/api/backtest/status');
     const d = await r.json();
+    // Hydrate the params cache from server-side state so the Paramètres
+    // tab shows the right run after a page reload, whether the backtest
+    // is still running or already finished.
+    if (d.params) _btRunParams = d.params;
     if (d.running) {
       document.getElementById('bt-start-btn').disabled = true;
       document.getElementById('bt-stop-btn').disabled  = false;

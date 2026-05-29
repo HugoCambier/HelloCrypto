@@ -645,17 +645,29 @@ function renderPnlBarsChart(opts) {
   }
   canvas.classList.remove('hidden'); empty?.classList.add('hidden');
 
-  if (opts.chartRef && opts.chartRef.current) { opts.chartRef.current.destroy(); opts.chartRef.current = null; }
+  const labels = entries.map(([s]) => s);
+  const data   = entries.map(([, v]) => v);
+  const bg     = entries.map(([, v]) => v >= 0 ? 'rgba(52,211,153,0.65)' : 'rgba(248,113,113,0.65)');
+  const bd     = entries.map(([, v]) => v >= 0 ? '#34d399' : '#f87171');
+
+  // Update in place when the chart already exists: avoids destroy/recreate
+  // on every poll, which would reflow the canvas and steal scroll position
+  // from the user (each Charts-tab poll is ~1s during a running backtest).
+  const existing = opts.chartRef && opts.chartRef.current;
+  if (existing) {
+    existing.data.labels = labels;
+    existing.data.datasets[0].data = data;
+    existing.data.datasets[0].backgroundColor = bg;
+    existing.data.datasets[0].borderColor     = bd;
+    existing.update('none');
+    return;
+  }
+
   const chart = new Chart(canvas, {
     type: 'bar',
     data: {
-      labels: entries.map(([s]) => s),
-      datasets: [{
-        data: entries.map(([, v]) => v),
-        backgroundColor: entries.map(([, v]) => v >= 0 ? 'rgba(52,211,153,0.65)' : 'rgba(248,113,113,0.65)'),
-        borderColor:     entries.map(([, v]) => v >= 0 ? '#34d399' : '#f87171'),
-        borderWidth: 1, borderRadius: 3,
-      }],
+      labels,
+      datasets: [{ data, backgroundColor: bg, borderColor: bd, borderWidth: 1, borderRadius: 3 }],
     },
     options: {
       responsive: true, animation: false,
@@ -698,13 +710,25 @@ function renderVolBarsChart(opts) {
   }
   canvas.classList.remove('hidden'); empty?.classList.add('hidden');
 
-  if (opts.chartRef && opts.chartRef.current) { opts.chartRef.current.destroy(); opts.chartRef.current = null; }
+  const labels = entries.map(([s]) => s);
+  const data   = entries.map(([, v]) => v);
+
+  // Update in place to avoid canvas reflow on every poll (see notes in
+  // renderPnlBarsChart).
+  const existing = opts.chartRef && opts.chartRef.current;
+  if (existing) {
+    existing.data.labels = labels;
+    existing.data.datasets[0].data = data;
+    existing.update('none');
+    return;
+  }
+
   const chart = new Chart(canvas, {
     type: 'bar',
     data: {
-      labels: entries.map(([s]) => s),
+      labels,
       datasets: [{
-        data: entries.map(([, v]) => v),
+        data,
         backgroundColor: 'rgba(96,165,250,0.45)', borderColor: '#60a5fa',
         borderWidth: 1, borderRadius: 3,
       }],
