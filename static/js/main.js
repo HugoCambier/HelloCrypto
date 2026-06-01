@@ -116,6 +116,68 @@ function toggleRunFilter(section, kind) {
   renderRunsList();
 }
 
+// Right-panel context bar: shows the selected run's identity (tag + name) with
+// quick rename/delete actions, plus the next-cycle countdown when the live sim
+// driving the panel is this run. Hidden when no specific run is selected (e.g.
+// the "Activité réelle" catch-all view).
+function _renderRunCtxBar() {
+  const bar = document.getElementById('run-ctx-bar');
+  if (!bar) return;
+  const id = _selectedSession;
+  if (!id) { bar.classList.add('hidden'); return; }
+
+  const isSim = _selectedMode === 'simulation';
+  const src   = isSim ? _runs : _realRuns;
+  const s     = src.find(r => r.id === id);
+  if (!s) { bar.classList.add('hidden'); return; }
+
+  const name      = s.name || id;
+  const isRunning = isSim ? !!_simSessions[id] : id === _activeRealSessionId;
+
+  bar.classList.remove('hidden');
+  const tag = document.getElementById('run-ctx-tag');
+  tag.textContent = isSim ? 'SIM' : 'RÉEL';
+  tag.className   = 'run-tag ' + (isSim ? 'tag-sim' : 'tag-real');
+  document.getElementById('run-ctx-name').textContent = name;
+  document.getElementById('run-ctx-running-dot').classList.toggle('hidden', !isRunning);
+
+  const renameBtn = document.getElementById('run-ctx-rename');
+  renameBtn.onclick = (e) => { e.stopPropagation(); openRenameModal(id, name); };
+
+  // Mirror the sidebar rule: an active real session can't be deleted from here
+  // (must be stopped first via the pinned card).
+  const deleteBtn = document.getElementById('run-ctx-delete');
+  const blockDelete = !isSim && isRunning;
+  deleteBtn.classList.toggle('hidden', blockDelete);
+  deleteBtn.onclick = (e) => {
+    e.stopPropagation();
+    if (isSim) deleteRun(id, name);
+    else       deleteRealRun(id, name, s.trade_count || 0);
+  };
+
+  // Countdown: only meaningful when this run is the live sim feeding the panel.
+  const showCd = isSim && isRunning && id === _simSessionId && (_simNextCycleAt || _simCycleStartedAt);
+  document.getElementById('run-ctx-next').classList.toggle('hidden', !showCd);
+
+  // Cycle counter: prefer the live snapshot when running (most accurate),
+  // otherwise fall back to the cycle_count served by the sessions list
+  // (MAX(cycle) over logs, populated for finished runs too).
+  const cyclesEl = document.getElementById('run-ctx-cycles');
+  const cyclesVal = document.getElementById('run-ctx-cycles-val');
+  let nCycles = null;
+  if (isRunning && isSim) {
+    nCycles = _simSessions[id]?.snapshot?.cycle ?? s.cycle_count ?? null;
+  } else {
+    nCycles = s.cycle_count ?? null;
+  }
+  if (nCycles != null && nCycles > 0) {
+    cyclesVal.textContent = nCycles;
+    cyclesEl.classList.remove('hidden');
+  } else {
+    cyclesEl.classList.add('hidden');
+  }
+}
+
 function _renderPinnedRealCard() {
   // Source of truth for "is real armed?" is the DB-backed
   // ``active_real_session_id`` (loaded into _activeRealSessionId). The
@@ -318,6 +380,7 @@ function selectRun(mode, sessionId) {
   _selectedMode    = mode;
   _selectedSession = sessionId;
   renderRunsList();
+  _renderRunCtxBar();
   _showContentState();
   _updateOrdersTabVisibility();
   // Clear charts immediately to avoid lingering data from the previous run
@@ -835,6 +898,7 @@ async function _pollSimStatus() {
 
     _updateSidebarLiveRail();
     renderRunsList(); // refresh "running" indicator dots (per session)
+    _renderRunCtxBar();
 
     // Push live updates to the right panel only when viewing a running session.
     const viewed = _simSessions[_selectedSession];
@@ -847,8 +911,9 @@ async function _pollSimStatus() {
 }
 
 function _tickCountdown() {
-  const el = document.getElementById('sim-countdown');
-  if (!el) return;
+  const el  = document.getElementById('sim-countdown');
+  const el2 = document.getElementById('run-ctx-countdown');
+  if (!el && !el2) return;
   // Prefer server-computed next_cycle_at (aligned on GH Actions 5-min boundary
   // in serverless mode). Falls back to the legacy cycle_started_at + cycle_seconds
   // calculation for local dev (threading-based loop).
@@ -859,16 +924,26 @@ function _tickCountdown() {
     const elapsed = (Date.now() - new Date(_simCycleStartedAt+'Z').getTime())/1000;
     rem = Math.max(0, Math.round(_simCycleSeconds - elapsed));
   } else {
-    el.textContent = '—'; return;
+    if (el)  el.textContent  = '—';
+    if (el2) el2.textContent = '—';
+    return;
   }
-  if (rem === 0) { el.textContent = 'exécution…'; return; }
-  const m = Math.floor(rem/60), s = rem%60;
-  el.textContent = m > 0 ? `${m}m${String(s).padStart(2,'0')}s` : `${s}s`;
+  let txt;
+  if (rem === 0) {
+    txt = 'exécution…';
+  } else {
+    const m = Math.floor(rem/60), s = rem%60;
+    txt = m > 0 ? `${m}m${String(s).padStart(2,'0')}s` : `${s}s`;
+  }
+  if (el)  el.textContent  = txt;
+  if (el2) el2.textContent = txt;
 }
 function _stopCountdown() {
   clearInterval(_countdownIv); _countdownIv = null;
-  const el = document.getElementById('sim-countdown');
-  if (el) el.textContent = '—';
+  const el  = document.getElementById('sim-countdown');
+  const el2 = document.getElementById('run-ctx-countdown');
+  if (el)  el.textContent  = '—';
+  if (el2) el2.textContent = '—';
 }
 
 // ─── Resume detection ────────────────────────────────────────────────────────

@@ -392,47 +392,68 @@ function renderPnlChart(opts) {
   const valueMode = opts.valueMode || 'absolute'; // 'absolute' | 'delta'
   const stratPts = series.map(p => valueMode === 'absolute' ? p.v - budget : p.v);
 
+  // pointRadius array: marker only at the LAST data point so the user can
+  // read its exact value visually (matches the KPI card). Everywhere else
+  // the line stays clean.
+  const _endMarker = (data) => data.map((_, i) => i === data.length - 1 ? 3 : 0);
+
+  // Force the last position of a benchmark series to be the truly-latest
+  // bench value, regardless of strat-vs-bench timestamp alignment. The KPI
+  // cards use bench[last].v - budget; this guarantees the chart's visible
+  // end equals that value too. Other points keep their aligned values.
+  const _pinLastTo = (alignedPts, raw, budget) => {
+    if (!Array.isArray(alignedPts) || !alignedPts.length || !raw.length) return alignedPts;
+    const out = alignedPts.slice();
+    const lastV = raw[raw.length - 1].v;
+    if (lastV != null) out[out.length - 1] = lastV - budget;
+    return out;
+  };
+
   const datasets = [{
     label: 'Stratégie',
     data: stratPts,
-    fill: false, tension: 0.3, pointRadius: 0,
+    fill: false, tension: 0, pointRadius: _endMarker(stratPts), pointBackgroundColor: '#60a5fa',
     borderColor: '#60a5fa', borderWidth: 2,
   }];
 
   // Bucket benchmark series with same period/granularity
   if (Array.isArray(opts.bhSeries) && opts.bhSeries.length) {
     const bh = bucketTimeseries(opts.bhSeries, filters.period, filters.granularity);
-    const bhPts = _alignToLabels(bh, series, budget, 'absolute');
+    let bhPts  = _alignToLabels(bh, series, budget, 'absolute');
+    bhPts      = _pinLastTo(bhPts, opts.bhSeries, budget);
     datasets.push({
       label: 'Buy & Hold',
       data: bhPts,
-      fill: false, tension: 0.3, pointRadius: 0,
+      fill: false, tension: 0, pointRadius: _endMarker(bhPts), pointBackgroundColor: '#a78bfa',
       borderColor: '#a78bfa', borderWidth: 2, borderDash: [4, 4],
     });
   } else if (series[0].bh != null) {
     // Backtest case: bh is inline on each strategy point
+    const bhPts = series.map(p => p.bh != null ? p.bh - budget : null);
     datasets.push({
       label: 'Buy & Hold',
-      data: series.map(p => p.bh != null ? p.bh - budget : null),
-      fill: false, tension: 0.3, pointRadius: 0,
+      data: bhPts,
+      fill: false, tension: 0, pointRadius: _endMarker(bhPts), pointBackgroundColor: '#a78bfa',
       borderColor: '#a78bfa', borderWidth: 2, borderDash: [4, 4],
     });
   }
 
   if (Array.isArray(opts.btcSeries) && opts.btcSeries.length) {
     const btc = bucketTimeseries(opts.btcSeries, filters.period, filters.granularity);
-    const btcPts = _alignToLabels(btc, series, budget, 'absolute');
+    let btcPts = _alignToLabels(btc, series, budget, 'absolute');
+    btcPts     = _pinLastTo(btcPts, opts.btcSeries, budget);
     datasets.push({
       label: 'BTC seul',
       data: btcPts,
-      fill: false, tension: 0.3, pointRadius: 0,
+      fill: false, tension: 0, pointRadius: _endMarker(btcPts), pointBackgroundColor: '#f59e0b',
       borderColor: '#f59e0b', borderWidth: 2, borderDash: [2, 4],
     });
   } else if (series[0].btc != null) {
+    const btcPts = series.map(p => p.btc != null ? p.btc - budget : null);
     datasets.push({
       label: 'BTC seul',
-      data: series.map(p => p.btc != null ? p.btc - budget : null),
-      fill: false, tension: 0.3, pointRadius: 0,
+      data: btcPts,
+      fill: false, tension: 0, pointRadius: _endMarker(btcPts), pointBackgroundColor: '#f59e0b',
       borderColor: '#f59e0b', borderWidth: 2, borderDash: [2, 4],
     });
   }

@@ -20,13 +20,20 @@ _BENCH_CACHE: dict = {}
 _BENCH_TTL  = 600  # seconds (benchmarks change slowly; aggressive cache)
 
 
-def _compute_benchmarks(start_iso: str, watchlist: list[str], budget: float) -> dict:
+def _compute_benchmarks(start_iso: str, watchlist: list[str], budget: float,
+                        end_iso: str | None = None) -> dict:
     """Compute BH + BTC benchmark timeseries from Binance klines.
 
     Returns ``{"bh": [{ts, v}], "btc": [{ts, v}]}`` where v is the portfolio
     value (USDC equivalent) at each hourly candle.
+
+    ``end_iso`` clips the benchmark series at a specific timestamp (for
+    finished sessions). Without it, benchmarks extend to "now", which is
+    correct for live runs but creates a mismatch between chart and KPI cards
+    on finished sessions (chart aligns bench to strategy's last point, KPIs
+    use the last bench point — they differ when ``now > session_end``).
     """
-    cache_key = (start_iso, tuple(watchlist), round(budget, 2))
+    cache_key = (start_iso, end_iso, tuple(watchlist), round(budget, 2))
     now = time.time()
     cached = _BENCH_CACHE.get(cache_key)
     if cached and (now - cached[0]) < _BENCH_TTL:
@@ -37,7 +44,13 @@ def _compute_benchmarks(start_iso: str, watchlist: list[str], budget: float) -> 
         if start_dt.tzinfo is None:
             start_dt = start_dt.replace(tzinfo=UTC)
         start_ms = int(start_dt.timestamp() * 1000)
-        end_ms   = int(datetime.now(UTC).timestamp() * 1000)
+        if end_iso:
+            end_dt = datetime.fromisoformat(end_iso)
+            if end_dt.tzinfo is None:
+                end_dt = end_dt.replace(tzinfo=UTC)
+            end_ms = int(end_dt.timestamp() * 1000)
+        else:
+            end_ms = int(datetime.now(UTC).timestamp() * 1000)
     except Exception:
         return {"bh": [], "btc": []}
 
@@ -201,14 +214,35 @@ def api_performance():
     # Benchmark timeseries (BH + BTC) — anchor on the session start when known,
     # else on the first trade. Use the session's own budget + watchlist so the
     # curves are measured against the same capital as the strategy.
+    #
+    # End anchor: when the session is finished (not currently armed), clip the
+    # bench at the session's last trade so chart and KPI cards agree. For
+    # active runs we let it extend to "now" so the strategy's live value can
+    # be compared against passive at the same horizon.
     bh_ts: list = []
     btc_ts: list = []
     effective_budget    = float(sess_budget if sess_budget is not None else config.get("budget", 100))
     effective_watchlist = sess_watchlist if sess_watchlist else config.get("watchlist", [])
     if with_bench and (sorted_trades or sess_started_at):
         start_iso = sess_started_at or sorted_trades[0]["timestamp"]
+        end_iso: str | None = None
+        if session_id:
+            try:
+                from db.store import get_state as _get_state
+                active_real = _get_state("active_real_session_id") or None
+                active_sims_state = _get_state("active_sims") or {}
+                is_active = (
+                    session_id == active_real
+                    or (isinstance(active_sims_state, dict)
+                        and session_id in active_sims_state)
+                )
+            except Exception:
+                is_active = False
+            if not is_active and sorted_trades:
+                end_iso = sorted_trades[-1]["timestamp"]
         try:
-            bench = _compute_benchmarks(start_iso, effective_watchlist, effective_budget)
+            bench = _compute_benchmarks(start_iso, effective_watchlist,
+                                        effective_budget, end_iso=end_iso)
             bh_ts  = bench.get("bh", [])
             btc_ts = bench.get("btc", [])
         except Exception:

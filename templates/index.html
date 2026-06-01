@@ -429,6 +429,21 @@
         <button class="rtab hidden" id="rtab-orders-btn" data-rtab="orders" onclick="switchRTab('orders',this)">Ordres</button>
       </div>
 
+      <!-- Run context bar (run name + actions + next cycle countdown, scoped to the selected session) -->
+      <div id="run-ctx-bar" class="hidden bg-slate-900/60 border-b border-slate-800 px-4 py-2 flex items-center justify-between gap-3 shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <span id="run-ctx-tag" class="run-tag"></span>
+          <span id="run-ctx-name" class="text-sm font-semibold text-slate-100 truncate"></span>
+          <span id="run-ctx-running-dot" class="hidden w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+          <button id="run-ctx-rename" type="button" class="ml-1 text-slate-500 hover:text-blue-300 text-sm leading-none px-1.5 py-0.5 rounded hover:bg-slate-800 transition-colors" title="Renommer">✎</button>
+          <button id="run-ctx-delete" type="button" class="text-slate-500 hover:text-rose-400 text-base leading-none px-1.5 py-0.5 rounded hover:bg-slate-800 transition-colors" title="Supprimer">×</button>
+        </div>
+        <div class="flex items-center gap-3 shrink-0 text-xs text-slate-400">
+          <span id="run-ctx-cycles" class="hidden"><span id="run-ctx-cycles-val" class="text-slate-200">—</span> <span class="text-slate-500">cycles</span></span>
+          <span id="run-ctx-next" class="hidden">Prochain cycle dans <span id="run-ctx-countdown" class="text-slate-200">—</span></span>
+        </div>
+      </div>
+
       <!-- Tab: Cockpit -->
       <div id="rtab-cockpit" class="flex-1 overflow-y-auto p-5 space-y-4">
 

@@ -739,7 +739,8 @@ def list_simulation_sessions_v2() -> list[dict]:
             c.execute(
                 "SELECT s.id, s.name, s.mode, s.created_at,"
                 " COUNT(t.id) as trade_count,"
-                " MIN(t.timestamp) as start_ts, MAX(t.timestamp) as end_ts"
+                " MIN(t.timestamp) as start_ts, MAX(t.timestamp) as end_ts,"
+                " (SELECT MAX(cycle) FROM logs WHERE session_id = s.id) as cycle_count"
                 " FROM sessions s"
                 " LEFT JOIN trades t ON t.session_id = s.id AND t.mode = 'simulation'"
                 " WHERE s.mode = 'simulation'"
@@ -751,7 +752,8 @@ def list_simulation_sessions_v2() -> list[dict]:
             rows = c.execute(
                 "SELECT s.id, s.name, s.mode, s.created_at,"
                 " COUNT(t.id) as trade_count,"
-                " MIN(t.timestamp) as start_ts, MAX(t.timestamp) as end_ts"
+                " MIN(t.timestamp) as start_ts, MAX(t.timestamp) as end_ts,"
+                " (SELECT MAX(cycle) FROM logs WHERE session_id = s.id) as cycle_count"
                 " FROM sessions s"
                 " LEFT JOIN trades t ON t.session_id = s.id AND t.mode = 'simulation'"
                 " WHERE s.mode = 'simulation'"
@@ -777,7 +779,8 @@ def list_real_sessions() -> list[dict]:
             c.execute(
                 "SELECT s.id, s.name, s.mode, s.created_at,"
                 " COUNT(t.id) as trade_count,"
-                " MIN(t.timestamp) as start_ts, MAX(t.timestamp) as end_ts"
+                " MIN(t.timestamp) as start_ts, MAX(t.timestamp) as end_ts,"
+                " (SELECT MAX(cycle) FROM logs WHERE session_id = s.id) as cycle_count"
                 " FROM sessions s"
                 " LEFT JOIN trades t ON t.session_id = s.id AND t.mode = 'real'"
                 " WHERE s.mode = 'real'"
@@ -789,7 +792,8 @@ def list_real_sessions() -> list[dict]:
             rows = c.execute(
                 "SELECT s.id, s.name, s.mode, s.created_at,"
                 " COUNT(t.id) as trade_count,"
-                " MIN(t.timestamp) as start_ts, MAX(t.timestamp) as end_ts"
+                " MIN(t.timestamp) as start_ts, MAX(t.timestamp) as end_ts,"
+                " (SELECT MAX(cycle) FROM logs WHERE session_id = s.id) as cycle_count"
                 " FROM sessions s"
                 " LEFT JOIN trades t ON t.session_id = s.id AND t.mode = 'real'"
                 " WHERE s.mode = 'real'"
