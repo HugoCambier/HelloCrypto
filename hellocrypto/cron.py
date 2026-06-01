@@ -31,9 +31,16 @@ def tick(stop_event: threading.Event | None = None) -> dict:
         stop_event = threading.Event()
 
     _maybe_purge_old_logs()
+    _maybe_purge_old_snapshots()
     # Note: playbook / behavior rebuilds are NOT called here. They run on
     # their own daily schedule via /api/cron/learn so a slow rebuild
     # cannot delay a trading decision cycle.
+
+    # Collect a 5-min market snapshot on EVERY tick, regardless of decision
+    # cadence (a deterministic run with cycle=4h would otherwise only refresh
+    # prices every 4h). The data is stored with interval='5m' so it coexists
+    # with the hourly grid; purged after 7 days to keep DB size in check.
+    _capture_5min_market_data()
 
     # Sims and the real runner can be armed simultaneously and are processed
     # on the same fire — they share the heartbeat but each gates itself by
@@ -97,6 +104,71 @@ def _maybe_purge_old_logs() -> None:
             log.info("[CRON] Purge logs >14j: %d lignes supprimées", deleted)
     except Exception:
         log.warning("[CRON] Purge logs échouée", exc_info=True)
+
+
+def _maybe_purge_old_snapshots() -> None:
+    """Purge 5-min snapshots older than 7 days, at most once per 24h.
+
+    Hourly snapshots (interval='1h') are kept indefinitely — only the dense
+    5-min stream is trimmed, since it's only useful for short-term context
+    (last-week intraday) and accumulates ~3000 rows/day/coin otherwise.
+    """
+    import db.store as store
+    try:
+        last = store.get_state("last_snapshot_purge_at")
+        if last:
+            elapsed = (datetime.utcnow() - datetime.fromisoformat(last)).total_seconds()
+            if elapsed < 86400:
+                return
+        from db.snapshots import purge_old_snapshots
+        deleted = purge_old_snapshots(retention_days=7, interval="5m")
+        store.set_state("last_snapshot_purge_at", datetime.utcnow().isoformat())
+        if deleted:
+            log.info("[CRON] Purge snapshots 5m >7j: %d lignes supprimées", deleted)
+    except Exception:
+        log.warning("[CRON] Purge snapshots échouée", exc_info=True)
+
+
+def _capture_5min_market_data() -> None:
+    """Fetch + persist a 5-min market snapshot for the configured watchlist.
+
+    Runs at every cron heartbeat so prices / indicators are refreshed in DB
+    even when no decision cycle fires (e.g. a deterministic run with
+    cycle=4h). Best-effort: any failure is logged and swallowed.
+    """
+    try:
+        from hellocrypto.api import (
+            get_btc_dominance,
+            get_enriched_market_data,
+            get_fear_and_greed,
+            load_config,
+        )
+        from hellocrypto.eval.capture import capture_snapshots_5min
+
+        cfg = load_config() or {}
+        watchlist = cfg.get("watchlist") or []
+        if not watchlist:
+            return
+        # Reuse the 5-min cache window so back-to-back ticks within the same
+        # window don't double-fetch.
+        market = get_enriched_market_data(watchlist, cycle_seconds=300)
+        if not market:
+            return
+        fng = None
+        dom = None
+        try:
+            fng = get_fear_and_greed()
+        except Exception:
+            pass
+        try:
+            dom = get_btc_dominance()
+        except Exception:
+            pass
+        n = capture_snapshots_5min(market, fng, dom)
+        if n:
+            log.info("[CRON] Capture 5min: %d snapshots persistés", n)
+    except Exception:
+        log.warning("[CRON] Capture 5min échouée", exc_info=True)
 
 
 def _maybe_rebuild_playbook() -> None:

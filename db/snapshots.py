@@ -203,6 +203,31 @@ def count_snapshots(
     return int(row[0])
 
 
+def purge_old_snapshots(retention_days: int = 7, interval: str = "5m") -> int:
+    """Delete snapshots older than ``retention_days`` for a given interval.
+
+    Used to keep the 5-min market-data stream from filling up the DB: beyond
+    7 days only the hourly grid (interval='1h') is kept. Returns the number
+    of rows deleted. Failures are swallowed by the caller (cron) — purge
+    is best-effort, never on the critical path.
+    """
+    if _USE_FIRESTORE:
+        return 0
+    from datetime import UTC, datetime, timedelta
+    cutoff = (datetime.now(UTC) - timedelta(days=retention_days)).isoformat()
+    ph = "%s" if _USE_POSTGRES else "?"
+    sql = f"DELETE FROM price_snapshots WHERE interval={ph} AND timestamp<{ph}"
+    if _USE_POSTGRES:
+        from db.store import _postgres
+        with _postgres() as c:
+            c.execute(sql, (interval, cutoff))
+            return c.rowcount or 0
+    from db.store import _sqlite
+    with _sqlite() as c:
+        cur = c.execute(sql, (interval, cutoff))
+        return cur.rowcount or 0
+
+
 def load_snapshots(
     symbol: str | None = None,
     source: str | None = None,

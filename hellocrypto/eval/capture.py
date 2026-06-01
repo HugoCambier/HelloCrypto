@@ -119,3 +119,47 @@ def capture_snapshots(
     except Exception:
         log.exception("capture_snapshots: failed to persist %d rows", len(rows))
         return 0
+
+
+def capture_snapshots_5min(
+    market_data_raw: dict,
+    fear_greed: dict | None,
+    btc_dominance: float | None,
+    source: str = "live_5m",
+) -> int:
+    """Persist one 5-min snapshot per symbol (decoupled from decision cycles).
+
+    Same shape as ``capture_snapshots`` but timestamps are floored to the
+    nearest 5-min boundary and stored with ``interval='5m'`` — so they
+    coexist with hourly rows (UNIQUE on symbol+timestamp+interval).
+
+    Beyond 7 days these are purged by ``purge_old_snapshots`` to keep the DB
+    small; only the hourly grid is retained long-term.
+    """
+    if not market_data_raw:
+        return 0
+
+    now = datetime.now(UTC)
+    floored_minute = (now.minute // 5) * 5
+    ts = now.replace(minute=floored_minute, second=0, microsecond=0).isoformat()
+    btc_trend_1d = (
+        market_data_raw.get("BTCUSDC", {}).get("trend_1d")
+        if "BTCUSDC" in market_data_raw else None
+    )
+
+    rows = []
+    for sym, data in market_data_raw.items():
+        if data.get("price") is None:
+            continue
+        row = _market_row_to_snapshot(
+            sym, data, ts, fear_greed, btc_dominance,
+            source, None, None, btc_trend_1d,
+        )
+        row["interval"] = "5m"
+        rows.append(row)
+
+    try:
+        return save_snapshots_batch(rows)
+    except Exception:
+        log.exception("capture_snapshots_5min: failed to persist %d rows", len(rows))
+        return 0
