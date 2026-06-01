@@ -228,6 +228,35 @@ def purge_old_snapshots(retention_days: int = 7, interval: str = "5m") -> int:
         return cur.rowcount or 0
 
 
+def load_cycle_timestamps(session_id: str) -> list[str]:
+    """Return one timestamp per decision cycle for a session, oldest-first.
+
+    Sourced from the ``logs`` table (one row per cycle per log message,
+    aggregated to MIN(timestamp) per cycle so we get the moment the cycle
+    *started*). price_snapshots can't be used: it floors timestamps to
+    the hour for backfill alignment, so multiple intra-hour cycles
+    collapse into one row.
+
+    The dashboard uses this list to densify the strategy curve — a sim
+    with 185 cycles but 1 trade still gets 185 points on the chart.
+    """
+    if _USE_FIRESTORE:
+        return []
+    ph  = "%s" if _USE_POSTGRES else "?"
+    sql = (f"SELECT MIN(timestamp) FROM logs "
+           f"WHERE session_id={ph} AND cycle IS NOT NULL "
+           f"GROUP BY cycle ORDER BY cycle ASC")
+    if _USE_POSTGRES:
+        from db.store import _postgres
+        with _postgres() as c:
+            c.execute(sql, (session_id,))
+            return [r[0] for r in c.fetchall() if r[0]]
+    from db.store import _sqlite
+    with _sqlite() as c:
+        rows = c.execute(sql, (session_id,)).fetchall()
+    return [r[0] for r in rows if r[0]]
+
+
 def load_snapshots(
     symbol: str | None = None,
     source: str | None = None,

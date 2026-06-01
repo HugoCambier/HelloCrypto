@@ -336,26 +336,35 @@ def api_performance():
         except Exception:
             log.exception("Failed to compute benchmarks")
 
+    cycle_timestamps: list[str] = []
+    if session_id:
+        try:
+            from db.snapshots import load_cycle_timestamps
+            cycle_timestamps = load_cycle_timestamps(session_id)
+        except Exception:
+            log.exception("Failed to load cycle timestamps")
+
     return jsonify({
-        "period":         period,
-        "mode":           mode,
-        "trades":         len(filtered),
-        "buys":           len(buys),
-        "sells":          len(sells),
-        "stop_losses":    len(stop_losses),
-        "invested":       round(invested, 2),
-        "recovered":      round(recovered, 2),
-        "fees":           round(fees, 4),
-        "net":            net,
-        "win_rate":       win_rate,
-        "best_trade":     best_trade,
-        "worst_trade":    worst_trade,
-        "history":        list(reversed(sorted_trades[-200:])),
-        "timeseries":     timeseries,
-        "bh_timeseries":  bh_ts,
-        "btc_timeseries": btc_ts,
-        "bh_breakdown":   bh_breakdown,
-        "btc_breakdown":  btc_breakdown,
-        "sessions":       sessions,
-        "budget":         round(effective_budget, 2),
+        "period":            period,
+        "mode":              mode,
+        "trades":            len(filtered),
+        "buys":              len(buys),
+        "sells":             len(sells),
+        "stop_losses":       len(stop_losses),
+        "invested":          round(invested, 2),
+        "recovered":         round(recovered, 2),
+        "fees":              round(fees, 4),
+        "net":               net,
+        "win_rate":          win_rate,
+        "best_trade":        best_trade,
+        "worst_trade":       worst_trade,
+        "history":           list(reversed(sorted_trades[-200:])),
+        "timeseries":        timeseries,
+        "bh_timeseries":     bh_ts,
+        "btc_timeseries":    btc_ts,
+        "bh_breakdown":      bh_breakdown,
+        "btc_breakdown":     btc_breakdown,
+        "cycle_timestamps":  cycle_timestamps,
+        "sessions":          sessions,
+        "budget":            round(effective_budget, 2),
     })

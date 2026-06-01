@@ -161,6 +161,58 @@ function setHeroVal(elId, val, str, subStr) {
 // Reconstruct a [{ts, v}] timeseries of TOTAL portfolio value from trade history.
 // Each point's v = cash + Σ(qty × last_known_price). Approximate between trades
 // (uses last seen price per symbol), useful for past sim sessions and real mode.
+// Like strategyTimeseriesFromHistory but emits one point per *decision cycle*
+// rather than per trade. cycleTimestamps is the chronological list of every
+// cycle the agent ran (sourced from price_snapshots WHERE session_id=X).
+// Trades happen *at* cycle boundaries (the agent decides then executes), so
+// for each cycle we apply every trade up to that timestamp, then snapshot
+// the wallet value. Result: a flat-at-zero curve still has 185 points, not 1.
+function strategyTimeseriesFromCycles(history, cycleTimestamps, budget) {
+  if (!Array.isArray(cycleTimestamps) || !cycleTimestamps.length) {
+    return strategyTimeseriesFromHistory(history, budget);
+  }
+  const trades = (history || [])
+    .filter(t => t.timestamp && t.action && t.action !== 'ANALYSE')
+    .sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)));
+
+  let cash = budget;
+  const positions = {};
+  const lastPrice = {};
+  const points = [];
+  let ti = 0;
+  const applyTrade = (t) => {
+    if (!t.symbol) return;
+    if (t.price) lastPrice[t.symbol] = t.price;
+    const qty    = Number(t.qty) || 0;
+    const amount = t.amount != null ? Number(t.amount) : qty * (t.price || 0);
+    if (/BUY/i.test(t.action))       { cash -= amount; positions[t.symbol] = (positions[t.symbol] || 0) + qty; }
+    else if (/SELL/i.test(t.action)) { cash += amount; positions[t.symbol] = (positions[t.symbol] || 0) - qty; }
+    if (positions[t.symbol] != null && positions[t.symbol] <= 1e-8) delete positions[t.symbol];
+  };
+  const snapshotV = () => {
+    let posVal = 0;
+    for (const [sym, q] of Object.entries(positions)) {
+      if (lastPrice[sym]) posVal += q * lastPrice[sym];
+    }
+    return cash + posVal;
+  };
+
+  for (const cycleTs of cycleTimestamps) {
+    while (ti < trades.length && trades[ti].timestamp <= cycleTs) {
+      applyTrade(trades[ti]);
+      ti++;
+    }
+    points.push({ ts: cycleTs, v: snapshotV() });
+  }
+  // Catch any trades that happened after the last recorded cycle timestamp
+  while (ti < trades.length) {
+    applyTrade(trades[ti]);
+    points.push({ ts: trades[ti].timestamp, v: snapshotV() });
+    ti++;
+  }
+  return points;
+}
+
 function strategyTimeseriesFromHistory(history, budget) {
   if (!Array.isArray(history) || !history.length) return [];
   const sorted = history

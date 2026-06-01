@@ -1027,6 +1027,8 @@ async function loadPerformance() {
       if (token !== _perfFetchToken) return;
       _lastPerf.bh_timeseries  = perfBench.bh_timeseries;
       _lastPerf.btc_timeseries = perfBench.btc_timeseries;
+      _lastPerf.bh_breakdown   = perfBench.bh_breakdown;
+      _lastPerf.btc_breakdown  = perfBench.btc_breakdown;
       _renderPnlChart();
       _renderKpis(_lastPerf);
     }).catch(()=>{}).finally(() => {
@@ -1071,8 +1073,12 @@ function _renderPnlChart() {
     series = _simSnap.value_timeseries;
     budget = _simSnap.budget ?? budget;
   } else {
-    // Priority 2: reconstruct from trade history (last-known-price per symbol)
-    series = strategyTimeseriesFromHistory(_lastPerf.history || [], budget);
+    // Priority 2: reconstruct from trade history forward-filled at every
+    // decision cycle (so a 185-cycle sim that only traded once still draws
+    // 185 points, not 1). Falls back to trade-only points when the session
+    // pre-dates the cycle_timestamps capture.
+    series = strategyTimeseriesFromCycles(
+      _lastPerf.history || [], _lastPerf.cycle_timestamps || [], budget);
     // For real mode, append a 'now' point with the actual live total
     if (_selectedMode === 'real' && _livePortfolio && !_livePortfolio.error) {
       const cash   = _livePortfolio.cash ?? 0;
@@ -1284,16 +1290,27 @@ function renderSimComparisons(snap) {
   _setHeroVal('kpi-pnl', pnl, fmtPnl(pnl), fmtPct(pnlPct));
   _setHeroColor('hero-pnl', pnl);
 
-  const btcDiff = (snap.pnl != null && snap.btc_bh_pnl != null) ? snap.pnl - snap.btc_bh_pnl : null;
-  _setHeroVal('kpi-btc-bh', btcDiff,
-              btcDiff != null ? fmtPnl(btcDiff) : '—',
-              btcDiff != null && budget > 0 ? fmtPct(btcDiff/budget*100) : 'stratégie − BTC');
-  _setHeroColor('hero-btc', btcDiff);
+  // Comparison cards: always use the DB-sourced bench timeseries (same as
+  // the PnL chart) for card == chart consistency. snap.btc_bh_pnl /
+  // snap.alpha would otherwise lag by one cycle (computed at last sim
+  // tick, can be 5-30 min stale).
+  const benchP = _lastPerf && (_lastPerf.btc_timeseries || _lastPerf.bh_timeseries)
+    ? _lastPerf
+    : null;
+  const btcVal = benchP ? _computeVsBtc(benchP, pnl)
+    : ((snap.pnl != null && snap.btc_bh_pnl != null) ? snap.pnl - snap.btc_bh_pnl : null);
+  _setHeroVal('kpi-btc-bh', btcVal,
+              btcVal != null ? fmtPnl(btcVal) : '—',
+              btcVal != null && budget > 0 ? fmtPct(btcVal/budget*100) : 'stratégie − BTC');
+  _setHeroColor('hero-btc', btcVal);
 
-  _setHeroVal('kpi-alpha', snap.alpha,
-              snap.alpha != null ? fmtPnl(snap.alpha) : '—',
-              snap.alpha != null && budget > 0 ? fmtPct(snap.alpha/budget*100) : 'stratégie − hold');
-  _setHeroColor('hero-alpha', snap.alpha);
+  const alphaVal = benchP ? _computeVsBH(benchP, pnl) : snap.alpha;
+  _setHeroVal('kpi-alpha', alphaVal,
+              alphaVal != null ? fmtPnl(alphaVal) : '—',
+              alphaVal != null && budget > 0 ? fmtPct(alphaVal/budget*100) : 'stratégie − hold');
+  _setHeroColor('hero-alpha', alphaVal);
+
+  if (benchP) _renderBenchTooltips(benchP);
 
   // Secondary
   _setKpi('kpi-budget', `$${fmt(budget)}`);
