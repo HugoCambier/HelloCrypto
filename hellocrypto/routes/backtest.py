@@ -45,6 +45,7 @@ def bt_start():
         speed      = max(1.0, min(500.0, float(body.get("speed", 10.0))))
         llm_mode   = bool(body.get("llm_mode", False))
         llm_every  = max(1, int(body.get("llm_every_n_candles", 4)))
+        decide_every_n = max(1, int(body.get("decide_every_n_candles", 1)))
         _bt_speed["value"] = speed
         _bt_stop_event = threading.Event()
         # Stash the launch params so the frontend's "Paramètres" tab can
@@ -60,6 +61,7 @@ def bt_start():
             "risk_level":        risk,
             "buy_threshold":     buy_thr,
             "sell_threshold":    sell_thr,
+            "decide_every_n_candles": decide_every_n,
             "speed":             speed,
         }
         _bt_state = {"running": True, "loading": True, "snapshot": None,
@@ -81,6 +83,7 @@ def bt_start():
                 trailing_stop_pct=trailing_stop_pct,
                 risk_level=risk, buy_threshold=buy_thr, sell_threshold=sell_thr,
                 sell_cooldown_cycles=sell_cd,
+                decide_every_n_candles=decide_every_n,
                 llm_mode=llm_mode, llm_every_n_candles=llm_every,
                 on_step=on_step, stop_event=_bt_stop_event, speed_ref=_bt_speed,
             )

@@ -63,6 +63,7 @@ function renderRunParamsTab() {
     ['Risque',         p.risk_level != null ? `${p.risk_level} / 10` : '—'],
     ['Seuil achat',    fmtVal(p.buy_threshold)],
     ['Seuil vente',    fmtVal(p.sell_threshold)],
+    ['Décision /N bougies', p.decide_every_n_candles ? `toutes les ${p.decide_every_n_candles}h` : 'chaque heure'],
     ['Vitesse',        p.speed ? `${p.speed}x` : '—'],
   ];
   grid.innerHTML = items.map(([k, v]) => `
@@ -88,65 +89,267 @@ function renderRunParamsTab() {
 // Build a markdown-flavoured recap of the run that the user can copy and
 // paste into a discussion (e.g. to iterate on the deterministic decider).
 // Pulls from the cached launch params + the latest snapshot — no extra
-// server roundtrip.
+// server roundtrip. Also emits an auto-critique (strengths / weaknesses /
+// improvement axes) pointing at the decider's actual config knobs so the
+// next iteration starts from observed signals, not gut feel.
 function _buildRecapMarkdown() {
   const p    = _btRunParams || {};
   const snap = _latestSnap || {};
+  const history = snap.history || [];
   const syms = (p.symbols || '').split(',').filter(Boolean);
 
+  // ── Aggregates over trades ────────────────────────────────────────────────
+  const buys      = history.filter(t => t.action === 'BUY');
+  const sellsAll  = history.filter(t => /SELL/.test(t.action || ''));
+  const sellsHard = sellsAll.filter(t => /stop-loss/i.test(t.action || ''));
+  const sellsTrail= sellsAll.filter(t => /trailing-stop/i.test(t.action || ''));
+  const sellsLiq  = sellsAll.filter(t => /liquidation/i.test(t.action || ''));
+  // Signal-driven exits = anything that is not a stop / trailing / liquidation:
+  // in rule mode that's the "Trend break" exits, in LLM mode the model's SELL.
+  const sellsSig  = sellsAll.filter(t => !/stop-loss|trailing-stop|liquidation/i.test(t.action || ''));
+  const winners   = sellsAll.filter(t => (t.pnl ?? 0) > 0);
+  const losers    = sellsAll.filter(t => (t.pnl ?? 0) < 0);
+  const grossW    = winners.reduce((s, t) => s + (t.pnl || 0), 0);
+  const grossL    = Math.abs(losers.reduce((s, t) => s + (t.pnl || 0), 0));
+  const pf        = grossL > 0 ? grossW / grossL : (grossW > 0 ? Infinity : null);
+  const expectancy= sellsAll.length ? (grossW - grossL) / sellsAll.length : null;
+  const avgWin    = winners.length ? grossW / winners.length : 0;
+  const avgLoss   = losers.length  ? grossL / losers.length  : 0;
+  const payoff    = avgLoss > 0 ? avgWin / avgLoss : null;
+  const isLLM     = history.some(t => t.action === 'ANALYSE');
+
+  // ── Max drawdown from the equity curve (peak-to-trough %) ─────────────────
+  let mdd = null;
+  if ((snap.timeseries || []).length) {
+    let peak = -Infinity, low = 0;
+    for (const pt of snap.timeseries) {
+      if (pt?.v == null) continue;
+      if (pt.v > peak) peak = pt.v;
+      const dd = peak > 0 ? (pt.v - peak) / peak * 100 : 0;
+      if (dd < low) low = dd;
+    }
+    mdd = low;
+  }
+
+  // ── Holding period (h) + entry-score outcome, FIFO match BUY → SELL ───────
+  // We pair each closing sell with its oldest open buy on the same symbol so
+  // a partial-then-full sell still produces reasonable hold/score samples.
+  const cycleStack = {};
+  const scoreStack = {};
+  const holdHours = [];
+  const scoredOutcomes = [];
+  for (const t of history) {
+    const sym = t.symbol;
+    if (!sym) continue;
+    cycleStack[sym] = cycleStack[sym] || [];
+    scoreStack[sym] = scoreStack[sym] || [];
+    if (t.action === 'BUY') {
+      cycleStack[sym].push(t.cycle);
+      scoreStack[sym].push(t.score);
+    } else if (/SELL/.test(t.action || '')) {
+      if (cycleStack[sym].length) holdHours.push(t.cycle - cycleStack[sym].shift());
+      if (scoreStack[sym].length) {
+        const s = scoreStack[sym].shift();
+        if (typeof s === 'number') scoredOutcomes.push({ s, pnl: t.pnl });
+      }
+    }
+  }
+  const sortedH = holdHours.slice().sort((a, b) => a - b);
+  const medianH = sortedH.length ? sortedH[Math.floor(sortedH.length / 2)] : null;
+  const avgH    = sortedH.length ? sortedH.reduce((s, x) => s + x, 0) / sortedH.length : null;
+  const maxH    = sortedH.length ? sortedH[sortedH.length - 1] : null;
+
+  const winScores  = scoredOutcomes.filter(o => (o.pnl || 0) > 0).map(o => o.s);
+  const lossScores = scoredOutcomes.filter(o => (o.pnl || 0) < 0).map(o => o.s);
+  const mean = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : null;
+  const avgScoreBuy  = mean(buys.map(b => b.score).filter(s => typeof s === 'number'));
+  const avgScoreWin  = mean(winScores);
+  const avgScoreLoss = mean(lossScores);
+
+  // ── Per-crypto breakdown (PnL, trade count, win rate) ─────────────────────
+  const perCrypto = {};
+  for (const t of history) {
+    const sym = (t.symbol || '').toUpperCase();
+    if (!sym) continue;
+    perCrypto[sym] = perCrypto[sym] || { trades: 0, pnl: 0, wins: 0, losses: 0 };
+    if (t.action !== 'ANALYSE') perCrypto[sym].trades += 1;
+    if (t.pnl != null) {
+      perCrypto[sym].pnl += t.pnl;
+      if (t.pnl > 0) perCrypto[sym].wins += 1;
+      else if (t.pnl < 0) perCrypto[sym].losses += 1;
+    }
+  }
+  const cryptoEntries = Object.entries(perCrypto).sort((a, b) => b[1].pnl - a[1].pnl);
+  const noTradeCryptos = syms.filter(s => !perCrypto[s.toUpperCase()]);
+  const totalAbsPnL = cryptoEntries.reduce((s, [, v]) => s + Math.abs(v.pnl), 0);
+  const topConc = cryptoEntries.length && totalAbsPnL > 0
+    ? Math.abs(cryptoEntries[0][1].pnl) / totalAbsPnL : 0;
+
+  // ── Headline numbers (from snapshot) ──────────────────────────────────────
   const budget = snap.budget ?? p.budget ?? 0;
   const total  = snap.total ?? snap.total_value ?? budget;
   const pnl    = snap.pnl ?? (total - budget);
   const pnlPct = snap.pnl_pct ?? (budget > 0 ? pnl / budget * 100 : 0);
   const wr     = snap.win_rate;
-  const tn     = snap.trades_count ?? snap.trades ?? (snap.history || []).filter(t => t.action !== 'ANALYSE').length;
+  const tn     = snap.trades_count ?? snap.trades ?? history.filter(t => t.action !== 'ANALYSE').length;
   const alpha  = snap.alpha;
   const btcDiff = (snap.pnl != null && snap.btc_bh_pnl != null) ? snap.pnl - snap.btc_bh_pnl : null;
+  const best   = sellsAll.length ? Math.max(...sellsAll.map(t => t.pnl || 0)) : null;
+  const worst  = sellsAll.length ? Math.min(...sellsAll.map(t => t.pnl || 0)) : null;
+  const sumPnL = arr => arr.reduce((s, t) => s + (t.pnl || 0), 0);
 
-  const sells = (snap.history || []).filter(t => t.pnl != null);
-  const best  = sells.length ? Math.max(...sells.map(t => t.pnl)) : null;
-  const worst = sells.length ? Math.min(...sells.map(t => t.pnl)) : null;
+  // ── Formatters ────────────────────────────────────────────────────────────
+  const fmtNum    = (v, d = 2) => (v == null || isNaN(v)) ? '—' : Number(v).toFixed(d);
+  const fmtDollar = v => v == null ? '—' : (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(2);
+  const fmtPct    = (v, d = 1) => v == null ? '—' : `${v >= 0 ? '+' : ''}${Number(v).toFixed(d)}%`;
+  const fmtH      = h => h == null ? '—' : `${h}h`;
+  const pctOf     = (n, d) => d > 0 ? `${(n / d * 100).toFixed(0)}%` : '—';
 
-  // Per-crypto breakdown: realised PnL + trade count.
-  const perCrypto = {};
-  for (const t of (snap.history || [])) {
-    const sym = (t.symbol || '').toUpperCase();
-    if (!sym) continue;
-    if (!perCrypto[sym]) perCrypto[sym] = { trades: 0, pnl: 0 };
-    if (t.action !== 'ANALYSE') perCrypto[sym].trades += 1;
-    if (t.pnl != null) perCrypto[sym].pnl += t.pnl;
+  // ── Heuristic critique ────────────────────────────────────────────────────
+  // Each bullet is an observation grounded in a number. The closing note
+  // reminds the reader these are heuristics, not verdicts.
+  const strengths  = [];
+  const weaknesses = [];
+  const axes       = [];
+
+  if (alpha != null && alpha > 0)      strengths.push(`Alpha positif vs buy & hold (${fmtDollar(alpha)})`);
+  if (btcDiff != null && btcDiff > 0)  strengths.push(`Surperforme BTC seul (${fmtDollar(btcDiff)})`);
+  if (typeof wr === 'number' && wr >= 55) strengths.push(`Win rate solide (${wr.toFixed(1)}%)`);
+  if (pf != null && pf !== Infinity && pf >= 1.5) strengths.push(`Profit factor sain (${pf.toFixed(2)})`);
+  if (payoff != null && payoff >= 1.5) strengths.push(`Asymétrie favorable : gains moyens ${payoff.toFixed(2)}× les pertes`);
+  if (mdd != null && mdd > -10)        strengths.push(`Drawdown maîtrisé (${mdd.toFixed(1)}%)`);
+
+  if (alpha != null && alpha < 0)      weaknesses.push(`Sous-performance vs buy & hold (${fmtDollar(alpha)})`);
+  if (btcDiff != null && btcDiff < 0)  weaknesses.push(`Sous BTC seul (${fmtDollar(btcDiff)})`);
+  if (typeof wr === 'number' && wr < 40) weaknesses.push(`Win rate faible (${wr.toFixed(1)}%)`);
+  if (pf != null && pf < 1)            weaknesses.push(`Profit factor < 1 (${pf.toFixed(2)}) : on perd plus qu'on ne gagne`);
+  if (payoff != null && payoff < 1)    weaknesses.push(`Pertes moyennes > gains moyens (payoff ${payoff.toFixed(2)})`);
+  if (mdd != null && mdd < -20)        weaknesses.push(`Drawdown élevé (${mdd.toFixed(1)}%)`);
+
+  if (sellsAll.length >= 5) {
+    const ratioHard  = sellsHard.length  / sellsAll.length;
+    const ratioTrail = sellsTrail.length / sellsAll.length;
+    if (ratioHard > 0.4)
+      weaknesses.push(`${pctOf(sellsHard.length, sellsAll.length)} de sorties sur stop-loss dur (${sellsHard.length}/${sellsAll.length}) — entrée probablement trop tôt ou stop trop serré`);
+    if (ratioTrail > 0.4)
+      weaknesses.push(`${pctOf(sellsTrail.length, sellsAll.length)} de sorties sur trailing (${sellsTrail.length}/${sellsAll.length}) — peut churner sur le bruit`);
+    if (sellsLiq.length && sumPnL(sellsLiq) < 0)
+      weaknesses.push(`Liquidation finale négative (${fmtDollar(sumPnL(sellsLiq))}) sur ${sellsLiq.length} position(s) — la sortie de tendance arrive trop tard`);
   }
-  const perCryptoRows = Object.entries(perCrypto)
-    .sort((a, b) => b[1].pnl - a[1].pnl)
-    .map(([sym, s]) => `- ${sym} : ${s.trades} trade${s.trades > 1 ? 's' : ''}, PnL réalisé ${s.pnl >= 0 ? '+' : ''}$${s.pnl.toFixed(2)}`);
 
-  const fmtNum = (v, d = 2) => (v == null || isNaN(v)) ? '—' : Number(v).toFixed(d);
-  const fmtDollar = (v) => v == null ? '—' : (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(2);
+  if (noTradeCryptos.length > 0)
+    weaknesses.push(`${noTradeCryptos.length}/${syms.length} cryptos sans aucun trade (${noTradeCryptos.join(', ')}) — filtre d'entrée trop strict ou symboles peu volatils`);
 
+  if (avgScoreWin != null && avgScoreLoss != null) {
+    const gap = avgScoreWin - avgScoreLoss;
+    if (gap >= 0.8)
+      strengths.push(`Score discrimine : entrées gagnantes ${avgScoreWin.toFixed(1)}/10 vs perdantes ${avgScoreLoss.toFixed(1)}/10`);
+    else if (gap <= 0.2)
+      weaknesses.push(`Score ne discrimine pas gains/pertes (${avgScoreWin.toFixed(1)} vs ${avgScoreLoss.toFixed(1)}) — la recette de scoring est à revoir`);
+  }
+
+  if (cryptoEntries.length >= 3 && topConc > 0.7)
+    weaknesses.push(`Concentration : ${cryptoEntries[0][0]} porte ${(topConc * 100).toFixed(0)}% du PnL absolu — manque de robustesse cross-actifs`);
+
+  if (!sellsAll.length)
+    weaknesses.push(`Aucun trade exécuté : décideur trop conservateur ou période sans setup valide`);
+
+  // ── Improvement axes — each one references the actual knob to turn ────────
+  if (!isLLM) {
+    if (sellsAll.length >= 5 && sellsHard.length / sellsAll.length > 0.4 && p.stop_loss_pct != null)
+      axes.push(`**Stop-loss** : actuel ${p.stop_loss_pct}%. Soit l'élargir (laisser respirer), soit durcir l'entrée (relever \`buy_threshold\` de ${p.buy_threshold ?? '?'} à ${(p.buy_threshold ?? 0) + 1}).`);
+    if (sellsAll.length >= 5 && sellsTrail.length / sellsAll.length > 0.4 && p.trailing_stop_pct != null)
+      axes.push(`**Trailing-stop** : actuel ${p.trailing_stop_pct}%. Tester ${(Number(p.trailing_stop_pct) + 2).toFixed(0)}%+ pour laisser courir les gagnants.`);
+    if (sellsLiq.length > 0 && sumPnL(sellsLiq) < 0)
+      axes.push(`**Sortie de tendance** : liquidation négative. Réduire \`trend_confirm_candles\` (défaut 6 → essayer 3-4) pour sortir plus vite quand la tendance casse.`);
+    if (avgScoreWin != null && avgScoreLoss != null && (avgScoreWin - avgScoreLoss) >= 0.8 && p.buy_threshold != null)
+      axes.push(`**Seuil d'achat** : le score corrèle au gain (Δ ${(avgScoreWin - avgScoreLoss).toFixed(1)}). Tester \`buy_threshold\` ${p.buy_threshold + 1} pour ne garder que les setups les plus francs.`);
+    if (noTradeCryptos.length >= Math.max(2, syms.length / 2) && p.buy_threshold != null)
+      axes.push(`**Seuil d'achat trop strict** : ${noTradeCryptos.length}/${syms.length} symboles muets. Abaisser \`buy_threshold\` à ${Math.max(1, p.buy_threshold - 1)} ou revoir la watchlist.`);
+    if (mdd != null && mdd < -20 && p.risk_level != null)
+      axes.push(`**Risque par trade** : drawdown ${mdd.toFixed(1)}%. Réduire \`risk_level\` (${p.risk_level} → ${Math.max(1, p.risk_level - 1)}) pour des tailles de position plus petites.`);
+    if (cryptoEntries.length >= 3) {
+      const repeatLosers = cryptoEntries
+        .filter(([, v]) => v.pnl < 0 && v.trades >= 2)
+        .map(([s]) => s);
+      if (repeatLosers.length)
+        axes.push(`**Watchlist** : ${repeatLosers.join(', ')} génèrent des pertes répétées. Tester un run sans ces symboles.`);
+    }
+    if (medianH != null && medianH <= 3 && sellsAll.length >= 5 && sellsTrail.length / sellsAll.length > 0.3)
+      axes.push(`**Min-hold trop court** : médiane de détention ${medianH}h. Augmenter \`min_hold_candles\` (défaut 12) pour réduire le churn intra-tendance.`);
+  } else {
+    axes.push(`Mode LLM détecté — la critique ci-dessus vise le décideur déterministe. Pour ajuster le LLM, voir \`hellocrypto/prompts.py\` puis lancer \`make bench\`.`);
+  }
+
+  // ── Markdown assembly ─────────────────────────────────────────────────────
   const startTs = (snap.start_ts || '').replace('T', ' ').slice(0, 16) || (p.start_date || 'auto');
   const periodLine = p.days ? `${p.days} jour${p.days > 1 ? 's' : ''}${startTs ? ' (à partir du ' + startTs + ')' : ''}` : '—';
+  const modeLabel = isLLM ? 'LLM (Claude/Gemini)' : 'Règles (déterministe)';
+
+  const cryptoRows = cryptoEntries.map(([sym, s]) => {
+    const closed = s.wins + s.losses;
+    const wrSym  = closed > 0 ? `${(s.wins / closed * 100).toFixed(0)}% wr (${s.wins}/${closed})` : '—';
+    return `- ${sym} : ${s.trades} trade${s.trades > 1 ? 's' : ''}, PnL ${s.pnl >= 0 ? '+' : ''}$${s.pnl.toFixed(2)} · ${wrSym}`;
+  });
+
+  const exitRows = sellsAll.length ? [
+    `- Stop-loss dur : ${sellsHard.length}/${sellsAll.length} (${pctOf(sellsHard.length, sellsAll.length)}, PnL ${fmtDollar(sumPnL(sellsHard))})`,
+    `- Trailing-stop : ${sellsTrail.length}/${sellsAll.length} (${pctOf(sellsTrail.length, sellsAll.length)}, PnL ${fmtDollar(sumPnL(sellsTrail))})`,
+    `- Signal (tendance/LLM) : ${sellsSig.length}/${sellsAll.length} (${pctOf(sellsSig.length, sellsAll.length)}, PnL ${fmtDollar(sumPnL(sellsSig))})`,
+    `- Liquidation finale : ${sellsLiq.length}/${sellsAll.length} (${pctOf(sellsLiq.length, sellsAll.length)}, PnL ${fmtDollar(sumPnL(sellsLiq))})`,
+  ] : ['- Aucune sortie enregistrée'];
+
+  const scoreSection = isLLM ? [] : [
+    '',
+    '## Qualité du scoring (rule-based)',
+    `- Score moyen à l'entrée : ${avgScoreBuy != null ? avgScoreBuy.toFixed(2) + '/10' : '—'} (n=${buys.length})`,
+    `- Sur trades gagnants : ${avgScoreWin  != null ? avgScoreWin.toFixed(2)  + '/10' : '—'} (n=${winScores.length})`,
+    `- Sur trades perdants : ${avgScoreLoss != null ? avgScoreLoss.toFixed(2) + '/10' : '—'} (n=${lossScores.length})`,
+  ];
 
   const lines = [
     '# Backtest — récap',
     '',
     '## Paramètres',
+    `- Mode : ${modeLabel}`,
     `- Cryptos : ${syms.length ? syms.join(' · ') : '—'} (${syms.length})`,
     `- Période : ${periodLine}`,
     `- Budget initial : $${fmtNum(p.budget)}`,
     `- Stop-loss : ${fmtNum(p.stop_loss_pct, 1)}% · Trailing : ${fmtNum(p.trailing_stop_pct, 1)}%`,
     `- Risque : ${p.risk_level ?? '—'}/10`,
     `- Seuils : achat ${p.buy_threshold ?? '—'} · vente ${p.sell_threshold ?? '—'}`,
+    `- Décision toutes les ${p.decide_every_n_candles ?? 1} bougie${(p.decide_every_n_candles ?? 1) > 1 ? 's' : ''} (1h chacune)`,
     `- Vitesse de simulation : ${p.speed ?? '—'}x`,
     '',
-    '## Performance',
-    `- Total final : $${fmtNum(total)} (${fmtDollar(pnl)}, ${pnl >= 0 ? '+' : ''}${fmtNum(pnlPct, 2)}%)`,
+    '## Performance globale',
+    `- Total final : $${fmtNum(total)} (${fmtDollar(pnl)}, ${fmtPct(pnlPct, 2)})`,
     `- vs Buy & Hold (alpha) : ${alpha != null ? fmtDollar(alpha) : '—'}`,
     `- vs BTC seul : ${btcDiff != null ? fmtDollar(btcDiff) : '—'}`,
+    `- Max drawdown : ${mdd != null ? fmtPct(mdd, 1) : '—'}`,
     `- Win rate : ${wr != null ? fmtNum(wr, 1) + '%' : '—'} sur ${tn} trade${tn > 1 ? 's' : ''}`,
-    `- Best trade : ${best != null ? fmtDollar(best) : '—'} · Worst trade : ${worst != null ? fmtDollar(worst) : '—'}`,
+    `- Profit factor : ${pf == null ? '—' : (pf === Infinity ? '∞ (aucune perte)' : pf.toFixed(2))}`,
+    `- Expectancy / trade : ${expectancy != null ? fmtDollar(expectancy) : '—'} · Payoff : ${payoff != null ? payoff.toFixed(2) : '—'}`,
+    `- Best : ${best != null ? fmtDollar(best) : '—'} · Worst : ${worst != null ? fmtDollar(worst) : '—'}`,
+    `- Détention (h) : médiane ${fmtH(medianH)} · moy ${avgH != null ? fmtH(Math.round(avgH)) : '—'} · max ${fmtH(maxH)}`,
+    '',
+    '## Sorties par motif',
+    exitRows.join('\n'),
     '',
     '## Trades par crypto',
-    perCryptoRows.length ? perCryptoRows.join('\n') : '- Aucun trade enregistré',
+    cryptoRows.length ? cryptoRows.join('\n') : '- Aucun trade enregistré',
+    ...(noTradeCryptos.length ? [`- _Sans trade :_ ${noTradeCryptos.join(', ')}`] : []),
+    ...scoreSection,
+    '',
+    '## Points forts (auto-détectés)',
+    strengths.length ? strengths.map(s => `- ${s}`).join('\n') : '- _Rien de marquant détecté._',
+    '',
+    '## Points faibles (auto-détectés)',
+    weaknesses.length ? weaknesses.map(s => `- ${s}`).join('\n') : '- _Rien de marquant détecté._',
+    '',
+    "## Axes d'amélioration suggérés",
+    axes.length ? axes.map(s => `- ${s}`).join('\n') : '- _Pas de signal clair pour ajuster le décideur sur ce run._',
+    '',
+    "> Critique auto-générée à partir des trades exécutés — heuristiques, pas verdicts. À recouper avec ton intuition et le contexte marché avant d'itérer sur `hellocrypto/strategy.py` ou `config.json`.",
     '',
     '## Contexte (à compléter)',
     '- Régime marché : (fear/greed moyen, dominance BTC, événements macro…)',
@@ -199,6 +402,7 @@ async function startBacktest() {
     trailing_stop_pct: Number(document.getElementById('bt-ts').value),
     buy_threshold:  Number(document.getElementById('bt-buy-thr').value),
     sell_threshold: Number(document.getElementById('bt-sell-thr').value),
+    decide_every_n_candles: Math.max(1, Number(document.getElementById('bt-decide-every').value) || 1),
     risk_level:     Number(document.getElementById('bt-risk').value),
     speed:          Number(document.getElementById('bt-speed').value),
   };

@@ -157,6 +157,11 @@
       </div>
 
       <div>
+        <label class="lbl" title="Bougies 1h. 1 = décision chaque heure (défaut). 4 = toutes les 4h. Les stops continuent à chaque bougie.">Décision toutes les N bougies</label>
+        <input class="fld" type="number" id="bt-decide-every" value="1" min="1" max="48">
+      </div>
+
+      <div>
         <label class="lbl">Risque : <span id="bt-risk-val" class="text-blue-400 font-bold">{{ cfg_defaults.risk_level }}</span> / 10</label>
         <input class="w-full accent-blue-500" type="range" id="bt-risk" min="1" max="10" value="{{ cfg_defaults.risk_level }}" oninput="document.getElementById('bt-risk-val').textContent = this.value">
       </div>

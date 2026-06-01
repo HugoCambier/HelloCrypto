@@ -262,6 +262,7 @@ def run_live(
     sell_cooldown_cycles: int = 3,
     min_hold_candles: int = 12,
     trend_confirm_candles: int = 6,
+    decide_every_n_candles: int = 1,
     regime_mode: bool = False,
     decide_every: int = 48,
     top_n: int = 3,
@@ -275,10 +276,13 @@ def run_live(
     """Replay historical candles with speed control.
 
     Args:
-        start_date:           ISO date string "YYYY-MM-DD". If None, uses `days` ago.
-        llm_mode:             Use the production LLM agent for decisions.
-        llm_every_n_candles:  In LLM mode, call the LLM every N candles (throttle).
-        speed_ref:            Mutable dict {"value": float} — candles/second.
+        start_date:             ISO date string "YYYY-MM-DD". If None, uses `days` ago.
+        decide_every_n_candles: Rule-based mode only. Run BUY/SELL logic every N
+                                candles (1 = every hour, default). Stops still
+                                fire every candle so risk is never gated.
+        llm_mode:               Use the production LLM agent for decisions.
+        llm_every_n_candles:    In LLM mode, call the LLM every N candles (throttle).
+        speed_ref:              Mutable dict {"value": float} — candles/second.
     """
     stop_loss  = stop_loss_pct  / 100
     trail_stop = trailing_stop_pct / 100
@@ -573,7 +577,7 @@ def run_live(
                             "reason":    f"Panier top-{top_n} (score {scores[sym]}/10)",
                         })
 
-        else:
+        elif (i - warmup) % decide_every_n_candles == 0:
             # ── Rule-based mode (approach A: decouple entry/exit) ──────────────
             # ENTER on a strong score in a non-bearish trend. EXIT only on a
             # daily-trend break — never on score level (that churns). Hard /
@@ -741,6 +745,9 @@ def main() -> None:
                              "(les stops coupent toujours avant, même pendant ce délai)")
     parser.add_argument("--trend-confirm", type=int, default=6,
                         help="Bougies baissières consécutives requises pour sortir sur tendance")
+    parser.add_argument("--decide-every-n", type=int, default=1,
+                        help="Mode rules : exécuter la décision BUY/SELL toutes les N bougies "
+                             "(1 = chaque heure, défaut). Les stops continuent à chaque bougie.")
     parser.add_argument("--regime",    action="store_true",
                         help="Décideur C : panier régime-piloté, décision lente (bull→top-N, bear→cash)")
     parser.add_argument("--decide-every", type=int, default=48,
@@ -766,6 +773,7 @@ def main() -> None:
         sell_threshold       = args.sell_thr,
         min_hold_candles     = args.min_hold,
         trend_confirm_candles = args.trend_confirm,
+        decide_every_n_candles = args.decide_every_n,
         regime_mode          = args.regime,
         decide_every         = args.decide_every,
         top_n                = args.top_n,
