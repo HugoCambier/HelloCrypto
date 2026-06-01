@@ -397,6 +397,11 @@ function renderPnlChart(opts) {
   // the line stays clean.
   const _endMarker = (data) => data.map((_, i) => i === data.length - 1 ? 3 : 0);
 
+  // Strategy line: small marker at every point (= one decision cycle) so the
+  // user sees when each cycle fired, even when the strategy is flat. End
+  // point keeps a larger radius for the value-read affordance.
+  const _cycleMarkers = (data) => data.map((_, i) => i === data.length - 1 ? 4 : 2);
+
   // Force the last position of a benchmark series to be the truly-latest
   // bench value, regardless of strat-vs-bench timestamp alignment. The KPI
   // cards use bench[last].v - budget; this guarantees the chart's visible
@@ -412,7 +417,8 @@ function renderPnlChart(opts) {
   const datasets = [{
     label: 'Stratégie',
     data: stratPts,
-    fill: false, tension: 0, pointRadius: _endMarker(stratPts), pointBackgroundColor: '#60a5fa',
+    fill: false, tension: 0, pointRadius: _cycleMarkers(stratPts),
+    pointBackgroundColor: '#60a5fa', pointBorderColor: '#1e293b', pointBorderWidth: 1,
     borderColor: '#60a5fa', borderWidth: 2,
   }];
 
