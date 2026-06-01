@@ -52,7 +52,7 @@ def _compute_benchmarks(start_iso: str, watchlist: list[str], budget: float,
         else:
             end_ms = int(datetime.now(UTC).timestamp() * 1000)
     except Exception:
-        return {"bh": [], "btc": []}
+        return {"bh": [], "btc": [], "bh_breakdown": [], "btc_breakdown": None}
 
     # Cap symbols to avoid storms (BTC + up to 9 watchlist coins)
     symbols = list(dict.fromkeys(["BTCUSDC"] + list(watchlist)))[:10]
@@ -81,17 +81,51 @@ def _compute_benchmarks(start_iso: str, watchlist: list[str], budget: float,
 
     # Buy & Hold benchmark — equal-weight split across watchlist
     bh_ts = []
+    bh_breakdown: list = []
     if bh_syms:
         initial = {s: float(klines[s][0][4]) for s in bh_syms}
-        w_net = (budget / len(bh_syms)) * (1 - _FEE_RATE)
-        # Align on shortest series
+        share   = budget / len(bh_syms)
+        w_net   = share * (1 - _FEE_RATE)
         min_len = min(len(klines[s]) for s in bh_syms)
         for i in range(min_len):
             ts_iso = datetime.utcfromtimestamp(int(klines[bh_syms[0]][i][0]) / 1000).isoformat()
             v = sum(w_net * float(klines[s][i][4]) / initial[s] for s in bh_syms)
             bh_ts.append({"ts": ts_iso, "v": round(v, 2)})
+        # Per-symbol contribution at the LAST point (what the card shows)
+        for s in bh_syms:
+            init_p  = initial[s]
+            final_p = float(klines[s][min_len - 1][4])
+            value   = w_net * final_p / init_p
+            pnl     = value - share
+            bh_breakdown.append({
+                "symbol":   s,
+                "weight":   round(share, 2),
+                "initial":  init_p,
+                "final":    final_p,
+                "value":    round(value, 2),
+                "pnl":      round(pnl, 2),
+                "pnl_pct":  round((pnl / share) * 100, 2) if share else 0,
+            })
 
-    result = {"bh": bh_ts, "btc": btc_ts}
+    # BTC single-coin breakdown
+    btc_breakdown: dict | None = None
+    if btc_kl:
+        init_p  = float(btc_kl[0][4])
+        final_p = float(btc_kl[-1][4])
+        value   = budget * (1 - _FEE_RATE) * final_p / init_p
+        btc_breakdown = {
+            "symbol":  "BTCUSDC",
+            "weight":  round(budget, 2),
+            "initial": init_p,
+            "final":   final_p,
+            "value":   round(value, 2),
+            "pnl":     round(value - budget, 2),
+            "pnl_pct": round((value - budget) / budget * 100, 2) if budget else 0,
+        }
+
+    result = {"bh": bh_ts, "btc": btc_ts,
+              "bh_breakdown":  bh_breakdown,
+              "btc_breakdown": btc_breakdown}
     _BENCH_CACHE[cache_key] = (now, result)
     return result
 
@@ -221,6 +255,8 @@ def api_performance():
     # be compared against passive at the same horizon.
     bh_ts: list = []
     btc_ts: list = []
+    bh_breakdown: list = []
+    btc_breakdown: dict | None = None
     effective_budget    = float(sess_budget if sess_budget is not None else config.get("budget", 100))
     effective_watchlist = sess_watchlist if sess_watchlist else config.get("watchlist", [])
     if with_bench and (sorted_trades or sess_started_at):
@@ -243,8 +279,10 @@ def api_performance():
         try:
             bench = _compute_benchmarks(start_iso, effective_watchlist,
                                         effective_budget, end_iso=end_iso)
-            bh_ts  = bench.get("bh", [])
-            btc_ts = bench.get("btc", [])
+            bh_ts          = bench.get("bh", [])
+            btc_ts         = bench.get("btc", [])
+            bh_breakdown   = bench.get("bh_breakdown") or []
+            btc_breakdown  = bench.get("btc_breakdown")
         except Exception:
             log.exception("Failed to compute benchmarks")
 
@@ -266,6 +304,8 @@ def api_performance():
         "timeseries":     timeseries,
         "bh_timeseries":  bh_ts,
         "btc_timeseries": btc_ts,
+        "bh_breakdown":   bh_breakdown,
+        "btc_breakdown":  btc_breakdown,
         "sessions":       sessions,
         "budget":         round(effective_budget, 2),
     })

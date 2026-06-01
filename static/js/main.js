@@ -1186,6 +1186,76 @@ function _renderKpis(p) {
               alphaVal != null ? fmtPnl(alphaVal) : '—',
               alphaVal != null && budget > 0 ? fmtPct(alphaVal/budget*100) : 'stratégie − hold');
   _setHeroColor('hero-alpha', alphaVal);
+
+  _renderBenchTooltips(p);
+}
+
+// Per-coin breakdown of the BH/BTC benchmarks, shown on card hover. The Total
+// row reproduces the card value so the user can audit the composition.
+function _renderBenchTooltips(p) {
+  const fmtP = (n) => (n >= 0 ? '+' : '') + n.toFixed(2);
+  const cls  = (n) => n > 0 ? 'pos' : (n < 0 ? 'neg' : '');
+
+  const bhTip  = document.getElementById('kpi-bh-tooltip');
+  const btcTip = document.getElementById('kpi-btc-tooltip');
+  if (!bhTip || !btcTip) return;
+
+  // ── BH tooltip: one row per coin in the basket + total ──
+  const bh = p.bh_breakdown;
+  if (Array.isArray(bh) && bh.length) {
+    const totalPnl = bh.reduce((s, r) => s + (r.pnl || 0), 0);
+    const totalW   = bh.reduce((s, r) => s + (r.weight || 0), 0);
+    const totalPct = totalW > 0 ? (totalPnl / totalW * 100) : 0;
+    bhTip.innerHTML = `
+      <table>
+        <thead><tr>
+          <th>Coin</th><th class="num">Poids</th><th class="num">PnL $</th><th class="num">PnL %</th>
+        </tr></thead>
+        <tbody>
+          ${bh.map(r => `
+            <tr>
+              <td class="sym">${shortSym(r.symbol)}</td>
+              <td class="num">$${r.weight.toFixed(2)}</td>
+              <td class="num ${cls(r.pnl)}">${fmtP(r.pnl)}</td>
+              <td class="num ${cls(r.pnl)}">${fmtP(r.pnl_pct)}%</td>
+            </tr>
+          `).join('')}
+          <tr class="total-row">
+            <td>Total</td>
+            <td class="num">$${totalW.toFixed(2)}</td>
+            <td class="num ${cls(totalPnl)}">${fmtP(totalPnl)}</td>
+            <td class="num ${cls(totalPnl)}">${fmtP(totalPct)}%</td>
+          </tr>
+        </tbody>
+      </table>`;
+    bhTip.classList.add('has-content');
+  } else {
+    bhTip.innerHTML = '';
+    bhTip.classList.remove('has-content');
+  }
+
+  // ── BTC tooltip: single line, but kept symmetric for readability ──
+  const btc = p.btc_breakdown;
+  if (btc && typeof btc === 'object') {
+    btcTip.innerHTML = `
+      <table>
+        <thead><tr>
+          <th>Coin</th><th class="num">Prix début</th><th class="num">Prix actuel</th><th class="num">PnL $</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td class="sym">${shortSym(btc.symbol)}</td>
+            <td class="num">${Number(btc.initial).toLocaleString('fr-FR', {maximumFractionDigits: 4})}</td>
+            <td class="num">${Number(btc.final).toLocaleString('fr-FR', {maximumFractionDigits: 4})}</td>
+            <td class="num ${cls(btc.pnl)}">${fmtP(btc.pnl)} (${fmtP(btc.pnl_pct)}%)</td>
+          </tr>
+        </tbody>
+      </table>`;
+    btcTip.classList.add('has-content');
+  } else {
+    btcTip.innerHTML = '';
+    btcTip.classList.remove('has-content');
+  }
 }
 
 // Derive vs BTC & vs B&H from /api/performance benchmark timeseries (final point - budget)

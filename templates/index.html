@@ -85,6 +85,27 @@
     .kpi-hero-sub.pnl-pos { color:#86efac; }
     .kpi-hero-sub.pnl-neg { color:#fca5a5; }
 
+    /* Per-coin breakdown tooltip on the comparison cards.
+       Populated by _renderKpis from bh_breakdown / btc_breakdown so the user
+       can audit how the card value is composed. Hidden when no data. */
+    .kpi-hero .kpi-tooltip {
+      position:absolute; z-index:30; top:calc(100% + 6px); left:0; right:0;
+      background:#0f172a; border:1px solid #334155; border-radius:10px;
+      padding:8px 10px; font-size:11px; color:#cbd5e1;
+      opacity:0; pointer-events:none; transition:opacity .15s;
+      box-shadow:0 10px 28px rgba(0,0,0,.5);
+    }
+    .kpi-hero { overflow:visible; }
+    .kpi-hero:hover .kpi-tooltip.has-content { opacity:1; pointer-events:auto; }
+    .kpi-tooltip table { width:100%; border-collapse:collapse; }
+    .kpi-tooltip th { text-align:left; padding:2px 6px 4px; color:#64748b; font-weight:600; border-bottom:1px solid #1f2937; font-size:10px; text-transform:uppercase; letter-spacing:.3px; }
+    .kpi-tooltip td { padding:2px 6px; }
+    .kpi-tooltip tr.total-row td { border-top:1px solid #334155; padding-top:5px; font-weight:700; color:#e2e8f0; }
+    .kpi-tooltip .num { text-align:right; font-variant-numeric:tabular-nums; }
+    .kpi-tooltip .sym { color:#94a3b8; font-weight:600; }
+    .kpi-tooltip .pos { color:#34d399; }
+    .kpi-tooltip .neg { color:#f87171; }
+
     .spinner-mini { display:inline-block; width:11px; height:11px; border:2px solid #334155; border-top-color:#60a5fa; border-radius:50%; animation:spin-mini .7s linear infinite; vertical-align:middle; margin-left:6px; }
     @keyframes spin-mini { to { transform:rotate(360deg); } }
     .panel-loading { position:relative; }
@@ -468,11 +489,13 @@
             <div class="kpi-hero-label">vs BTC seul</div>
             <div class="kpi-hero-val" id="kpi-btc-bh">—</div>
             <div class="kpi-hero-sub">stratégie − BTC</div>
+            <div class="kpi-tooltip" id="kpi-btc-tooltip"></div>
           </div>
           <div class="kpi-hero" id="hero-alpha">
             <div class="kpi-hero-label">vs Buy &amp; Hold</div>
             <div class="kpi-hero-val" id="kpi-alpha">—</div>
             <div class="kpi-hero-sub">stratégie − hold</div>
+            <div class="kpi-tooltip" id="kpi-bh-tooltip"></div>
           </div>
         </div>
 
