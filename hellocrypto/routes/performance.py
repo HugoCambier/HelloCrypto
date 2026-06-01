@@ -20,6 +20,49 @@ _BENCH_CACHE: dict = {}
 _BENCH_TTL  = 600  # seconds (benchmarks change slowly; aggressive cache)
 
 
+def _load_close_series(symbol: str, start_iso: str, end_iso: str,
+                       start_ms: int, end_ms: int) -> list:
+    """Return a kline-shaped close series for ``symbol`` in ``[start, end]``.
+
+    Source priority:
+      1. ``price_snapshots`` rows (5m preferred at same minute, else 1h).
+      2. Live Binance fetch (``_fetch_klines`` 1h) if DB returns < 2 rows.
+
+    Output shape ``[[open_time_ms, None, None, None, close, None], ...]`` to
+    stay drop-in compatible with the legacy BH/BTC logic that only reads
+    ``k[0]`` and ``k[4]``. Falling back to Binance preserves behavior on
+    cold DB / missing-symbol cases.
+    """
+    from db.snapshots import load_snapshots
+
+    rows = load_snapshots(symbol=symbol, start_ts=start_iso,
+                          end_ts=end_iso, limit=20000)
+    if rows and len(rows) >= 2:
+        by_ts: dict[str, dict] = {}
+        for r in rows:
+            ts    = r.get("timestamp")
+            close = r.get("close")
+            if ts is None or close is None:
+                continue
+            existing = by_ts.get(ts)
+            if existing is None or r.get("interval") == "5m":
+                by_ts[ts] = r
+        out: list = []
+        for ts in sorted(by_ts):
+            r = by_ts[ts]
+            try:
+                dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=UTC)
+                ts_ms = int(dt.timestamp() * 1000)
+            except Exception:
+                continue
+            out.append([ts_ms, None, None, None, r["close"], None])
+        if len(out) >= 2:
+            return out
+    return _fetch_klines(symbol, "1h", start_ms, end_ms)
+
+
 def _compute_benchmarks(start_iso: str, watchlist: list[str], budget: float,
                         end_iso: str | None = None) -> dict:
     """Compute BH + BTC benchmark timeseries from Binance klines.
@@ -56,10 +99,17 @@ def _compute_benchmarks(start_iso: str, watchlist: list[str], budget: float,
 
     # Cap symbols to avoid storms (BTC + up to 9 watchlist coins)
     symbols = list(dict.fromkeys(["BTCUSDC"] + list(watchlist)))[:10]
+    # Resolve end ISO for DB query (mirror end_ms)
+    end_iso_db = (
+        end_iso
+        if end_iso
+        else datetime.utcfromtimestamp(end_ms / 1000).isoformat()
+    )
     klines: dict[str, list] = {}
     for sym in symbols:
         try:
-            klines[sym] = _fetch_klines(sym, "1h", start_ms, end_ms)
+            klines[sym] = _load_close_series(sym, start_iso, end_iso_db,
+                                             start_ms, end_ms)
         except Exception:
             klines[sym] = []
 
