@@ -151,14 +151,15 @@
         <div><label class="lbl">Trailing (%)</label><input class="fld" type="number" id="bt-ts" value="{{ cfg_defaults.trailing_stop_pct }}"></div>
       </div>
 
-      <div class="grid grid-cols-2 gap-3">
-        <div><label class="lbl">Seuil achat</label><input class="fld" type="number" id="bt-buy-thr" value="7" min="1" max="10"></div>
-        <div><label class="lbl">Seuil vente</label><input class="fld" type="number" id="bt-sell-thr" value="3" min="1" max="10"></div>
+      <div class="grid grid-cols-3 gap-3">
+        <div><label class="lbl" title="Score (sur 10) requis pour entrer dans le panier — seuil strict de regime_decision">Seuil achat</label><input class="fld" type="number" id="bt-buy-thr" value="8" min="1" max="10"></div>
+        <div><label class="lbl" title="Score min pour conserver une position détenue (hystérésis ; plus bas que le seuil achat)">Seuil maintien</label><input class="fld" type="number" id="bt-hold-thr" value="6" min="1" max="10"></div>
+        <div><label class="lbl" title="Nombre max d'actifs détenus simultanément">Taille panier</label><input class="fld" type="number" id="bt-top-n" value="3" min="1" max="10"></div>
       </div>
 
       <div>
-        <label class="lbl" title="Bougies 1h. 1 = décision chaque heure (défaut). 4 = toutes les 4h. Les stops continuent à chaque bougie.">Décision toutes les N bougies</label>
-        <input class="fld" type="number" id="bt-decide-every" value="1" min="1" max="48">
+        <label class="lbl" title="Bougies 1h. 4 = décision toutes les 4h (défaut). Les stops continuent à chaque bougie.">Décision toutes les N bougies</label>
+        <input class="fld" type="number" id="bt-decide-every" value="4" min="1" max="48">
       </div>
 
       <div>
