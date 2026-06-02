@@ -521,7 +521,18 @@ function renderPnlChart(opts) {
   datasets[0].fill        = 'origin';
   datasets[0].backgroundColor = lastVal >= 0 ? 'rgba(96,165,250,0.08)' : 'rgba(248,113,113,0.08)';
 
-  if (opts.chartRef && opts.chartRef.current) { opts.chartRef.current.destroy(); opts.chartRef.current = null; }
+  // Update in place when the chart already exists: avoids destroy/recreate
+  // on every poll, which would reflow the canvas and steal scroll position
+  // from the user (the backtest polls /api/backtest/status ~1s while a
+  // run is in progress).
+  const existing = opts.chartRef && opts.chartRef.current;
+  if (existing) {
+    existing.data.labels   = labels;
+    existing.data.datasets = datasets;
+    existing.update('none');
+    return;
+  }
+
   const chart = new Chart(canvas, {
     type: 'line',
     data: { labels, datasets },
