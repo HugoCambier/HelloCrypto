@@ -319,9 +319,22 @@ def run_live(
         return {"error": "Aucun symbole avec suffisamment de données (min ~50 bougies)"}
 
     min_len = min(len(v) for v in all_klines.values())
+    max_len = max(len(v) for v in all_klines.values())
+    # When one symbol stops trading (low-volume gaps) before the others, min_len
+    # truncates everyone to the shortest series — silently cutting hours off
+    # the end of the run. Identify the bottleneck so the user sees why.
+    tail_truncated_hours = max(0, max_len - min_len)
+    tail_bottleneck = [
+        s for s, k in all_klines.items() if len(k) == min_len
+    ] if tail_truncated_hours > 0 else []
     skipped_msg = f" — {len(skipped)} crypto(s) exclue(s): {', '.join(skipped)}" if skipped else ""
     if skipped_msg:
         log.info("[BACKTEST] Run sur %d symbole(s)%s", len(symbols), skipped_msg)
+    if tail_truncated_hours > 0:
+        log.warning(
+            "[BACKTEST] Période tronquée de %dh à la fin par %s (min_len=%d vs max_len=%d)",
+            tail_truncated_hours, ",".join(tail_bottleneck), min_len, max_len,
+        )
 
     total_steps   = min_len - warmup
     cash          = budget
@@ -659,6 +672,9 @@ def run_live(
         last_snap["start_ts"] = start_ts_iso
         if skipped:
             last_snap["skipped_symbols"] = skipped
+        if tail_truncated_hours > 0:
+            last_snap["tail_truncated_hours"] = tail_truncated_hours
+            last_snap["tail_bottleneck"]     = tail_bottleneck
         if llm_mode:
             last_snap["llm_calls"] = llm_call_count
             if llm_last_error:
@@ -720,6 +736,9 @@ def run_live(
         last_snap["start_ts"] = start_ts_iso
         if skipped:
             last_snap["skipped_symbols"] = skipped
+        if tail_truncated_hours > 0:
+            last_snap["tail_truncated_hours"] = tail_truncated_hours
+            last_snap["tail_bottleneck"]     = tail_bottleneck
         if on_step:
             on_step(last_snap)
 

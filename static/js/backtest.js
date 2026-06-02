@@ -493,10 +493,18 @@ function renderStatus(d) {
   document.getElementById('bt-step').textContent = tot > 0 ? `${cur} / ${tot} (${pct}%)` : '—';
 
   document.getElementById('bt-start-ts').textContent = snap.start_ts || '—';
+  document.getElementById('bt-end-ts').textContent   = snap.current_ts || '—';
 
   const skippedEl = document.getElementById('bt-skipped');
+  const msgs = [];
   if (Array.isArray(snap.skipped_symbols) && snap.skipped_symbols.length) {
-    skippedEl.textContent = `Exclu(s) (données insuffisantes) : ${snap.skipped_symbols.map(shortSym).join(', ')}`;
+    msgs.push(`Exclu(s) (données insuffisantes) : ${snap.skipped_symbols.map(shortSym).join(', ')}`);
+  }
+  if (snap.tail_truncated_hours && Array.isArray(snap.tail_bottleneck) && snap.tail_bottleneck.length) {
+    msgs.push(`Période tronquée de ${snap.tail_truncated_hours}h en fin de run (bridé par ${snap.tail_bottleneck.map(shortSym).join(', ')})`);
+  }
+  if (msgs.length) {
+    skippedEl.textContent = msgs.join(' • ');
     skippedEl.classList.remove('hidden');
   } else {
     skippedEl.classList.add('hidden');
