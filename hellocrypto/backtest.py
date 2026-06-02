@@ -263,7 +263,9 @@ def run_live(
     decide_every_n_candles: int = 4,
     top_n: int = 3,
     buy_threshold: int = 8,
-    hold_threshold: int = 6,
+    trend_confirm_hours: float = 24.0,
+    min_hold_hours: float = 12.0,
+    rebuy_cooldown_hours: float = 0.0,
     llm_mode: bool = False,
     llm_every_n_candles: int = 4,
     on_step=None,
@@ -277,10 +279,13 @@ def run_live(
         decide_every_n_candles: Cadence du décideur déterministe en bougies 1h
                                 (4 = décision toutes les 4h, défaut). Les stops
                                 fire à chaque bougie peu importe la cadence.
-        top_n / buy_threshold / hold_threshold:
-                                Params de ``regime_decision`` — taille du
-                                panier, score-bar d'entrée stricte, score-bar
-                                d'hystérésis pour le maintien.
+        top_n / buy_threshold:  Params de ``regime_decision`` — taille du
+                                panier (positions simultanées max) et seuil
+                                de score requis pour entrer.
+        trend_confirm_hours:    Heures de tendance baissière confirmée pour exit.
+        min_hold_hours:         Période min de détention avant tout exit.
+        rebuy_cooldown_hours:   Anti-whipsaw — pas de rachat avant N heures
+                                après un SELL.
         llm_mode:               Use the production LLM agent for decisions.
         llm_every_n_candles:    In LLM mode, call the LLM every N candles (throttle).
         speed_ref:              Mutable dict {"value": float} — candles/second.
@@ -514,18 +519,21 @@ def run_live(
             market_raw = _enrich_from_klines(symbols, all_klines, all_klines_1d, i)
             decision, strat_state = regime_decision(
                 market_raw=market_raw, holdings=holdings, cash=cash,
-                cycle=current_step, strat_state=strat_state,
+                cycle=current_step, now_ts=ts / 1000.0,
+                risk_level=risk_level, strat_state=strat_state,
                 params={
-                    "decide_every_cycles": decide_every_n_candles,
-                    "top_n":               top_n,
-                    "buy_threshold":       buy_threshold,
-                    "hold_threshold":      hold_threshold,
+                    "decide_every_cycles":  decide_every_n_candles,
+                    "top_n":                top_n,
+                    "buy_threshold":        buy_threshold,
+                    "trend_confirm_hours":  trend_confirm_hours,
+                    "min_hold_hours":       min_hold_hours,
+                    "rebuy_cooldown_hours": rebuy_cooldown_hours,
                 },
             )
             actions = decision.get("actions", [])
             scores  = decision.get("scores", {}) or {}
 
-            # Sells first — frees cash for the equal-weight buys below.
+            # Sells first — frees cash for the buys below.
             for a in actions:
                 sym = a.get("symbol")
                 if a.get("type") != "sell" or sym not in holdings or sym not in prices:
@@ -552,31 +560,33 @@ def run_live(
                     "reason":    a.get("reason", ""),
                 })
 
-            buys = [a for a in actions
-                    if a.get("type") == "buy" and a.get("symbol") in prices]
-            if buys and cash > 10:
-                alloc = cash / len(buys)
-                for a in buys:
-                    if alloc < 10:
-                        break
-                    sym = a["symbol"]
-                    cur = prices[sym]
-                    br  = paper_buy(sym, alloc, cur, holdings)
-                    total_fees += br.fee
-                    cash       -= alloc
-                    peak_prices[sym] = cur
-                    history.append({
-                        "cycle":     current_step,
-                        "timestamp": dt_str,
-                        "action":    "BUY",
-                        "symbol":    sym,
-                        "amount":    round(alloc, 2),
-                        "qty":       round(br.qty, 6),
-                        "price":     round(cur, 4),
-                        "fee":       round(br.fee, 6),
-                        "score":     scores.get(sym),
-                        "reason":    a.get("reason", ""),
-                    })
+            # Buys: decider already computed risk-aware usdc_amount per action.
+            for a in actions:
+                if a.get("type") != "buy" or a.get("symbol") not in prices:
+                    continue
+                amount = float(a.get("usdc_amount", 0) or 0)
+                if amount < 10 or amount > cash:
+                    amount = min(amount, cash)
+                    if amount < 10:
+                        continue
+                sym = a["symbol"]
+                cur = prices[sym]
+                br  = paper_buy(sym, amount, cur, holdings)
+                total_fees += br.fee
+                cash       -= amount
+                peak_prices[sym] = cur
+                history.append({
+                    "cycle":     current_step,
+                    "timestamp": dt_str,
+                    "action":    "BUY",
+                    "symbol":    sym,
+                    "amount":    round(amount, 2),
+                    "qty":       round(br.qty, 6),
+                    "price":     round(cur, 4),
+                    "fee":       round(br.fee, 6),
+                    "score":     scores.get(sym),
+                    "reason":    a.get("reason", ""),
+                })
 
         last_snap = _make_snapshot(
             current_step, total_steps, ts,
@@ -683,15 +693,19 @@ def main() -> None:
     parser.add_argument("--trailing",  type=float, default=float(cfg.get("trailing_stop_pct", 5)))
     parser.add_argument("--risk",      type=int,   default=int(cfg.get("risk_level", 3)))
     parser.add_argument("--buy-thr",   type=int,   default=8,
-                        help="Seuil d'entrée stricte de regime_decision (score sur 10)")
-    parser.add_argument("--hold-thr",  type=int,   default=6,
-                        help="Seuil de maintien (hystérésis) — on garde un actif "
-                             "détenu tant que son score reste >= ce seuil")
+                        help="Score requis pour entrer (sur 10)")
     parser.add_argument("--top-n",     type=int,   default=3,
-                        help="Taille du panier régime-piloté")
+                        help="Nombre max de positions simultanées")
     parser.add_argument("--decide-every-n", type=int, default=4,
                         help="Cadence du décideur déterministe en bougies 1h "
                              "(4 = décision toutes les 4h, défaut)")
+    parser.add_argument("--trend-confirm-hours", type=float, default=24.0,
+                        help="Heures de tendance baissière confirmée requises pour exit")
+    parser.add_argument("--min-hold-hours", type=float, default=12.0,
+                        help="Période min de détention (h) avant tout exit hors stop")
+    parser.add_argument("--rebuy-cooldown-hours", type=float, default=0.0,
+                        help="Anti-whipsaw : interdiction de racheter pendant N heures "
+                             "après un SELL. 0 = désactivé (défaut)")
     parser.add_argument("--llm",       action="store_true", help="Utiliser l'agent LLM (réaliste)")
     parser.add_argument("--llm-every", type=int,   default=4, help="Appel LLM toutes les N bougies")
     args = parser.parse_args()
@@ -706,9 +720,11 @@ def main() -> None:
         trailing_stop_pct    = args.trailing,
         risk_level           = args.risk,
         buy_threshold        = args.buy_thr,
-        hold_threshold       = args.hold_thr,
         top_n                = args.top_n,
         decide_every_n_candles = args.decide_every_n,
+        trend_confirm_hours  = args.trend_confirm_hours,
+        min_hold_hours       = args.min_hold_hours,
+        rebuy_cooldown_hours = args.rebuy_cooldown_hours,
         llm_mode             = args.llm,
         llm_every_n_candles  = args.llm_every,
     )

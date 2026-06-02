@@ -4,14 +4,16 @@ Two deciders are exposed to a simulation session:
 
 - ``llm``           — the production Claude/Gemini agent (handled inline in
   ``simulation.run``; this module only provides the deterministic one).
-- ``deterministic`` — the validated regime-gated basket (approach C): on a slow
-  clock, hold the top-N highest-scoring symbols while BTC's daily trend is
-  bullish, otherwise sit in cash. Hysteresis keeps held names through minor
-  rank changes so the basket doesn't churn.
+- ``deterministic`` — per-symbol entry/exit with a top-N cap, risk-aware
+  sizing, bear-trend confirmation before exit, and an anti-rebuy cooldown.
 
 ``regime_decision`` is pure: it reads the live enriched market snapshot and
 returns an LLM-shaped decision dict plus updated per-session strategy state.
 The caller executes the actions and persists the state across cycles.
+
+All delays are expressed in **wall-clock hours** so behavior is identical
+regardless of decision cadence (backtest 1h candle cycles, live 30 min
+cycles, etc.).
 """
 
 from __future__ import annotations
@@ -20,13 +22,13 @@ from typing import Any
 
 from .api import compute_score_rules
 
-# Defaults mirror the values validated in the backtest (see backtest.run_live):
-# decide every 48 cycles, basket of 3, strict entry bar 8, looser hold bar 6.
 DEFAULTS = {
-    "decide_every_cycles": 48,
-    "top_n":               3,
-    "buy_threshold":       8,
-    "hold_threshold":      6,
+    "decide_every_cycles":   48,    # cadence gate (units = caller cycle)
+    "top_n":                 3,     # max simultaneously held positions
+    "buy_threshold":         8,     # score required to enter
+    "trend_confirm_hours":   24.0,  # bearish trend duration required to exit
+    "min_hold_hours":        12.0,  # minimum holding period before any exit
+    "rebuy_cooldown_hours":  0.0,   # anti-whipsaw: hours before re-entering a sold sym
 }
 
 
@@ -37,26 +39,40 @@ def _params(params: dict | None) -> dict:
     return p
 
 
+def _max_pct(risk_level: int) -> float:
+    """Per-buy allocation as a fraction of available cash (matches A's formula)."""
+    return (5 + max(1, min(10, int(risk_level))) * 4) / 100
+
+
 def regime_decision(
     *,
     market_raw: dict[str, dict],
     holdings: dict[str, dict],
     cash: float,
     cycle: int,
+    now_ts: float | None = None,
+    risk_level: int = 5,
     strat_state: dict[str, Any] | None = None,
     params: dict | None = None,
 ) -> tuple[dict, dict]:
-    """Return (decision, new_strat_state) for the deterministic regime decider.
+    """Per-symbol deterministic decider with top-N cap and risk-aware sizing.
 
-    The decision mirrors the LLM output shape: ``{market_sentiment, summary,
-    actions}``. Actions are ``{"type": "sell", "symbol", "qty", "reason"}`` and
-    ``{"type": "buy", "symbol", "reason"}`` — BUYs carry no amount; the executor
-    equal-weights the post-sell cash across them (faithful to the backtest).
+    Entry per symbol:
+      score >= buy_threshold
+      AND trend_1d != baissier
+      AND len(holdings) < top_n
+      AND now - last_sell_ts[sym] >= rebuy_cooldown_hours
+
+    Exit per symbol (only after min_hold_hours since entry):
+      trend_1d has been baissier continuously for trend_confirm_hours
+
+    Sizing per BUY: cash * max_pct  where max_pct = (5 + risk*4)/100.
+    Returns actions with ``usdc_amount`` populated so the caller just executes.
     """
     p = _params(params)
     st = dict(strat_state or {})
 
-    # Slow clock: only rebalance every `decide_every_cycles` cycles.
+    # Cadence gate.
     last = st.get("last_decision_cycle")
     if last is not None and cycle - last < p["decide_every_cycles"]:
         return {"market_sentiment": "hold",
@@ -66,49 +82,94 @@ def regime_decision(
 
     scores = {sym: compute_score_rules(d) for sym, d in market_raw.items()}
 
-    # Market regime from BTC's daily trend (live trend_1d is a real daily MA).
-    btc = market_raw.get("BTCUSDC") or {}
-    regime_bull = btc.get("trend_1d") == "haussier"
+    bear_since   = dict(st.get("bear_since")   or {})
+    entry_ts     = dict(st.get("entry_ts")     or {})
+    last_sell_ts = dict(st.get("last_sell_ts") or {})
 
-    if regime_bull:
-        ranked = sorted(market_raw, key=lambda s: -scores.get(s, 0))
-        rank = {s: i for i, s in enumerate(ranked)}
-        keep_top = p["top_n"] + 2
-        # Hysteresis: keep a held name while still "good enough" and in the wide
-        # band, so a #N↔#N+1 rank swap doesn't churn the basket.
-        kept = [s for s in holdings
-                if scores.get(s, 0) >= p["hold_threshold"] and rank.get(s, 1e9) < keep_top]
-        target = list(kept)
-        for s in ranked:
-            if len(target) >= p["top_n"]:
-                break
-            if s not in target and scores.get(s, 0) >= p["buy_threshold"]:
-                target.append(s)
-    else:
-        target = []
+    # Update per-symbol bear-trend timer (when did trend_1d first turn bearish).
+    if now_ts is not None:
+        for sym, d in market_raw.items():
+            if d.get("trend_1d") == "baissier":
+                bear_since.setdefault(sym, now_ts)
+            else:
+                bear_since.pop(sym, None)
 
+    confirm_sec    = float(p["trend_confirm_hours"])  * 3600
+    min_hold_sec   = float(p["min_hold_hours"])       * 3600
+    cooldown_sec   = float(p["rebuy_cooldown_hours"]) * 3600
+
+    # ── Exits ───────────────────────────────────────────────────────────────
     actions: list[dict] = []
+    selling_now: set[str] = set()
     for sym in list(holdings):
-        if sym not in target:
+        if now_ts is None:
+            continue
+        bear_ts = bear_since.get(sym)
+        ent_ts  = entry_ts.get(sym, now_ts)
+        if (bear_ts is not None
+                and (now_ts - bear_ts) >= confirm_sec
+                and (now_ts - ent_ts) >= min_hold_sec):
             actions.append({
                 "type":   "sell",
                 "symbol": sym,
                 "qty":    holdings[sym]["qty"],
-                "reason": "Régime bear → cash" if not regime_bull else "Rotation hors panier",
+                "reason": f"Trend baissier confirmé ({p['trend_confirm_hours']:g}h)",
             })
-    for sym in target:
-        if sym not in holdings:
-            actions.append({
-                "type":   "buy",
-                "symbol": sym,
-                "reason": f"Panier top-{p['top_n']} (score {scores.get(sym)}/10)",
-            })
+            selling_now.add(sym)
+            last_sell_ts[sym] = now_ts
+            entry_ts.pop(sym, None)
 
-    summary = (f"Régime {'BULL' if regime_bull else 'BEAR→cash'} | "
-               f"panier cible: {target or '—'}")
+    # ── Entries (ranked by score desc, capped at top_n) ─────────────────────
+    held_after = len(holdings) - len(selling_now)
+    max_pct    = _max_pct(risk_level)
+    cash_after = cash  # mutated as we propose buys
+    blocked_cooldown: list[str] = []
+    candidates = sorted(market_raw.items(), key=lambda kv: -scores.get(kv[0], 0))
+    for sym, d in candidates:
+        if held_after >= p["top_n"]:
+            break
+        if sym in holdings and sym not in selling_now:
+            continue
+        score = scores.get(sym, 0)
+        if score < p["buy_threshold"]:
+            continue
+        if d.get("trend_1d") == "baissier":
+            continue
+        if cooldown_sec > 0 and now_ts is not None:
+            sold_at = last_sell_ts.get(sym)
+            if sold_at is not None and (now_ts - sold_at) < cooldown_sec:
+                blocked_cooldown.append(sym)
+                continue
+        alloc = cash_after * max_pct
+        if alloc < 10:
+            break
+        actions.append({
+            "type":        "buy",
+            "symbol":      sym,
+            "usdc_amount": round(alloc, 2),
+            "reason":      f"Score {score}/10 entry (risk {risk_level} → {max_pct*100:.0f}%)",
+        })
+        if now_ts is not None:
+            entry_ts[sym] = now_ts
+        cash_after -= alloc
+        held_after += 1
+
+    st["bear_since"]   = bear_since
+    st["entry_ts"]     = entry_ts
+    st["last_sell_ts"] = last_sell_ts
+
+    bull_count = sum(1 for d in market_raw.values() if d.get("trend_1d") == "haussier")
+    bear_count = sum(1 for d in market_raw.values() if d.get("trend_1d") == "baissier")
+    sentiment = ("bullish" if bull_count > bear_count
+                 else "bearish" if bear_count > bull_count else "neutral")
+
+    summary_parts = [f"per-sym | held {held_after}/{p['top_n']}",
+                     f"breadth bull={bull_count}/bear={bear_count}"]
+    if blocked_cooldown:
+        summary_parts.append(f"cooldown bloque: {','.join(blocked_cooldown)}")
     return {
-        "market_sentiment": "bullish" if regime_bull else "bearish",
-        "summary":          summary,
+        "market_sentiment": sentiment,
+        "summary":          " | ".join(summary_parts),
         "actions":          actions,
         "scores":           scores,
     }, st

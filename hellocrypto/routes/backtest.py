@@ -88,8 +88,10 @@ def bt_start():
         days       = max(1, int(body.get("days", 30)))
         budget     = float(body.get("budget", cfg.get("budget", 1000)))
         buy_thr    = int(body.get("buy_threshold", 8))
-        hold_thr   = int(body.get("hold_threshold", 6))
         top_n      = max(1, int(body.get("top_n", 3)))
+        trend_confirm_h = max(0.0, float(body.get("trend_confirm_hours", 24)))
+        min_hold_h      = max(0.0, float(body.get("min_hold_hours", 12)))
+        rebuy_cd_h      = max(0.0, float(body.get("rebuy_cooldown_hours", 0)))
         risk       = max(1, min(int(body.get("risk_level", cfg.get("risk_level", 3))), 10))
         sell_cd    = max(0, int(body.get("sell_cooldown_cycles", cfg.get("sell_cooldown_cycles", 3))))
         speed      = max(1.0, min(500.0, float(body.get("speed", 10.0))))
@@ -110,8 +112,10 @@ def bt_start():
             "trailing_stop_pct": float(body.get("trailing_stop_pct", cfg.get("trailing_stop_pct", 5))),
             "risk_level":        risk,
             "buy_threshold":     buy_thr,
-            "hold_threshold":    hold_thr,
             "top_n":             top_n,
+            "trend_confirm_hours":  trend_confirm_h,
+            "min_hold_hours":       min_hold_h,
+            "rebuy_cooldown_hours": rebuy_cd_h,
             "decide_every_n_candles": decide_every_n,
             "speed":             speed,
         }
@@ -133,7 +137,10 @@ def bt_start():
                 stop_loss_pct=stop_loss_pct,
                 trailing_stop_pct=trailing_stop_pct,
                 risk_level=risk,
-                buy_threshold=buy_thr, hold_threshold=hold_thr, top_n=top_n,
+                buy_threshold=buy_thr, top_n=top_n,
+                trend_confirm_hours=trend_confirm_h,
+                min_hold_hours=min_hold_h,
+                rebuy_cooldown_hours=rebuy_cd_h,
                 sell_cooldown_cycles=sell_cd,
                 decide_every_n_candles=decide_every_n,
                 llm_mode=llm_mode, llm_every_n_candles=llm_every,
@@ -223,7 +230,7 @@ def grid_start():
                 result = bt_engine.run_live(
                     symbols=symbols, start_date=start_date, days=days, budget=budget,
                     stop_loss_pct=sl, trailing_stop_pct=ts,
-                    risk_level=risk, buy_threshold=8, hold_threshold=6, top_n=3,
+                    risk_level=risk, buy_threshold=8, top_n=3,
                     sell_cooldown_cycles=3,
                     llm_mode=False, on_step=None, stop_event=None,
                     speed_ref={"value": 500},

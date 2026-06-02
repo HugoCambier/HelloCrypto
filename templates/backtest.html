@@ -151,15 +151,31 @@
         <div><label class="lbl">Trailing (%)</label><input class="fld" type="number" id="bt-ts" value="{{ cfg_defaults.trailing_stop_pct }}"></div>
       </div>
 
-      <div class="grid grid-cols-3 gap-3">
-        <div><label class="lbl" title="Score (sur 10) requis pour entrer dans le panier — seuil strict de regime_decision">Seuil achat</label><input class="fld" type="number" id="bt-buy-thr" value="8" min="1" max="10"></div>
-        <div><label class="lbl" title="Score min pour conserver une position détenue (hystérésis ; plus bas que le seuil achat)">Seuil maintien</label><input class="fld" type="number" id="bt-hold-thr" value="6" min="1" max="10"></div>
-        <div><label class="lbl" title="Nombre max d'actifs détenus simultanément">Taille panier</label><input class="fld" type="number" id="bt-top-n" value="3" min="1" max="10"></div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="lbl" title="Score (sur 10) requis pour entrer">Seuil achat</label><input class="fld" type="number" id="bt-buy-thr" value="8" min="1" max="10"></div>
+        <div><label class="lbl" title="Nombre max de positions simultanées">Top-N panier</label><input class="fld" type="number" id="bt-top-n" value="3" min="1" max="10"></div>
       </div>
 
-      <div>
-        <label class="lbl" title="Bougies 1h. 4 = décision toutes les 4h (défaut). Les stops continuent à chaque bougie.">Décision toutes les N bougies</label>
-        <input class="fld" type="number" id="bt-decide-every" value="4" min="1" max="48">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="lbl" title="Heures de tendance baissière confirmée requises avant exit (filtre le bruit)">Confirm bear (h)</label>
+          <input class="fld" type="number" id="bt-trend-confirm" value="24" min="0" max="168" step="1">
+        </div>
+        <div>
+          <label class="lbl" title="Période min de détention avant tout exit (sauf stop-loss)">Min-hold (h)</label>
+          <input class="fld" type="number" id="bt-min-hold" value="12" min="0" max="168" step="1">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="lbl" title="Bougies 1h. 4 = décision toutes les 4h (défaut). Les stops continuent à chaque bougie.">Décision /N bougies</label>
+          <input class="fld" type="number" id="bt-decide-every" value="4" min="1" max="48">
+        </div>
+        <div>
+          <label class="lbl" title="Anti-whipsaw : interdiction de racheter pendant N heures après un SELL. 0 = désactivé.">Cooldown rebuy (h)</label>
+          <input class="fld" type="number" id="bt-rebuy-cd" value="0" min="0" max="240" step="1">
+        </div>
       </div>
 
       <div>

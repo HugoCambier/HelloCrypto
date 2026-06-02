@@ -310,10 +310,12 @@ def run(
 
     # Deterministic-decider params (only used when decider == "deterministic").
     det_params = {
-        "decide_every_cycles": cfg.get("decide_every_cycles"),
-        "top_n":               cfg.get("top_n"),
-        "buy_threshold":       cfg.get("buy_threshold"),
-        "hold_threshold":      cfg.get("hold_threshold"),
+        "decide_every_cycles":  cfg.get("decide_every_cycles"),
+        "top_n":                cfg.get("top_n"),
+        "buy_threshold":        cfg.get("buy_threshold"),
+        "trend_confirm_hours":  cfg.get("trend_confirm_hours"),
+        "min_hold_hours":       cfg.get("min_hold_hours"),
+        "rebuy_cooldown_hours": cfg.get("rebuy_cooldown_hours"),
     }
 
     if resume:
@@ -425,7 +427,12 @@ def run(
             # runtime-derived fields on top instead of overwriting, otherwise the
             # Paramètres tab loses the originals.
             try:
-                from db.store import get_session as _get_sess, upsert_session as _upsert
+                from db.store import (
+                    get_session as _get_sess,
+                )
+                from db.store import (
+                    upsert_session as _upsert,
+                )
                 existing = {}
                 try:
                     row = _get_sess(session_id) or {}
@@ -542,7 +549,9 @@ def run(
             from .deciders import regime_decision
             decision, strat_state = regime_decision(
                 market_raw=market_raw, holdings=holdings, cash=cash,
-                cycle=cycle, strat_state=strat_state, params=det_params,
+                cycle=cycle, now_ts=time.time(),
+                risk_level=risk_level, strat_state=strat_state,
+                params=det_params,
             )
             sentiment = decision.get("market_sentiment", "—")
             summary   = decision.get("summary", "")
@@ -587,31 +596,33 @@ def run(
                 except Exception:
                     pass
 
-            buys = [a for a in decision.get("actions", [])
-                    if a.get("type") == "buy" and a.get("symbol") in prices]
-            if buys and cash > 10:
-                alloc = cash / len(buys)
-                for a in buys:
-                    if alloc < 10:
-                        break
-                    sym = a["symbol"]
-                    res = paper_buy(sym, alloc, prices[sym], holdings)
-                    cash       -= alloc
-                    total_fees += res.fee
-                    peak_prices[sym] = prices[sym]
-                    _t = {"cycle": cycle, "timestamp": datetime.utcnow().isoformat(),
-                          "action": "BUY", "symbol": sym, "qty": res.qty,
-                          "amount": round(alloc, 2), "price": prices[sym],
-                          "fee": round(res.fee, 6), "pnl": None, "reason": a.get("reason")}
-                    history.append(_t)
-                    try:
-                        from db.store import save_trade as _db_save
-                        _db_save(action="BUY", symbol=sym, amount=round(alloc, 2),
-                                 price=prices[sym], reason=a.get("reason"), fee=res.fee,
-                                 qty=res.qty, pnl=None, mode="simulation",
-                                 session_id=session_id, session_name=session_name)
-                    except Exception:
-                        pass
+            # Buys: decider already computed risk-aware usdc_amount per action.
+            for a in decision.get("actions", []):
+                if a.get("type") != "buy" or a.get("symbol") not in prices:
+                    continue
+                alloc = float(a.get("usdc_amount", 0) or 0)
+                if alloc > cash:
+                    alloc = cash
+                if alloc < 10:
+                    continue
+                sym = a["symbol"]
+                res = paper_buy(sym, alloc, prices[sym], holdings)
+                cash       -= alloc
+                total_fees += res.fee
+                peak_prices[sym] = prices[sym]
+                _t = {"cycle": cycle, "timestamp": datetime.utcnow().isoformat(),
+                      "action": "BUY", "symbol": sym, "qty": res.qty,
+                      "amount": round(alloc, 2), "price": prices[sym],
+                      "fee": round(res.fee, 6), "pnl": None, "reason": a.get("reason")}
+                history.append(_t)
+                try:
+                    from db.store import save_trade as _db_save
+                    _db_save(action="BUY", symbol=sym, amount=round(alloc, 2),
+                             price=prices[sym], reason=a.get("reason"), fee=res.fee,
+                             qty=res.qty, pnl=None, mode="simulation",
+                             session_id=session_id, session_name=session_name)
+                except Exception:
+                    pass
 
             # Shared end-of-cycle: snapshot, persist, emit, wait.
             snap = _snapshot(cycle, cash, holdings, prices, history, total_fees,

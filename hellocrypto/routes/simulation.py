@@ -351,8 +351,9 @@ def sim_start():
     trailing_stop_pct    = float(body.get("trailing_stop_pct", cfg.get("trailing_stop_pct", 5)))
     sell_cooldown_cycles = max(0, int(body.get("sell_cooldown_cycles", cfg.get("sell_cooldown_cycles", 3))))
     decider              = "deterministic" if body.get("decider") == "deterministic" else "llm"
-    # Deterministic-decider (approach C) params — only meaningful when chosen.
-    det_keys = ("decide_every_cycles", "top_n", "buy_threshold", "hold_threshold")
+    # Deterministic-decider params — only meaningful when decider == "deterministic".
+    det_keys = ("decide_every_cycles", "top_n", "buy_threshold",
+                "trend_confirm_hours", "min_hold_hours", "rebuy_cooldown_hours")
     det_params = {k: body.get(k) for k in det_keys if body.get(k) is not None}
     resume               = bool(body.get("resume", False))
     from_binance         = bool(body.get("from_binance", False))
