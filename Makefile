@@ -1,4 +1,4 @@
-.PHONY: install hooks agent dashboard simulation shell deploy clean backtest bench bench-full bench-scenarios bench-ollama bench-ollama-full bench-ollama-overnight bench-progress propose init-db
+.PHONY: install hooks agent dashboard simulation shell deploy clean backtest bench bench-full bench-scenarios bench-ollama bench-ollama-full bench-ollama-overnight bench-progress bench-diff bench-promote propose init-db
 
 install:     ## Install dependencies (Gemini + PostgreSQL)
 	poetry install --extras gemini --extras postgres
@@ -44,6 +44,19 @@ bench-scenarios:  ## (Re)build the holdout scenarios from price_snapshots
 
 bench-progress:  ## Show live progress + ETA of a running bench
 	@poetry run python -m hellocrypto.eval.progress
+
+bench-diff:  ## Compare latest bench result vs champion baseline
+	@latest=$$(ls -t eval/reports/bench/bench_*.json 2>/dev/null | head -1); \
+	 if [ -z "$$latest" ]; then echo "No bench results found"; exit 1; fi; \
+	 if [ ! -f eval/reports/champion.json ]; then echo "No champion.json — set initial with: cp $$latest eval/reports/champion.json"; exit 1; fi; \
+	 poetry run python -m hellocrypto.eval.bench_diff eval/reports/champion.json $$latest
+
+bench-promote:  ## Promote latest bench as new champion (after manual review)
+	@latest=$$(ls -t eval/reports/bench/bench_*.json 2>/dev/null | head -1); \
+	 if [ -z "$$latest" ]; then echo "No bench results found"; exit 1; fi; \
+	 cp $$latest eval/reports/champion.json; \
+	 echo "Champion updated → $$latest"; \
+	 echo "Don't forget to add a CHANGELOG.md entry describing this iteration."
 
 bench-ollama:      ## Bench compact via Ollama (caffeinate empêche le sleep). WORKERS=3 + OLLAMA_NUM_PARALLEL=4 pour ~3x speedup
 	caffeinate -i poetry run python -m hellocrypto.eval.bench \

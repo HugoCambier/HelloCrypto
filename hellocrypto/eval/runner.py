@@ -182,34 +182,20 @@ class RunReport:
     cycles_run:   int        = 0
 
 
-def _rule_based_decision(market: dict, scores: dict, holdings: dict,
-                         cfg: StrategyConfig) -> dict:
-    """Deterministic baseline: buy top score above threshold, sell stale low scores."""
-    actions = []
-    for sym, sc in sorted(scores.items(), key=lambda kv: -kv[1]):
-        # Trend veto: never buy against a bearish daily trend, however high the
-        # score — blocks oversold-reversal buys (falling knife) in a downtrend.
-        if (market.get(sym) or {}).get("trend_1d") == "baissier":
-            continue
-        if sc >= cfg.buy_score_min and sym not in holdings:
-            actions.append({"type": "buy", "symbol": sym, "usdc_amount": 9999,
-                            "score": sc, "horizon": "medium",
-                            "reason": f"rule: score>={cfg.buy_score_min}"})
-            break  # one buy per cycle
-    for sym, pos in holdings.items():
-        sc = scores.get(sym, 5)
-        if sc <= cfg.sell_score_max:
-            actions.append({"type": "sell", "symbol": sym, "qty": pos["qty"],
-                            "score": sc,
-                            "reason": f"rule: score<={cfg.sell_score_max}"})
-    if not actions:
-        actions.append({"type": "hold", "symbol": "", "score": 5,
-                        "reason": "rule: pas de signal"})
-    return {
-        "market_sentiment": "neutral",
-        "summary":          "rule-based baseline",
-        "actions":          actions,
-    }
+def _ts_to_unix(timestamp: str) -> float:
+    """Convert a scenario cycle ISO timestamp to unix seconds.
+
+    Accepts naive ISO (assumed UTC) or trailing Z / offset suffixes.
+    Returns 0.0 if unparseable so the wall-clock guards in regime_decision
+    degrade to no-ops (cooldown/min-hold become inert).
+    """
+    from datetime import datetime
+    try:
+        s = timestamp.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        return dt.timestamp()
+    except (ValueError, TypeError):
+        return 0.0
 
 
 DecisionFn = Callable[[dict, dict, dict, StrategyConfig], tuple[dict, dict | None]]
@@ -258,6 +244,7 @@ def run(
     initial_prices: dict = {}
     btc_initial: float   = 0.0
     btc_final: float     = 0.0
+    strat_state: dict    = {}   # regime_decision per-symbol state across cycles
 
     stop_loss  = cfg.stop_loss_pct  / 100
     trail_stop = cfg.trailing_stop_pct / 100
@@ -302,11 +289,18 @@ def run(
         if decision_fn is not None:
             decision, usage = decision_fn(cyc.market, scores, holdings, cfg)
         elif cfg.provider == "rules":
-            # Deterministic decider reads its own enriched score (MACD + SMA
-            # cross + Bollinger on top of RSI/trend); the LLM keeps `scores`.
-            from ..api import compute_scores_rules
-            rule_scores = compute_scores_rules(cyc.market)
-            decision = _rule_based_decision(cyc.market, rule_scores, holdings, cfg)
+            # Use the *same* deterministic decider as live sim/réel/backtest so
+            # the bench measures what actually ships in prod.
+            from ..deciders import regime_decision
+            decision, strat_state = regime_decision(
+                market_raw=cyc.market, holdings=holdings, cash=cash,
+                cycle=idx, now_ts=_ts_to_unix(cyc.timestamp),
+                risk_level=cfg.risk_level, strat_state=strat_state,
+                params={
+                    "decide_every_cycles": 1,   # bench cycles are daily snapshots
+                    "buy_threshold":       cfg.buy_score_min,
+                },
+            )
             usage = None
         else:
             # Optionally inject playbook + behavior sections so the bench can
