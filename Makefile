@@ -1,7 +1,10 @@
-.PHONY: install hooks agent dashboard simulation shell deploy clean backtest bench bench-full bench-scenarios bench-ollama bench-ollama-full bench-ollama-overnight bench-progress propose
+.PHONY: install hooks agent dashboard simulation shell deploy clean backtest bench bench-full bench-scenarios bench-ollama bench-ollama-full bench-ollama-overnight bench-progress propose init-db
 
 install:     ## Install dependencies (Gemini + PostgreSQL)
 	poetry install --extras gemini --extras postgres
+
+init-db:     ## Init/migrate DB schema (run once after schema changes; reads DATABASE_URL from .env)
+	poetry run python -m scripts.init_db
 
 hooks:       ## Install local git hooks (regenerates requirements.txt on poetry changes)
 	git config core.hooksPath scripts/git-hooks

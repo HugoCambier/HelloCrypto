@@ -39,16 +39,12 @@ if _SENTRY_DSN:
             "SENTRY_DSN défini mais sentry-sdk absent — `pip install sentry-sdk[flask]`")
 
 # ── import existing Flask app ─────────────────────────────────────────────────
-from db.store import init_db, is_user_allowed, sync_users_from_env  # noqa: E402
+from db.store import is_user_allowed, sync_users_from_env  # noqa: E402
 from hellocrypto.dashboard import app, log  # noqa: E402  (must be after sys.path)
 
-# Ensure DB schema exists at module import (Vercel doesn't call main()).
-_INIT_DB_ERROR: str | None = None
-try:
-    init_db()
-except Exception as _exc:
-    _INIT_DB_ERROR = f"{type(_exc).__name__}: {_exc}"
-    log.exception("init_db() failed at module load")
+# Schema init/migration is a deploy-time operation (`make init-db`), not a
+# runtime one. Running ALTER TABLE at every cold-start triggers
+# AccessExclusiveLock deadlocks when Vercel autoscales under polling load.
 
 # Trust X-Forwarded-Proto so request.url uses https://
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
@@ -226,7 +222,6 @@ def debug_health():
     except Exception as exc:
         binance_status = f"error: {type(exc).__name__}"
     return jsonify({
-        "init_db_error_at_boot": _INIT_DB_ERROR,
         "db_runtime_check": db_status,
         "binance_check": binance_status,
         "auth_enabled": _AUTH_ENABLED,
