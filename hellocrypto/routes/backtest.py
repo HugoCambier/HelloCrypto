@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import itertools
+import json
 import logging
 import threading
+from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
@@ -18,11 +20,58 @@ _bt_stop_event = threading.Event()
 _bt_state: dict = {"running": False, "loading": False, "snapshot": None}
 _bt_speed: dict = {"value": 10.0}
 
+# DB key holding the last completed backtest (snapshot + params + completed_at).
+# Lets the cockpit + chart survive a Vercel instance recycle: the final run
+# is reloaded from the agent_state table when in-memory _bt_state is empty.
+_LAST_BACKTEST_KEY = "last_backtest_state"
+
+
+def _persist_last_backtest(snapshot: dict, params: dict | None) -> None:
+    """Save the final backtest snapshot to the DB so a page reload after a
+    Vercel cold-start still shows the previous run's results."""
+    try:
+        from db.store import set_state
+        set_state(_LAST_BACKTEST_KEY, json.dumps({
+            "snapshot":     snapshot,
+            "params":       params,
+            "completed_at": datetime.utcnow().isoformat(),
+        }))
+    except Exception:
+        log.warning("Could not persist last backtest snapshot", exc_info=True)
+
+
+def _load_last_backtest() -> dict | None:
+    """Inverse of _persist_last_backtest; returns None on miss."""
+    try:
+        from db.store import get_state
+        raw = get_state(_LAST_BACKTEST_KEY)
+        if not raw:
+            return None
+        return json.loads(raw) if isinstance(raw, str) else raw
+    except Exception:
+        return None
+
 
 @bp.get("/api/backtest/status")
 def bt_status():
     with _bt_lock:
-        return jsonify(dict(_bt_state))
+        state = dict(_bt_state)
+    # If there's something live (running, or in-memory snapshot from this
+    # process), return that. Otherwise, hydrate from the persisted last
+    # completed backtest so the user keeps seeing their previous results
+    # even across Vercel instance recycles.
+    if state.get("running") or state.get("snapshot"):
+        return jsonify(state)
+    persisted = _load_last_backtest()
+    if persisted and persisted.get("snapshot"):
+        return jsonify({
+            "running":      False,
+            "loading":      False,
+            "snapshot":     persisted.get("snapshot"),
+            "params":       persisted.get("params"),
+            "completed_at": persisted.get("completed_at"),
+        })
+    return jsonify(state)
 
 
 @bp.post("/api/backtest/start")
@@ -88,7 +137,12 @@ def bt_start():
                 on_step=on_step, stop_event=_bt_stop_event, speed_ref=_bt_speed,
             )
             with _bt_lock:
-                _bt_state = {"running": False, "loading": False, "snapshot": result}
+                _bt_state = {"running": False, "loading": False,
+                             "snapshot": result, "params": launch_params}
+            # Persist only successful, non-stopped runs. Stopped/errored runs
+            # would replace a previously-good cached result with a partial one.
+            if isinstance(result, dict) and not result.get("error"):
+                _persist_last_backtest(result, launch_params)
         except Exception as exc:
             with _bt_lock:
                 _bt_state = {"running": False, "loading": False,
