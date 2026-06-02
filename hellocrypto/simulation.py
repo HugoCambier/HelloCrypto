@@ -419,23 +419,38 @@ def run(
             log.info("[SIM] Capital initial (prix d'entrée): $%.2f cash + $%.2f actifs = $%.2f budget",
                      cash, initial_portfolio_val, initial_total_value)
 
-            # Persist initial state to sessions table
+            # Persist initial state to sessions table. The route already wrote
+            # the user-facing knobs (risk_level, stop_loss_pct, trailing_stop_pct,
+            # cycle_seconds, decider, llm, …) at session creation; we merge our
+            # runtime-derived fields on top instead of overwriting, otherwise the
+            # Paramètres tab loses the originals.
             try:
-                from db.store import upsert_session as _upsert
+                from db.store import get_session as _get_sess, upsert_session as _upsert
+                existing = {}
+                try:
+                    row = _get_sess(session_id) or {}
+                    raw = row.get("initial_state")
+                    if isinstance(raw, str):
+                        existing = json.loads(raw)
+                    elif isinstance(raw, dict):
+                        existing = raw
+                except Exception:
+                    existing = {}
+                runtime_state = {
+                    "budget":              budget,
+                    "initial_prices":      initial_prices,
+                    "initial_holdings":    {
+                        sym: {"qty": h["qty"], "avg_price": h["avg_price"]}
+                        for sym, h in holdings.items()
+                    },
+                    "initial_total_value": initial_total_value,
+                    "watchlist":           watchlist,
+                }
                 _upsert(
                     session_id=session_id,
                     name=session_name,
                     mode="simulation",
-                    initial_state={
-                        "budget":              budget,
-                        "initial_prices":      initial_prices,
-                        "initial_holdings":    {
-                            sym: {"qty": h["qty"], "avg_price": h["avg_price"]}
-                            for sym, h in holdings.items()
-                        },
-                        "initial_total_value": initial_total_value,
-                        "watchlist":           watchlist,
-                    },
+                    initial_state={**existing, **runtime_state},
                 )
             except Exception:
                 pass

@@ -431,6 +431,7 @@ def sim_start():
                            "trailing_stop_pct":    trailing_stop_pct,
                            "sell_cooldown_cycles": sell_cooldown_cycles,
                            "decider":              decider,
+                           "llm":                  cfg.get("llm"),
                            **det_params,
                        })
     except Exception:
