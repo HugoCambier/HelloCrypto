@@ -1,4 +1,4 @@
-.PHONY: install hooks agent dashboard simulation shell deploy clean backtest bench bench-full bench-scenarios bench-ollama bench-ollama-full bench-ollama-overnight bench-progress bench-diff bench-promote propose init-db
+.PHONY: install hooks agent dashboard simulation shell deploy clean backtest bench bench-fast bench-full bench-scenarios bench-ollama bench-ollama-full bench-ollama-overnight bench-progress bench-diff bench-promote propose init-db
 
 install:     ## Install dependencies (Gemini + PostgreSQL)
 	poetry install --extras gemini --extras postgres
@@ -32,6 +32,10 @@ bench:       ## A/B bench learning system vs baseline (compact 1d scenarios, thr
 	LLM_RATE_LIMIT_RPM=12 poetry run python -m hellocrypto.eval.bench \
 		--provider gemini --model gemini-3.1-flash-lite \
 		--temperature 0.0 --min-confidence 0.5
+
+bench-fast:  ## rules_only variant only — déterministe, sans LLM, ~1min. Pour itérer avant un bench complet.
+	poetry run python -m hellocrypto.eval.bench \
+		--variants rules_only
 
 bench-full:  ## Same as bench but on 7d scenarios (~1500 calls, runs ~2h with throttling)
 	LLM_RATE_LIMIT_RPM=12 poetry run python -m hellocrypto.eval.bench \

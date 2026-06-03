@@ -23,26 +23,55 @@ from typing import Any
 from .api import compute_score_rules
 
 DEFAULTS = {
-    "decide_every_cycles":   48,    # cadence gate (units = caller cycle)
-    "top_n":                 3,     # max simultaneously held positions
-    "buy_threshold":         8,     # score required to enter
-    "trend_confirm_hours":   24.0,  # bearish trend duration required to exit
-    "min_hold_hours":        12.0,  # minimum holding period before any exit
-    "rebuy_cooldown_hours":  0.0,   # anti-whipsaw: hours before re-entering a sold sym
-    "enable_regime_stance":  True,  # modulate threshold+top_n via market stance
+    "decide_every_cycles":   48,         # cadence gate (units = caller cycle)
+    "top_n":                 3,          # max simultaneously held positions
+    "buy_threshold":         8,          # score required to enter
+    "trend_confirm_hours":   24.0,       # bearish trend duration required to exit
+    "min_hold_hours":        12.0,       # minimum holding period before any exit
+    "rebuy_cooldown_hours":  0.0,        # anti-whipsaw: hours before re-entering a sold sym
+    "enable_regime_stance":  True,       # modulate threshold+top_n via market stance
+    "exit_signal":           "trend_1d", # which signal triggers bear-confirm exits
 }
 
+# Per-stance overrides. ``exit_signal`` switches the source of the bearish-trend
+# timer between the daily SMA cross (slow, ~weeks lag) and the 1h SMA cross
+# (~25h lag). In defensive stances we want faster exits, so we read from the
+# faster signal. ``top_n=0`` in CASH effectively blocks all new entries.
 STANCE_PARAMS: dict[str, dict] = {
-    "DEPLOY":    {"buy_threshold": 6, "top_n": 4},
-    "SELECTIVE": {"buy_threshold": 7, "top_n": 3},
-    "PRESERVE":  {"buy_threshold": 8, "top_n": 2},
+    "DEPLOY":    {"buy_threshold": 6,  "top_n": 4, "exit_signal": "trend_1d"},
+    "SELECTIVE": {"buy_threshold": 7,  "top_n": 3, "exit_signal": "trend_1d"},
+    "PRESERVE":  {"buy_threshold": 8,  "top_n": 2, "exit_signal": "trend"},
+    "CASH":      {"buy_threshold": 11, "top_n": 0, "exit_signal": "trend"},
 }
+
+# CASH triggers — leading signals so we don't lag the lagging trend_1d.
+CASH_BTC_DRAWDOWN_PCT     = 7.0  # BTC down this much from its 7d high
+CASH_BEAR_BREADTH_INTRA   = 0.7  # ratio of watchlist with intraday `trend` == baissier
 
 
 def _derive_stance(market_raw: dict) -> str:
-    """Derive DEPLOY / SELECTIVE / PRESERVE from BTC trend + market breadth."""
+    """Derive DEPLOY / SELECTIVE / PRESERVE / CASH from market signals.
+
+    CASH (no new entries, fast exits via intraday signal) is triggered by
+    *leading* indicators — BTC drawdown from its 7d high, or intraday bear
+    breadth — rather than the lagging daily trend, so it activates *before*
+    the worst of the downturn lands.
+    """
     btc = market_raw.get("BTCUSDC") or {}
-    btc_trend = btc.get("trend_1d")
+    btc_trend    = btc.get("trend_1d")
+    btc_drawdown = btc.get("drawdown_pct_7d")
+
+    # Leading: BTC is in a >7% pullback from its 7d high → defense.
+    if btc_drawdown is not None and btc_drawdown >= CASH_BTC_DRAWDOWN_PCT:
+        return "CASH"
+
+    # Leading: intraday breadth collapse on 1h SMA cross.
+    if market_raw:
+        bear_intra = sum(1 for d in market_raw.values() if d.get("trend") == "baissier")
+        if bear_intra / len(market_raw) >= CASH_BEAR_BREADTH_INTRA:
+            return "CASH"
+
+    # Lagging: daily breadth — used only when leading signals are clean.
     bull = sum(1 for d in market_raw.values() if d.get("trend_1d") == "haussier")
     bear = sum(1 for d in market_raw.values() if d.get("trend_1d") == "baissier")
     if btc_trend == "haussier" and bull >= bear:
@@ -109,21 +138,31 @@ def regime_decision(
 
     scores = {sym: compute_score_rules(d) for sym, d in market_raw.items()}
 
-    bear_since   = dict(st.get("bear_since")   or {})
-    entry_ts     = dict(st.get("entry_ts")     or {})
-    last_sell_ts = dict(st.get("last_sell_ts") or {})
+    # Maintain two parallel bear-trend timers so stance can switch which signal
+    # gates the exit without losing history. ``bear_since_1d`` tracks the
+    # daily SMA cross (used in DEPLOY/SELECTIVE), ``bear_since_1h`` tracks the
+    # 1h intraday cross (used in PRESERVE/CASH for faster exits).
+    bear_since_1d = dict(st.get("bear_since_1d") or st.get("bear_since") or {})
+    bear_since_1h = dict(st.get("bear_since_1h") or {})
+    entry_ts      = dict(st.get("entry_ts")      or {})
+    last_sell_ts  = dict(st.get("last_sell_ts")  or {})
 
-    # Update per-symbol bear-trend timer (when did trend_1d first turn bearish).
     if now_ts is not None:
         for sym, d in market_raw.items():
             if d.get("trend_1d") == "baissier":
-                bear_since.setdefault(sym, now_ts)
+                bear_since_1d.setdefault(sym, now_ts)
             else:
-                bear_since.pop(sym, None)
+                bear_since_1d.pop(sym, None)
+            if d.get("trend") == "baissier":
+                bear_since_1h.setdefault(sym, now_ts)
+            else:
+                bear_since_1h.pop(sym, None)
 
-    confirm_sec    = float(p["trend_confirm_hours"])  * 3600
-    min_hold_sec   = float(p["min_hold_hours"])       * 3600
-    cooldown_sec   = float(p["rebuy_cooldown_hours"]) * 3600
+    exit_signal  = p.get("exit_signal", "trend_1d")
+    bear_since   = bear_since_1d if exit_signal == "trend_1d" else bear_since_1h
+    confirm_sec  = float(p["trend_confirm_hours"])  * 3600
+    min_hold_sec = float(p["min_hold_hours"])       * 3600
+    cooldown_sec = float(p["rebuy_cooldown_hours"]) * 3600
 
     # ── Exits ───────────────────────────────────────────────────────────────
     actions: list[dict] = []
@@ -140,7 +179,7 @@ def regime_decision(
                 "type":   "sell",
                 "symbol": sym,
                 "qty":    holdings[sym]["qty"],
-                "reason": f"Trend baissier confirmé ({p['trend_confirm_hours']:g}h)",
+                "reason": f"{exit_signal} baissier confirmé ({p['trend_confirm_hours']:g}h)",
             })
             selling_now.add(sym)
             last_sell_ts[sym] = now_ts
@@ -181,9 +220,11 @@ def regime_decision(
         cash_after -= alloc
         held_after += 1
 
-    st["bear_since"]   = bear_since
-    st["entry_ts"]     = entry_ts
-    st["last_sell_ts"] = last_sell_ts
+    st["bear_since_1d"] = bear_since_1d
+    st["bear_since_1h"] = bear_since_1h
+    st.pop("bear_since", None)  # legacy key, superseded by per-signal trackers
+    st["entry_ts"]      = entry_ts
+    st["last_sell_ts"]  = last_sell_ts
 
     bull_count = sum(1 for d in market_raw.values() if d.get("trend_1d") == "haussier")
     bear_count = sum(1 for d in market_raw.values() if d.get("trend_1d") == "baissier")

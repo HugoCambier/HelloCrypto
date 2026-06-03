@@ -14,6 +14,62 @@ eval/reports/champion.json eval/reports/bench/<latest>.json`
 
 ---
 
+## 2026-06-03 — CASH stance + exit signal stance-dépendant (bench_20260603_084403)
+
+**Ce qui a changé** :
+- Ajout du stance **CASH** dans [hellocrypto/deciders.py](hellocrypto/deciders.py),
+  déclenché par des signaux **leading** (et non par `trend_1d` retardé) :
+  - BTC drawdown ≥ 7% depuis le high 7j, OU
+  - breadth intraday (`trend` 1h) bear ≥ 70%
+- En CASH : `top_n=0` → blocage de toute nouvelle entrée.
+- **Signal de sortie maintenant stance-dépendant** :
+  - DEPLOY/SELECTIVE → `trend_1d` (lent, OK en bull, évite la panique)
+  - PRESERVE/CASH → `trend` (1h SMA cross, ~25h) → sortie en heures au lieu
+    de semaines en marché descendant.
+- Trackers `bear_since_1d` et `bear_since_1h` maintenus en parallèle pour
+  permettre le switch sans perdre d'historique.
+- Nouveau champ `drawdown_pct_7d` calculé dans
+  [hellocrypto/api.py](hellocrypto/api.py) (live) + builder de scénarios.
+- Nouveau scénario holdout **bull_to_correction** (semaine de l'ATH BTC
+  $126k → $102k en oct 2025) — mesure explicitement la protection bear.
+
+**Diff vs champion précédent (bench_20260602_194122)** :
+
+| variant    | scenario              | champ ret/α        | new ret/α          | Δret    | Δα      |
+|------------|-----------------------|--------------------|--------------------|---------|---------|
+| rules_only | greed_bull            | +1.88% / +2.46%    | +1.88% / +2.46%    | 0       | 0       |
+| rules_only | neutral_bull          | -0.38% / -0.41%    | -0.38% / -0.41%    | 0       | 0       |
+| rules_only | fear_bear             | +0.00% / +0.71%    | +0.00% / +0.71%    | 0       | 0       |
+| rules_only | **bull_to_correction**| —                  | **-5.74% / +1.52%**| —       | —       |
+
+**Wins** :
+- **+1.52pp alpha** sur le nouveau scénario corrective. BTC perd ~7% en 24h ;
+  on perd 5.74% en se défendant via CASH (h0/h18-23) + sorties accélérées.
+- Aucune régression sur les 3 scénarios existants.
+- Backtest 600j local (Hugo) montre alpha positif vs buy-and-hold (+$21 sur
+  $100 budget), mais drawdown encore -43% → le CASH stance protège les
+  entrées, pas suffisamment les positions tenues.
+
+**Losses / caveats** :
+- Pas de contrefactuel direct "champion sur le même scénario" (le scénario
+  n'existait pas dans le champion).
+- Backtest 600j révèle que les **sorties par signal sont net négatives**
+  (-$60 sur 223 trades vs trailing-stop +$100 sur 21 trades). Accélérer
+  les sorties via `trend` 1h sur PRESERVE/CASH pourrait amplifier ce
+  pattern sur marchés mixtes — à surveiller au prochain bench long.
+
+**Pistes suivantes** :
+- Dédoublonnage scoring : `sma7>sma25` redondant avec `trend` dans
+  `compute_score_rules`. Ajouter `trend_short` (30m/5m).
+- Buy threshold par stance (DEPLOY 7 / SELECTIVE 8 / PRESERVE 9) :
+  être plus exigeant à l'entrée quand le régime se dégrade.
+- Score-based exit guard : ne pas sortir sur signal si le score reste fort
+  (anti-whipsaw, contre le -$60 des signal exits).
+- Risk-tier par coin pour filtrer la watchlist selon `risk_level`
+  (LINK, ADA, POL coûtent -$45 cumulés sur 600j).
+
+---
+
 ## 2026-06-03 — Stance système DEPLOY/SELECTIVE/PRESERVE (bench_20260602_194122)
 
 **Ce qui a changé** : ajout d'un système de régime stance dans

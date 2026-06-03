@@ -518,15 +518,22 @@ def get_enriched_market_data(watchlist: list[str], cycle_seconds: int = 60) -> d
                 except Exception:
                     pass
 
-            # Daily trend
-            trend_1d = None
+            # Daily trend + 7d drawdown (leading signal for bear protection).
+            # Both derived from the same 1d klines fetch.
+            trend_1d        = None
+            drawdown_pct_7d = None
             try:
                 klines_1d  = get_klines(sym, interval="1d", limit=30)
                 closes_1d  = [float(k[4]) for k in klines_1d]
+                highs_1d   = [float(k[2]) for k in klines_1d]
                 sma7_1d    = _compute_sma(closes_1d, 7)
                 sma25_1d   = _compute_sma(closes_1d, 25)
                 if sma7_1d and sma25_1d:
                     trend_1d = "haussier" if sma7_1d > sma25_1d else "baissier"
+                if len(highs_1d) >= 7 and price:
+                    recent_high = max(highs_1d[-7:])
+                    if recent_high > 0:
+                        drawdown_pct_7d = round((recent_high - price) / recent_high * 100, 2)
             except Exception:
                 pass
 
@@ -566,6 +573,7 @@ def get_enriched_market_data(watchlist: list[str], cycle_seconds: int = 60) -> d
                 "trend_short":    trend_short,
                 "interval_short": interval_short,
                 "trend_1d":       trend_1d,
+                "drawdown_pct_7d": drawdown_pct_7d,
                 "spread_pct":     spread_pct,
                 "macd":           macd_data,
                 "bollinger":      bollinger,

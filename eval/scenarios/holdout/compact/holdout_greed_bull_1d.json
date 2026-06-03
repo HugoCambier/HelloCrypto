@@ -31,6 +31,7 @@
           "sma25": 118113.0336,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.25,
           "range_pct_24h": 0.298,
           "atr": 372.497857,
           "macd": {
@@ -57,6 +58,7 @@
           "sma25": 3566.4276,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.3,
           "range_pct_24h": 0.53,
           "atr": 30.322857,
           "macd": {
@@ -83,6 +85,7 @@
           "sma25": 176.9292,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.84,
           "range_pct_24h": 0.895,
           "atr": 1.743571,
           "macd": {
@@ -109,6 +112,7 @@
           "sma25": 3.4311,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 6.41,
           "range_pct_24h": 0.712,
           "atr": 0.037629,
           "macd": {
@@ -135,6 +139,7 @@
           "sma25": 732.924,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.6,
           "range_pct_24h": 0.384,
           "atr": 5.074286,
           "macd": {
@@ -161,6 +166,7 @@
           "sma25": 0.82504,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 7.49,
           "range_pct_24h": 0.977,
           "atr": 0.01135,
           "macd": {
@@ -187,6 +193,7 @@
           "sma25": 23.9048,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.21,
           "range_pct_24h": 1.064,
           "atr": 0.431429,
           "macd": {
@@ -213,6 +220,7 @@
           "sma25": 0.245689,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.45,
           "range_pct_24h": 3.139,
           "atr": 0.004057,
           "macd": {
@@ -239,6 +247,7 @@
           "sma25": 18.0496,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.81,
           "range_pct_24h": 1.356,
           "atr": 0.24,
           "macd": {
@@ -265,6 +274,7 @@
           "sma25": 0.236548,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 5.51,
           "range_pct_24h": 0.833,
           "atr": 0.002564,
           "macd": {
@@ -301,6 +311,7 @@
           "sma25": 118120.2332,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.25,
           "range_pct_24h": 0.205,
           "atr": 366.017857,
           "macd": {
@@ -327,6 +338,7 @@
           "sma25": 3569.6952,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.94,
           "range_pct_24h": 1.031,
           "atr": 30.137857,
           "macd": {
@@ -353,6 +365,7 @@
           "sma25": 177.0356,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.73,
           "range_pct_24h": 1.197,
           "atr": 1.781429,
           "macd": {
@@ -379,6 +392,7 @@
           "sma25": 3.43078,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 6.53,
           "range_pct_24h": 0.876,
           "atr": 0.0368,
           "macd": {
@@ -405,6 +419,7 @@
           "sma25": 733.57,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.02,
           "range_pct_24h": 0.965,
           "atr": 5.22,
           "macd": {
@@ -431,6 +446,7 @@
           "sma25": 0.825996,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 7.1,
           "range_pct_24h": 1.441,
           "atr": 0.011236,
           "macd": {
@@ -457,6 +473,7 @@
           "sma25": 23.9588,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.89,
           "range_pct_24h": 0.938,
           "atr": 0.427143,
           "macd": {
@@ -483,6 +500,7 @@
           "sma25": 0.246219,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.42,
           "range_pct_24h": 4.443,
           "atr": 0.004241,
           "macd": {
@@ -509,6 +527,7 @@
           "sma25": 18.0832,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.34,
           "range_pct_24h": 1.026,
           "atr": 0.237857,
           "macd": {
@@ -535,6 +554,7 @@
           "sma25": 0.236844,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 5.63,
           "range_pct_24h": 0.793,
           "atr": 0.002521,
           "macd": {
@@ -571,6 +591,7 @@
           "sma25": 118117.0768,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.22,
           "range_pct_24h": 0.232,
           "atr": 369.51,
           "macd": {
@@ -597,6 +618,7 @@
           "sma25": 3572.4964,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.62,
           "range_pct_24h": 0.785,
           "atr": 30.277143,
           "macd": {
@@ -623,6 +645,7 @@
           "sma25": 177.0712,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.91,
           "range_pct_24h": 0.535,
           "atr": 1.725,
           "macd": {
@@ -649,6 +672,7 @@
           "sma25": 3.429284,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 7.0,
           "range_pct_24h": 1.118,
           "atr": 0.036864,
           "macd": {
@@ -675,6 +699,7 @@
           "sma25": 734.192,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.62,
           "range_pct_24h": 0.57,
           "atr": 5.087143,
           "macd": {
@@ -701,6 +726,7 @@
           "sma25": 0.826544,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 7.06,
           "range_pct_24h": 0.829,
           "atr": 0.010657,
           "macd": {
@@ -727,6 +753,7 @@
           "sma25": 24.0044,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.81,
           "range_pct_24h": 0.896,
           "atr": 0.415,
           "macd": {
@@ -753,6 +780,7 @@
           "sma25": 0.246561,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.66,
           "range_pct_24h": 1.437,
           "atr": 0.004244,
           "macd": {
@@ -779,6 +807,7 @@
           "sma25": 18.1068,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.29,
           "range_pct_24h": 0.917,
           "atr": 0.234286,
           "macd": {
@@ -805,6 +834,7 @@
           "sma25": 0.237016,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 5.63,
           "range_pct_24h": 0.501,
           "atr": 0.002443,
           "macd": {
@@ -841,6 +871,7 @@
           "sma25": 118106.6776,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.23,
           "range_pct_24h": 0.394,
           "atr": 387.356429,
           "macd": {
@@ -867,6 +898,7 @@
           "sma25": 3576.0012,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.48,
           "range_pct_24h": 2.357,
           "atr": 34.763571,
           "macd": {
@@ -893,6 +925,7 @@
           "sma25": 177.1028,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.67,
           "range_pct_24h": 0.893,
           "atr": 1.762143,
           "macd": {
@@ -919,6 +952,7 @@
           "sma25": 3.428668,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 6.21,
           "range_pct_24h": 1.071,
           "atr": 0.036929,
           "macd": {
@@ -945,6 +979,7 @@
           "sma25": 734.6972,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.48,
           "range_pct_24h": 0.712,
           "atr": 4.891429,
           "macd": {
@@ -971,6 +1006,7 @@
           "sma25": 0.827252,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 6.16,
           "range_pct_24h": 1.677,
           "atr": 0.0111,
           "macd": {
@@ -997,6 +1033,7 @@
           "sma25": 24.0456,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.61,
           "range_pct_24h": 1.301,
           "atr": 0.415,
           "macd": {
@@ -1023,6 +1060,7 @@
           "sma25": 0.247022,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.05,
           "range_pct_24h": 1.942,
           "atr": 0.004206,
           "macd": {
@@ -1049,6 +1087,7 @@
           "sma25": 18.1308,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.51,
           "range_pct_24h": 1.713,
           "atr": 0.245714,
           "macd": {
@@ -1075,6 +1114,7 @@
           "sma25": 0.237196,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 5.08,
           "range_pct_24h": 1.41,
           "atr": 0.0025,
           "macd": {
@@ -1111,6 +1151,7 @@
           "sma25": 118090.4708,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.25,
           "range_pct_24h": 0.199,
           "atr": 361.460714,
           "macd": {
@@ -1137,6 +1178,7 @@
           "sma25": 3578.4236,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.09,
           "range_pct_24h": 0.917,
           "atr": 34.618571,
           "macd": {
@@ -1163,6 +1205,7 @@
           "sma25": 177.1064,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.88,
           "range_pct_24h": 0.602,
           "atr": 1.62,
           "macd": {
@@ -1189,6 +1232,7 @@
           "sma25": 3.427584,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 6.53,
           "range_pct_24h": 0.902,
           "atr": 0.034929,
           "macd": {
@@ -1215,6 +1259,7 @@
           "sma25": 734.9696,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.6,
           "range_pct_24h": 0.424,
           "atr": 4.561429,
           "macd": {
@@ -1241,6 +1286,7 @@
           "sma25": 0.827648,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 6.52,
           "range_pct_24h": 1.421,
           "atr": 0.010829,
           "macd": {
@@ -1267,6 +1313,7 @@
           "sma25": 24.0772,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.5,
           "range_pct_24h": 0.894,
           "atr": 0.403571,
           "macd": {
@@ -1293,6 +1340,7 @@
           "sma25": 0.247226,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.35,
           "range_pct_24h": 2.098,
           "atr": 0.004273,
           "macd": {
@@ -1319,6 +1367,7 @@
           "sma25": 18.1496,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.56,
           "range_pct_24h": 1.071,
           "atr": 0.246429,
           "macd": {
@@ -1345,6 +1394,7 @@
           "sma25": 0.2373,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.57,
           "range_pct_24h": 0.99,
           "atr": 0.002421,
           "macd": {
@@ -1381,6 +1431,7 @@
           "sma25": 118077.6712,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.33,
           "range_pct_24h": 0.153,
           "atr": 332.768571,
           "macd": {
@@ -1407,6 +1458,7 @@
           "sma25": 3580.7072,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.28,
           "range_pct_24h": 0.734,
           "atr": 34.153571,
           "macd": {
@@ -1433,6 +1485,7 @@
           "sma25": 177.124,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.77,
           "range_pct_24h": 0.5,
           "atr": 1.498571,
           "macd": {
@@ -1459,6 +1512,7 @@
           "sma25": 3.425848,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 6.64,
           "range_pct_24h": 0.658,
           "atr": 0.031836,
           "macd": {
@@ -1485,6 +1539,7 @@
           "sma25": 735.2308,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.36,
           "range_pct_24h": 0.65,
           "atr": 4.557857,
           "macd": {
@@ -1511,6 +1566,7 @@
           "sma25": 0.828032,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 6.12,
           "range_pct_24h": 1.319,
           "atr": 0.010586,
           "macd": {
@@ -1537,6 +1593,7 @@
           "sma25": 24.1076,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.34,
           "range_pct_24h": 1.054,
           "atr": 0.390714,
           "macd": {
@@ -1563,6 +1620,7 @@
           "sma25": 0.247144,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.13,
           "range_pct_24h": 1.437,
           "atr": 0.004251,
           "macd": {
@@ -1589,6 +1647,7 @@
           "sma25": 18.172,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.3,
           "range_pct_24h": 0.908,
           "atr": 0.233571,
           "macd": {
@@ -1615,6 +1674,7 @@
           "sma25": 0.237484,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.06,
           "range_pct_24h": 1.354,
           "atr": 0.002343,
           "macd": {
@@ -1651,6 +1711,7 @@
           "sma25": 118061.3324,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.35,
           "range_pct_24h": 0.106,
           "atr": 319.742857,
           "macd": {
@@ -1677,6 +1738,7 @@
           "sma25": 3583.3476,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.13,
           "range_pct_24h": 0.62,
           "atr": 33.302857,
           "macd": {
@@ -1703,6 +1765,7 @@
           "sma25": 177.1136,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.01,
           "range_pct_24h": 0.485,
           "atr": 1.463571,
           "macd": {
@@ -1729,6 +1792,7 @@
           "sma25": 3.42418,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 6.69,
           "range_pct_24h": 0.588,
           "atr": 0.029357,
           "macd": {
@@ -1755,6 +1819,7 @@
           "sma25": 735.5236,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.55,
           "range_pct_24h": 0.329,
           "atr": 4.387143,
           "macd": {
@@ -1781,6 +1846,7 @@
           "sma25": 0.828272,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 6.75,
           "range_pct_24h": 0.73,
           "atr": 0.010114,
           "macd": {
@@ -1807,6 +1873,7 @@
           "sma25": 24.1356,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.53,
           "range_pct_24h": 0.691,
           "atr": 0.372143,
           "macd": {
@@ -1833,6 +1900,7 @@
           "sma25": 0.247048,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.7,
           "range_pct_24h": 1.442,
           "atr": 0.004265,
           "macd": {
@@ -1859,6 +1927,7 @@
           "sma25": 18.194,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.82,
           "range_pct_24h": 1.074,
           "atr": 0.227143,
           "macd": {
@@ -1885,6 +1954,7 @@
           "sma25": 0.237636,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.53,
           "range_pct_24h": 0.784,
           "atr": 0.002264,
           "macd": {
@@ -1921,6 +1991,7 @@
           "sma25": 118053.9388,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.19,
           "range_pct_24h": 0.33,
           "atr": 329.784286,
           "macd": {
@@ -1947,6 +2018,7 @@
           "sma25": 3587.2008,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.71,
           "range_pct_24h": 0.994,
           "atr": 33.832857,
           "macd": {
@@ -1973,6 +2045,7 @@
           "sma25": 177.1792,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.68,
           "range_pct_24h": 0.82,
           "atr": 1.447857,
           "macd": {
@@ -1999,6 +2072,7 @@
           "sma25": 3.423988,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 6.01,
           "range_pct_24h": 1.208,
           "atr": 0.029957,
           "macd": {
@@ -2025,6 +2099,7 @@
           "sma25": 736.0212,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.24,
           "range_pct_24h": 0.526,
           "atr": 4.368571,
           "macd": {
@@ -2051,6 +2126,7 @@
           "sma25": 0.829108,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 5.65,
           "range_pct_24h": 1.691,
           "atr": 0.010479,
           "macd": {
@@ -2077,6 +2153,7 @@
           "sma25": 24.1692,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.06,
           "range_pct_24h": 1.011,
           "atr": 0.377143,
           "macd": {
@@ -2103,6 +2180,7 @@
           "sma25": 0.24706,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.51,
           "range_pct_24h": 0.779,
           "atr": 0.004191,
           "macd": {
@@ -2129,6 +2207,7 @@
           "sma25": 18.2252,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.77,
           "range_pct_24h": 1.913,
           "atr": 0.244286,
           "macd": {
@@ -2155,6 +2234,7 @@
           "sma25": 0.23784,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.33,
           "range_pct_24h": 1.07,
           "atr": 0.002379,
           "macd": {
@@ -2191,6 +2271,7 @@
           "sma25": 118052.422,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.08,
           "range_pct_24h": 0.199,
           "atr": 326.441429,
           "macd": {
@@ -2217,6 +2298,7 @@
           "sma25": 3592.7516,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": -0.45,
           "range_pct_24h": 1.315,
           "atr": 35.740714,
           "macd": {
@@ -2243,6 +2325,7 @@
           "sma25": 177.3264,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.19,
           "range_pct_24h": 1.526,
           "atr": 1.548571,
           "macd": {
@@ -2269,6 +2352,7 @@
           "sma25": 3.425312,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.45,
           "range_pct_24h": 1.651,
           "atr": 0.032171,
           "macd": {
@@ -2295,6 +2379,7 @@
           "sma25": 736.7492,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.45,
           "range_pct_24h": 0.831,
           "atr": 4.547857,
           "macd": {
@@ -2321,6 +2406,7 @@
           "sma25": 0.830356,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.34,
           "range_pct_24h": 1.47,
           "atr": 0.010664,
           "macd": {
@@ -2347,6 +2433,7 @@
           "sma25": 24.2216,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.83,
           "range_pct_24h": 1.278,
           "atr": 0.352857,
           "macd": {
@@ -2373,6 +2460,7 @@
           "sma25": 0.247093,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.3,
           "range_pct_24h": 1.331,
           "atr": 0.004311,
           "macd": {
@@ -2399,6 +2487,7 @@
           "sma25": 18.2712,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.21,
           "range_pct_24h": 1.569,
           "atr": 0.244286,
           "macd": {
@@ -2425,6 +2514,7 @@
           "sma25": 0.23818,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.5,
           "range_pct_24h": 0.938,
           "atr": 0.002429,
           "macd": {
@@ -2461,6 +2551,7 @@
           "sma25": 118044.63,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.27,
           "range_pct_24h": 0.334,
           "atr": 316.332857,
           "macd": {
@@ -2487,6 +2578,7 @@
           "sma25": 3598.8396,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.28,
           "range_pct_24h": 0.901,
           "atr": 35.216429,
           "macd": {
@@ -2513,6 +2605,7 @@
           "sma25": 177.4744,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.7,
           "range_pct_24h": 1.068,
           "atr": 1.552857,
           "macd": {
@@ -2539,6 +2632,7 @@
           "sma25": 3.427304,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.74,
           "range_pct_24h": 1.673,
           "atr": 0.034814,
           "macd": {
@@ -2565,6 +2659,7 @@
           "sma25": 737.4796,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.69,
           "range_pct_24h": 0.47,
           "atr": 4.337143,
           "macd": {
@@ -2591,6 +2686,7 @@
           "sma25": 0.831392,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 5.0,
           "range_pct_24h": 1.656,
           "atr": 0.010629,
           "macd": {
@@ -2617,6 +2713,7 @@
           "sma25": 24.2768,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.23,
           "range_pct_24h": 1.083,
           "atr": 0.312857,
           "macd": {
@@ -2643,6 +2740,7 @@
           "sma25": 0.246995,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.84,
           "range_pct_24h": 2.102,
           "atr": 0.004389,
           "macd": {
@@ -2669,6 +2767,7 @@
           "sma25": 18.3352,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": -1.77,
           "range_pct_24h": 3.026,
           "atr": 0.262857,
           "macd": {
@@ -2695,6 +2794,7 @@
           "sma25": 0.238592,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.27,
           "range_pct_24h": 1.18,
           "atr": 0.00235,
           "macd": {
@@ -2731,6 +2831,7 @@
           "sma25": 118030.3096,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.29,
           "range_pct_24h": 0.101,
           "atr": 292.251429,
           "macd": {
@@ -2757,6 +2858,7 @@
           "sma25": 3604.4776,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.76,
           "range_pct_24h": 0.555,
           "atr": 34.541429,
           "macd": {
@@ -2783,6 +2885,7 @@
           "sma25": 177.5896,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.79,
           "range_pct_24h": 0.573,
           "atr": 1.51,
           "macd": {
@@ -2809,6 +2912,7 @@
           "sma25": 3.429504,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.16,
           "range_pct_24h": 1.122,
           "atr": 0.035564,
           "macd": {
@@ -2835,6 +2939,7 @@
           "sma25": 737.9768,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.17,
           "range_pct_24h": 0.594,
           "atr": 4.442857,
           "macd": {
@@ -2861,6 +2966,7 @@
           "sma25": 0.832028,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 5.28,
           "range_pct_24h": 0.872,
           "atr": 0.010679,
           "macd": {
@@ -2887,6 +2993,7 @@
           "sma25": 24.3328,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.23,
           "range_pct_24h": 0.561,
           "atr": 0.292143,
           "macd": {
@@ -2913,6 +3020,7 @@
           "sma25": 0.246913,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.65,
           "range_pct_24h": 0.712,
           "atr": 0.004332,
           "macd": {
@@ -2939,6 +3047,7 @@
           "sma25": 18.3916,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.63,
           "range_pct_24h": 1.499,
           "atr": 0.269286,
           "macd": {
@@ -2965,6 +3074,7 @@
           "sma25": 0.238992,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.07,
           "range_pct_24h": 0.528,
           "atr": 0.002286,
           "macd": {
@@ -3001,6 +3111,7 @@
           "sma25": 118007.5084,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.31,
           "range_pct_24h": 0.231,
           "atr": 271.124286,
           "macd": {
@@ -3027,6 +3138,7 @@
           "sma25": 3612.39,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": -0.75,
           "range_pct_24h": 1.928,
           "atr": 37.121429,
           "macd": {
@@ -3053,6 +3165,7 @@
           "sma25": 177.7112,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.34,
           "range_pct_24h": 0.936,
           "atr": 1.437857,
           "macd": {
@@ -3079,6 +3192,7 @@
           "sma25": 3.432284,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.47,
           "range_pct_24h": 0.806,
           "atr": 0.0345,
           "macd": {
@@ -3105,6 +3219,7 @@
           "sma25": 738.4848,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.72,
           "range_pct_24h": 0.73,
           "atr": 4.253571,
           "macd": {
@@ -3131,6 +3246,7 @@
           "sma25": 0.83296,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 5.01,
           "range_pct_24h": 0.987,
           "atr": 0.01025,
           "macd": {
@@ -3157,6 +3273,7 @@
           "sma25": 24.3944,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.4,
           "range_pct_24h": 1.392,
           "atr": 0.262857,
           "macd": {
@@ -3183,6 +3300,7 @@
           "sma25": 0.246914,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.47,
           "range_pct_24h": 1.136,
           "atr": 0.004251,
           "macd": {
@@ -3209,6 +3327,7 @@
           "sma25": 18.4528,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.27,
           "range_pct_24h": 1.494,
           "atr": 0.266429,
           "macd": {
@@ -3235,6 +3354,7 @@
           "sma25": 0.239472,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.2,
           "range_pct_24h": 1.006,
           "atr": 0.002243,
           "macd": {
@@ -3271,6 +3391,7 @@
           "sma25": 117997.1884,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.14,
           "range_pct_24h": 0.373,
           "atr": 279.772857,
           "macd": {
@@ -3297,6 +3418,7 @@
           "sma25": 3620.1768,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.56,
           "range_pct_24h": 0.836,
           "atr": 37.282857,
           "macd": {
@@ -3323,6 +3445,7 @@
           "sma25": 177.918,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.61,
           "range_pct_24h": 1.089,
           "atr": 1.485,
           "macd": {
@@ -3349,6 +3472,7 @@
           "sma25": 3.436148,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.7,
           "range_pct_24h": 0.736,
           "atr": 0.033886,
           "macd": {
@@ -3375,6 +3499,7 @@
           "sma25": 738.9152,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.88,
           "range_pct_24h": 0.401,
           "atr": 4.213571,
           "macd": {
@@ -3401,6 +3526,7 @@
           "sma25": 0.834336,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.71,
           "range_pct_24h": 1.101,
           "atr": 0.0103,
           "macd": {
@@ -3427,6 +3553,7 @@
           "sma25": 24.4508,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.03,
           "range_pct_24h": 1.079,
           "atr": 0.26,
           "macd": {
@@ -3453,6 +3580,7 @@
           "sma25": 0.247238,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.87,
           "range_pct_24h": 1.011,
           "atr": 0.004261,
           "macd": {
@@ -3479,6 +3607,7 @@
           "sma25": 18.5152,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.83,
           "range_pct_24h": 1.14,
           "atr": 0.274286,
           "macd": {
@@ -3505,6 +3634,7 @@
           "sma25": 0.24002,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.2,
           "range_pct_24h": 0.725,
           "atr": 0.002264,
           "macd": {
@@ -3541,6 +3671,7 @@
           "sma25": 118003.054,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.89,
           "range_pct_24h": 0.279,
           "atr": 289.706429,
           "macd": {
@@ -3567,6 +3698,7 @@
           "sma25": 3627.6428,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.52,
           "range_pct_24h": 0.595,
           "atr": 37.109286,
           "macd": {
@@ -3593,6 +3725,7 @@
           "sma25": 178.144,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.95,
           "range_pct_24h": 0.863,
           "atr": 1.535714,
           "macd": {
@@ -3619,6 +3752,7 @@
           "sma25": 3.440412,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.81,
           "range_pct_24h": 1.09,
           "atr": 0.035193,
           "macd": {
@@ -3645,6 +3779,7 @@
           "sma25": 739.21,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.64,
           "range_pct_24h": 0.348,
           "atr": 4.220714,
           "macd": {
@@ -3671,6 +3806,7 @@
           "sma25": 0.835856,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.26,
           "range_pct_24h": 1.673,
           "atr": 0.010786,
           "macd": {
@@ -3697,6 +3833,7 @@
           "sma25": 24.5068,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.12,
           "range_pct_24h": 1.069,
           "atr": 0.254286,
           "macd": {
@@ -3723,6 +3860,7 @@
           "sma25": 0.24758,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.1,
           "range_pct_24h": 0.952,
           "atr": 0.004311,
           "macd": {
@@ -3749,6 +3887,7 @@
           "sma25": 18.5828,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.61,
           "range_pct_24h": 1.638,
           "atr": 0.276429,
           "macd": {
@@ -3775,6 +3914,7 @@
           "sma25": 0.240584,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.61,
           "range_pct_24h": 0.88,
           "atr": 0.002286,
           "macd": {
@@ -3811,6 +3951,7 @@
           "sma25": 118013.088,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.84,
           "range_pct_24h": 0.472,
           "atr": 304.577143,
           "macd": {
@@ -3837,6 +3978,7 @@
           "sma25": 3635.9988,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.02,
           "range_pct_24h": 1.044,
           "atr": 38.56,
           "macd": {
@@ -3863,6 +4005,7 @@
           "sma25": 178.2796,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.11,
           "range_pct_24h": 1.277,
           "atr": 1.587143,
           "macd": {
@@ -3889,6 +4032,7 @@
           "sma25": 3.445548,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.37,
           "range_pct_24h": 1.683,
           "atr": 0.037707,
           "macd": {
@@ -3915,6 +4059,7 @@
           "sma25": 739.6344,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.01,
           "range_pct_24h": 0.684,
           "atr": 4.384286,
           "macd": {
@@ -3941,6 +4086,7 @@
           "sma25": 0.837448,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.46,
           "range_pct_24h": 2.0,
           "atr": 0.011443,
           "macd": {
@@ -3967,6 +4113,7 @@
           "sma25": 24.5684,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.36,
           "range_pct_24h": 1.35,
           "atr": 0.26,
           "macd": {
@@ -3993,6 +4140,7 @@
           "sma25": 0.248009,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.75,
           "range_pct_24h": 2.027,
           "atr": 0.004125,
           "macd": {
@@ -4019,6 +4167,7 @@
           "sma25": 18.6524,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.81,
           "range_pct_24h": 1.179,
           "atr": 0.275,
           "macd": {
@@ -4045,6 +4194,7 @@
           "sma25": 0.241204,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.77,
           "range_pct_24h": 1.643,
           "atr": 0.002436,
           "macd": {
@@ -4081,6 +4231,7 @@
           "sma25": 118052.3684,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.67,
           "range_pct_24h": 0.414,
           "atr": 322.417857,
           "macd": {
@@ -4107,6 +4258,7 @@
           "sma25": 3646.1556,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": -0.46,
           "range_pct_24h": 1.112,
           "atr": 38.912143,
           "macd": {
@@ -4133,6 +4285,7 @@
           "sma25": 178.5564,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.51,
           "range_pct_24h": 1.055,
           "atr": 1.572143,
           "macd": {
@@ -4159,6 +4312,7 @@
           "sma25": 3.45184,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.93,
           "range_pct_24h": 0.847,
           "atr": 0.037693,
           "macd": {
@@ -4185,6 +4339,7 @@
           "sma25": 740.5152,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.43,
           "range_pct_24h": 0.793,
           "atr": 4.300714,
           "macd": {
@@ -4211,6 +4366,7 @@
           "sma25": 0.839804,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.76,
           "range_pct_24h": 1.653,
           "atr": 0.011614,
           "macd": {
@@ -4237,6 +4393,7 @@
           "sma25": 24.6516,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": -0.43,
           "range_pct_24h": 1.338,
           "atr": 0.267857,
           "macd": {
@@ -4263,6 +4420,7 @@
           "sma25": 0.248596,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.47,
           "range_pct_24h": 1.42,
           "atr": 0.003584,
           "macd": {
@@ -4289,6 +4447,7 @@
           "sma25": 18.736,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": -0.31,
           "range_pct_24h": 3.55,
           "atr": 0.311429,
           "macd": {
@@ -4315,6 +4474,7 @@
           "sma25": 0.24196,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.54,
           "range_pct_24h": 0.72,
           "atr": 0.002429,
           "macd": {
@@ -4351,6 +4511,7 @@
           "sma25": 118072.3992,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.76,
           "range_pct_24h": 0.33,
           "atr": 330.879286,
           "macd": {
@@ -4377,6 +4538,7 @@
           "sma25": 3656.4232,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": -0.49,
           "range_pct_24h": 1.613,
           "atr": 41.275714,
           "macd": {
@@ -4403,6 +4565,7 @@
           "sma25": 178.7444,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.44,
           "range_pct_24h": 0.862,
           "atr": 1.616429,
           "macd": {
@@ -4429,6 +4592,7 @@
           "sma25": 3.456096,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.98,
           "range_pct_24h": 0.992,
           "atr": 0.037464,
           "macd": {
@@ -4455,6 +4619,7 @@
           "sma25": 741.4828,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.91,
           "range_pct_24h": 0.752,
           "atr": 4.404286,
           "macd": {
@@ -4481,6 +4646,7 @@
           "sma25": 0.841808,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.66,
           "range_pct_24h": 1.25,
           "atr": 0.0119,
           "macd": {
@@ -4507,6 +4673,7 @@
           "sma25": 24.7192,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.43,
           "range_pct_24h": 1.223,
           "atr": 0.274286,
           "macd": {
@@ -4533,6 +4700,7 @@
           "sma25": 0.249498,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": -2.7,
           "range_pct_24h": 5.376,
           "atr": 0.004346,
           "macd": {
@@ -4559,6 +4727,7 @@
           "sma25": 18.8072,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.45,
           "range_pct_24h": 1.624,
           "atr": 0.322143,
           "macd": {
@@ -4585,6 +4754,7 @@
           "sma25": 0.242764,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": -0.16,
           "range_pct_24h": 2.044,
           "atr": 0.002714,
           "macd": {
@@ -4621,6 +4791,7 @@
           "sma25": 118074.0072,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.2,
           "range_pct_24h": 0.513,
           "atr": 341.175714,
           "macd": {
@@ -4647,6 +4818,7 @@
           "sma25": 3663.5944,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.23,
           "range_pct_24h": 2.11,
           "atr": 40.750714,
           "macd": {
@@ -4673,6 +4845,7 @@
           "sma25": 178.866,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.27,
           "range_pct_24h": 1.007,
           "atr": 1.633571,
           "macd": {
@@ -4699,6 +4872,7 @@
           "sma25": 3.458352,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.44,
           "range_pct_24h": 1.208,
           "atr": 0.037857,
           "macd": {
@@ -4725,6 +4899,7 @@
           "sma25": 742.1008,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.87,
           "range_pct_24h": 1.249,
           "atr": 4.693571,
           "macd": {
@@ -4751,6 +4926,7 @@
           "sma25": 0.843108,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.16,
           "range_pct_24h": 1.875,
           "atr": 0.012043,
           "macd": {
@@ -4777,6 +4953,7 @@
           "sma25": 24.7688,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.0,
           "range_pct_24h": 1.876,
           "atr": 0.285,
           "macd": {
@@ -4803,6 +4980,7 @@
           "sma25": 0.250292,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.13,
           "range_pct_24h": 3.748,
           "atr": 0.004695,
           "macd": {
@@ -4829,6 +5007,7 @@
           "sma25": 18.86,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.05,
           "range_pct_24h": 1.702,
           "atr": 0.322857,
           "macd": {
@@ -4855,6 +5034,7 @@
           "sma25": 0.243424,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.96,
           "range_pct_24h": 2.038,
           "atr": 0.002836,
           "macd": {
@@ -4891,6 +5071,7 @@
           "sma25": 118095.6884,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.92,
           "range_pct_24h": 0.361,
           "atr": 354.977143,
           "macd": {
@@ -4917,6 +5098,7 @@
           "sma25": 3671.8692,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.94,
           "range_pct_24h": 0.73,
           "atr": 40.312143,
           "macd": {
@@ -4943,6 +5125,7 @@
           "sma25": 179.1024,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.37,
           "range_pct_24h": 1.3,
           "atr": 1.726429,
           "macd": {
@@ -4969,6 +5152,7 @@
           "sma25": 3.462724,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.51,
           "range_pct_24h": 1.095,
           "atr": 0.038414,
           "macd": {
@@ -4995,6 +5179,7 @@
           "sma25": 742.9252,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.6,
           "range_pct_24h": 0.549,
           "atr": 4.762857,
           "macd": {
@@ -5021,6 +5206,7 @@
           "sma25": 0.84508,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.81,
           "range_pct_24h": 1.63,
           "atr": 0.012207,
           "macd": {
@@ -5047,6 +5233,7 @@
           "sma25": 24.828,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.29,
           "range_pct_24h": 1.189,
           "atr": 0.290714,
           "macd": {
@@ -5073,6 +5260,7 @@
           "sma25": 0.251526,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": -1.53,
           "range_pct_24h": 5.046,
           "atr": 0.005296,
           "macd": {
@@ -5099,6 +5287,7 @@
           "sma25": 18.9096,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.35,
           "range_pct_24h": 1.707,
           "atr": 0.332143,
           "macd": {
@@ -5125,6 +5314,7 @@
           "sma25": 0.244212,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.51,
           "range_pct_24h": 1.575,
           "atr": 0.002957,
           "macd": {
@@ -5161,6 +5351,7 @@
           "sma25": 118107.016,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.09,
           "range_pct_24h": 0.342,
           "atr": 370.958571,
           "macd": {
@@ -5187,6 +5378,7 @@
           "sma25": 3679.744,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.94,
           "range_pct_24h": 0.772,
           "atr": 40.465714,
           "macd": {
@@ -5213,6 +5405,7 @@
           "sma25": 179.3104,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.49,
           "range_pct_24h": 1.126,
           "atr": 1.809286,
           "macd": {
@@ -5239,6 +5432,7 @@
           "sma25": 3.466844,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.79,
           "range_pct_24h": 1.05,
           "atr": 0.03945,
           "macd": {
@@ -5265,6 +5459,7 @@
           "sma25": 743.8192,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.18,
           "range_pct_24h": 0.724,
           "atr": 4.806429,
           "macd": {
@@ -5291,6 +5486,7 @@
           "sma25": 0.846972,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.78,
           "range_pct_24h": 1.09,
           "atr": 0.012093,
           "macd": {
@@ -5317,6 +5513,7 @@
           "sma25": 24.8644,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.1,
           "range_pct_24h": 0.989,
           "atr": 0.290714,
           "macd": {
@@ -5343,6 +5540,7 @@
           "sma25": 0.252842,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.35,
           "range_pct_24h": 2.452,
           "atr": 0.005517,
           "macd": {
@@ -5369,6 +5567,7 @@
           "sma25": 18.9596,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.75,
           "range_pct_24h": 1.183,
           "atr": 0.336429,
           "macd": {
@@ -5395,6 +5594,7 @@
           "sma25": 0.244968,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.31,
           "range_pct_24h": 0.943,
           "atr": 0.002893,
           "macd": {
@@ -5431,6 +5631,7 @@
           "sma25": 118109.6724,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.15,
           "range_pct_24h": 0.346,
           "atr": 391.172143,
           "macd": {
@@ -5457,6 +5658,7 @@
           "sma25": 3686.2264,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.2,
           "range_pct_24h": 1.028,
           "atr": 41.593571,
           "macd": {
@@ -5483,6 +5685,7 @@
           "sma25": 179.4776,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.92,
           "range_pct_24h": 0.976,
           "atr": 1.874286,
           "macd": {
@@ -5509,6 +5712,7 @@
           "sma25": 3.469928,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.18,
           "range_pct_24h": 0.986,
           "atr": 0.040486,
           "macd": {
@@ -5535,6 +5739,7 @@
           "sma25": 744.5572,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.17,
           "range_pct_24h": 1.021,
           "atr": 5.181429,
           "macd": {
@@ -5561,6 +5766,7 @@
           "sma25": 0.84864,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.76,
           "range_pct_24h": 2.146,
           "atr": 0.012993,
           "macd": {
@@ -5587,6 +5793,7 @@
           "sma25": 24.8716,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.56,
           "range_pct_24h": 1.232,
           "atr": 0.300714,
           "macd": {
@@ -5613,6 +5820,7 @@
           "sma25": 0.253968,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.67,
           "range_pct_24h": 2.034,
           "atr": 0.005652,
           "macd": {
@@ -5639,6 +5847,7 @@
           "sma25": 18.9992,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.15,
           "range_pct_24h": 1.033,
           "atr": 0.336429,
           "macd": {
@@ -5665,6 +5874,7 @@
           "sma25": 0.245608,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.86,
           "range_pct_24h": 1.456,
           "atr": 0.003021,
           "macd": {
@@ -5701,6 +5911,7 @@
           "sma25": 118120.9616,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.21,
           "range_pct_24h": 0.275,
           "atr": 386.509286,
           "macd": {
@@ -5727,6 +5938,7 @@
           "sma25": 3694.482,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.41,
           "range_pct_24h": 1.214,
           "atr": 42.242857,
           "macd": {
@@ -5753,6 +5965,7 @@
           "sma25": 179.6744,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.31,
           "range_pct_24h": 0.943,
           "atr": 1.892857,
           "macd": {
@@ -5779,6 +5992,7 @@
           "sma25": 3.473492,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.28,
           "range_pct_24h": 0.844,
           "atr": 0.039629,
           "macd": {
@@ -5805,6 +6019,7 @@
           "sma25": 745.6136,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.36,
           "range_pct_24h": 1.615,
           "atr": 5.777857,
           "macd": {
@@ -5831,6 +6046,7 @@
           "sma25": 0.850416,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.49,
           "range_pct_24h": 1.614,
           "atr": 0.012971,
           "macd": {
@@ -5857,6 +6073,7 @@
           "sma25": 24.8872,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.25,
           "range_pct_24h": 1.07,
           "atr": 0.302143,
           "macd": {
@@ -5883,6 +6100,7 @@
           "sma25": 0.255226,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.2,
           "range_pct_24h": 2.285,
           "atr": 0.005956,
           "macd": {
@@ -5909,6 +6127,7 @@
           "sma25": 19.0424,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.65,
           "range_pct_24h": 1.335,
           "atr": 0.329286,
           "macd": {
@@ -5935,6 +6154,7 @@
           "sma25": 0.246248,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 0.59,
           "range_pct_24h": 1.608,
           "atr": 0.003129,
           "macd": {
@@ -5971,6 +6191,7 @@
           "sma25": 118112.3232,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.62,
           "range_pct_24h": 1.346,
           "atr": 482.748571,
           "macd": {
@@ -5997,6 +6218,7 @@
           "sma25": 3701.5256,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.0,
           "range_pct_24h": 2.418,
           "atr": 45.226429,
           "macd": {
@@ -6023,6 +6245,7 @@
           "sma25": 179.8588,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.3,
           "range_pct_24h": 2.553,
           "atr": 2.025,
           "macd": {
@@ -6049,6 +6272,7 @@
           "sma25": 3.475532,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 5.65,
           "range_pct_24h": 3.011,
           "atr": 0.042907,
           "macd": {
@@ -6075,6 +6299,7 @@
           "sma25": 746.614,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.84,
           "range_pct_24h": 2.188,
           "atr": 6.513571,
           "macd": {
@@ -6101,6 +6326,7 @@
           "sma25": 0.85174,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.23,
           "range_pct_24h": 4.335,
           "atr": 0.014729,
           "macd": {
@@ -6127,6 +6353,7 @@
           "sma25": 24.9144,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.11,
           "range_pct_24h": 2.958,
           "atr": 0.332143,
           "macd": {
@@ -6153,6 +6380,7 @@
           "sma25": 0.256536,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.59,
           "range_pct_24h": 5.391,
           "atr": 0.006769,
           "macd": {
@@ -6179,6 +6407,7 @@
           "sma25": 19.0848,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.4,
           "range_pct_24h": 3.054,
           "atr": 0.35,
           "macd": {
@@ -6205,6 +6434,7 @@
           "sma25": 0.246732,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.03,
           "range_pct_24h": 3.225,
           "atr": 0.003529,
           "macd": {
@@ -6241,6 +6471,7 @@
           "sma25": 118091.1044,
           "trend": "baissier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.81,
           "range_pct_24h": 0.517,
           "atr": 497.927857,
           "macd": {
@@ -6267,6 +6498,7 @@
           "sma25": 3708.736,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.75,
           "range_pct_24h": 0.959,
           "atr": 45.414286,
           "macd": {
@@ -6293,6 +6525,7 @@
           "sma25": 180.06,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.79,
           "range_pct_24h": 1.228,
           "atr": 2.047143,
           "macd": {
@@ -6319,6 +6552,7 @@
           "sma25": 3.47682,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 5.69,
           "range_pct_24h": 0.961,
           "atr": 0.041107,
           "macd": {
@@ -6345,6 +6579,7 @@
           "sma25": 747.5908,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.64,
           "range_pct_24h": 1.015,
           "atr": 6.811429,
           "macd": {
@@ -6371,6 +6606,7 @@
           "sma25": 0.853056,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 4.2,
           "range_pct_24h": 1.421,
           "atr": 0.014593,
           "macd": {
@@ -6397,6 +6633,7 @@
           "sma25": 24.9416,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 2.0,
           "range_pct_24h": 1.158,
           "atr": 0.333571,
           "macd": {
@@ -6423,6 +6660,7 @@
           "sma25": 0.257872,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.58,
           "range_pct_24h": 2.493,
           "atr": 0.006881,
           "macd": {
@@ -6449,6 +6687,7 @@
           "sma25": 19.126,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 3.55,
           "range_pct_24h": 1.089,
           "atr": 0.322857,
           "macd": {
@@ -6475,6 +6714,7 @@
           "sma25": 0.247264,
           "trend": "haussier",
           "trend_1d": "haussier",
+          "drawdown_pct_7d": 1.56,
           "range_pct_24h": 1.426,
           "atr": 0.003579,
           "macd": {

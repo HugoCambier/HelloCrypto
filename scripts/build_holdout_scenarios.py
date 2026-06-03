@@ -40,15 +40,18 @@ HOLDOUT_DIR = Path("eval/scenarios/holdout")
 #   - "full"    : 168 cycles each (7 days). Stronger statistical signal but
 #                 ~1500 calls → must use throttling + spread over hours.
 DEFAULT_SUITE_COMPACT = [
-    {"name": "holdout_fear_bear_1d",    "start": "2026-03-29", "days": 1, "note": "Capitulation 1d (fear+bear)"},
-    {"name": "holdout_neutral_bull_1d", "start": "2026-05-03", "days": 1, "note": "Consolidation 1d (neutral+bull)"},
-    {"name": "holdout_greed_bull_1d",   "start": "2025-07-20", "days": 1, "note": "Euphoria 1d (greed+bull)"},
+    {"name": "holdout_fear_bear_1d",          "start": "2026-03-29", "days": 1, "note": "Capitulation 1d (fear+bear)"},
+    {"name": "holdout_neutral_bull_1d",       "start": "2026-05-03", "days": 1, "note": "Consolidation 1d (neutral+bull)"},
+    {"name": "holdout_greed_bull_1d",         "start": "2025-07-20", "days": 1, "note": "Euphoria 1d (greed+bull)"},
+    # ATH $126k → $102k week — tests bear-protection (CASH stance + intraday exits)
+    {"name": "holdout_bull_to_correction_1d", "start": "2025-10-10", "days": 1, "note": "Mid-week of the Oct 2025 ATH-to-correction"},
 ]
 
 DEFAULT_SUITE_FULL = [
-    {"name": "holdout_fear_bear_7d",    "start": "2026-03-29", "days": 7, "note": "Capitulation 7d (fear+bear)"},
-    {"name": "holdout_neutral_bull_7d", "start": "2026-05-03", "days": 7, "note": "Consolidation 7d (neutral+bull)"},
-    {"name": "holdout_greed_bull_7d",   "start": "2025-07-20", "days": 7, "note": "Euphoria 7d (greed+bull)"},
+    {"name": "holdout_fear_bear_7d",          "start": "2026-03-29", "days": 7, "note": "Capitulation 7d (fear+bear)"},
+    {"name": "holdout_neutral_bull_7d",       "start": "2026-05-03", "days": 7, "note": "Consolidation 7d (neutral+bull)"},
+    {"name": "holdout_greed_bull_7d",         "start": "2025-07-20", "days": 7, "note": "Euphoria 7d (greed+bull)"},
+    {"name": "holdout_bull_to_correction_7d", "start": "2025-10-06", "days": 7, "note": "BTC ATH $126k → $102k week — bull-to-correction transition"},
 ]
 
 
@@ -80,31 +83,41 @@ def _load_window(start: datetime, end: datetime, watchlist: list[str]) -> list[d
 
 # ── Per-cycle market dict reconstruction ──────────────────────────────────────
 
-def _snapshot_to_market_entry(s: dict, prev1h: dict | None, prev24h: dict | None) -> dict:
+def _snapshot_to_market_entry(s: dict, prev1h: dict | None, prev24h: dict | None,
+                              prev_168h_highs: list[float] | None = None) -> dict:
     """Reshape a snapshot row into the dict shape expected by the runner.
 
     ``prev1h`` / ``prev24h`` are the same symbol's snapshots 1h / 24h earlier
     (used to recompute change_pct_1h / change_pct_24h, which aren't stored
-    directly in the snapshots schema).
+    directly in the snapshots schema). ``prev_168h_highs`` is the list of
+    hourly highs from the past 7 days, used to derive ``drawdown_pct_7d`` —
+    the leading bear-protection signal used by the CASH stance.
     """
     close = s["close"]
     change_1h  = ((close - prev1h["close"]) / prev1h["close"] * 100) if (prev1h and prev1h["close"]) else 0.0
     change_24h = ((close - prev24h["close"]) / prev24h["close"] * 100) if (prev24h and prev24h["close"]) else 0.0
 
+    drawdown_pct_7d = None
+    if prev_168h_highs:
+        peak = max(prev_168h_highs)
+        if peak > 0:
+            drawdown_pct_7d = round((peak - close) / peak * 100, 2)
+
     out: dict = {
-        "price":          close,
-        "change_pct_1h":  round(change_1h, 3),
-        "change_pct_24h": round(change_24h, 3),
-        "volume_usdc":    s.get("volume"),
-        "high_24h":       s.get("high"),
-        "low_24h":        s.get("low"),
-        "rsi14":          s.get("rsi14"),
-        "sma7":           s.get("sma7"),
-        "sma25":          s.get("sma25"),
-        "trend":          s.get("trend"),
-        "trend_1d":       s.get("trend_1d"),
-        "range_pct_24h":  round((s.get("high", 0) - s.get("low", 0)) / close * 100, 3) if close else 0.0,
-        "atr":            s.get("atr14"),
+        "price":           close,
+        "change_pct_1h":   round(change_1h, 3),
+        "change_pct_24h":  round(change_24h, 3),
+        "volume_usdc":     s.get("volume"),
+        "high_24h":        s.get("high"),
+        "low_24h":         s.get("low"),
+        "rsi14":           s.get("rsi14"),
+        "sma7":            s.get("sma7"),
+        "sma25":           s.get("sma25"),
+        "trend":           s.get("trend"),
+        "trend_1d":        s.get("trend_1d"),
+        "drawdown_pct_7d": drawdown_pct_7d,
+        "range_pct_24h":   round((s.get("high", 0) - s.get("low", 0)) / close * 100, 3) if close else 0.0,
+        "atr":             s.get("atr14"),
     }
     if s.get("macd_hist") is not None:
         # Runner only reads .histogram from the macd dict.
@@ -124,8 +137,9 @@ def _snapshot_to_market_entry(s: dict, prev1h: dict | None, prev24h: dict | None
 def build_scenario(name: str, start_ts: datetime, days: int, watchlist: list[str], note: str = "") -> Scenario:
     end_ts = start_ts + timedelta(days=days)
     log.info("Building '%s': %s → %s, watchlist=%s", name, start_ts.date(), end_ts.date(), watchlist)
-    # Need a 24h prefix for change_pct_24h on the first cycle
-    fetch_start = start_ts - timedelta(hours=25)
+    # Need a 168h (7d) prefix for drawdown_pct_7d on the first cycle; the 24h
+    # change/prev1h are subsets of that window.
+    fetch_start = start_ts - timedelta(hours=168)
     rows = _load_window(fetch_start, end_ts, watchlist)
     log.info("  loaded %d rows", len(rows))
 
@@ -150,10 +164,17 @@ def build_scenario(name: str, start_ts: datetime, days: int, watchlist: list[str
             s = by_sym.get(sym, {}).get(ts_iso)
             if not s:
                 continue
+            # Collect highs from the past 168h (7 days) for drawdown_pct_7d.
+            prev_highs: list[float] = []
+            for h in range(1, 169):
+                prev = by_sym.get(sym, {}).get((cur - timedelta(hours=h)).isoformat())
+                if prev and prev.get("high") is not None:
+                    prev_highs.append(float(prev["high"]))
             market[sym] = _snapshot_to_market_entry(
                 s,
                 by_sym.get(sym, {}).get(prev1h_iso),
                 by_sym.get(sym, {}).get(prev24h_iso),
+                prev_168h_highs=prev_highs,
             )
             # F&G is denormalized in every snapshot — pick from BTC for stability
             if sym == "BTCUSDC":
