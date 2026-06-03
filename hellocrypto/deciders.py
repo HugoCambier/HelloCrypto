@@ -33,6 +33,8 @@ DEFAULTS = {
     "enable_regime_stance":  True,       # modulate threshold+top_n via market stance
     "exit_signal":           "trend_1d", # which signal triggers bear-confirm exits
     "score_exit_threshold":  5,          # anti-whipsaw: block exit while score >= this
+    "max_portfolio_dd_pct":  25.0,       # circuit-breaker: liquidate all if portfolio drops this much
+    "dd_cooldown_days":      3.0,        # no new entries for N days after the breaker fires
 }
 
 # Per-stance overrides. ``exit_signal`` switches the source of the bearish-trend
@@ -156,6 +158,46 @@ def regime_decision(
             p["buy_threshold"] = max(1, p["buy_threshold"] + fng_adj)
     st = dict(strat_state or {})
 
+    # ── Portfolio-level drawdown circuit-breaker ────────────────────────────
+    # Catastrophic-loss filet: if the *whole portfolio* is down N% from its
+    # all-time high, liquidate everything and freeze new entries for K days.
+    # This overrides cadence (we want to react NOW, not on the next decision
+    # window) and stance (CASH won't sell existing positions, this will).
+    holdings_value = sum(
+        (holdings.get(s, {}).get("qty") or 0)
+        * float((market_raw.get(s) or {}).get("price") or 0)
+        for s in holdings
+    )
+    portfolio_now = cash + holdings_value
+    peak = max(float(st.get("portfolio_peak") or 0.0), portfolio_now)
+    st["portfolio_peak"] = peak
+
+    dd_cooldown_until = float(st.get("dd_cooldown_until") or 0.0)
+    in_dd_cooldown = (now_ts is not None and now_ts < dd_cooldown_until)
+
+    if peak > 0 and not in_dd_cooldown:
+        dd_pct = (peak - portfolio_now) / peak * 100
+        if dd_pct >= float(p["max_portfolio_dd_pct"]) and holdings:
+            actions = [{
+                "type":   "sell",
+                "symbol": sym,
+                "qty":    holdings[sym]["qty"],
+                "reason": f"Circuit-breaker DD -{dd_pct:.1f}% (peak ${peak:,.0f})",
+            } for sym in holdings]
+            if now_ts is not None:
+                st["dd_cooldown_until"] = now_ts + float(p["dd_cooldown_days"]) * 86400
+                st["last_sell_ts"] = {sym: now_ts for sym in holdings}
+            # Reset peak to current value so we don't re-trigger on the new base.
+            st["portfolio_peak"] = portfolio_now
+            st["last_decision_cycle"] = cycle
+            return {
+                "market_sentiment": "circuit-breaker",
+                "summary":          f"DD circuit-breaker -{dd_pct:.1f}% → liquidation + {p['dd_cooldown_days']:g}d cooldown",
+                "actions":          actions,
+                "scores":           {},
+                "stance":           "FROZEN",
+            }, st
+
     # Cadence gate.
     last = st.get("last_decision_cycle")
     if last is not None and cycle - last < p["decide_every_cycles"]:
@@ -227,7 +269,12 @@ def regime_decision(
     cash_after = cash  # mutated as we propose buys
     blocked_cooldown: list[str] = []
     blocked_tier: list[str]     = []
-    candidates = sorted(market_raw.items(), key=lambda kv: -scores.get(kv[0], 0))
+    # Post-circuit-breaker cooldown freezes ALL new entries; existing exits
+    # (above) still run so we can clean up if needed.
+    if in_dd_cooldown:
+        candidates = []
+    else:
+        candidates = sorted(market_raw.items(), key=lambda kv: -scores.get(kv[0], 0))
     for sym, d in candidates:
         if held_after >= p["top_n"]:
             break
@@ -275,6 +322,9 @@ def regime_decision(
     summary_parts = [f"per-sym | held {held_after}/{p['top_n']}",
                      f"breadth bull={bull_count}/bear={bear_count}",
                      f"stance={stance}"]
+    if in_dd_cooldown and now_ts is not None:
+        hours_left = max(0, (dd_cooldown_until - now_ts) / 3600)
+        summary_parts.append(f"DD-cooldown ({hours_left:.0f}h restantes)")
     if fng_adj:
         sign = "+" if fng_adj > 0 else ""
         summary_parts.append(f"fng={fng_value} (thr {sign}{fng_adj})")

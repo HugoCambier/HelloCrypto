@@ -23,7 +23,7 @@ COIN_RISK_TIERS: dict[str, int] = {
     "XRPUSDC":  5,
     "DOGEUSDC": 5,  # backtest winner despite meme status
     "AVAXUSDC": 6,
-    "LINKUSDC": 7,
+    "LINKUSDC": 8,  # consistent loser (-$21 / -$9 / -$18 / -$4 / -$8 across 5 BTs)
     "ADAUSDC":  8,  # consistent loser (-$28 over 3 successive 600d backtests)
     "POLUSDC":  8,  # worst backtest loser
 }

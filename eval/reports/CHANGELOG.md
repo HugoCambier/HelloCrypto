@@ -14,6 +14,61 @@ eval/reports/champion.json eval/reports/bench/<latest>.json`
 
 ---
 
+## 2026-06-03 — Portfolio DD circuit-breaker + LINK → tier 8
+
+**Ce qui a changé** :
+- Nouveau mécanisme dans `regime_decision` : si le portfolio total
+  (cash + holdings × prix courants) descend ≥25% sous son peak ATH,
+  on liquide TOUT et on bloque les entrées pendant 3 jours. Override
+  la cadence et le stance (CASH ne vend pas les positions tenues,
+  le circuit-breaker oui).
+- Nouveaux params dans `DEFAULTS` :
+  - `max_portfolio_dd_pct: 25.0`
+  - `dd_cooldown_days: 3.0`
+- Nouveaux trackers dans `strat_state` : `portfolio_peak`,
+  `dd_cooldown_until`. Peak reset à la valeur courante après
+  circuit-breaker pour ne pas re-déclencher sur la nouvelle base.
+- Summary du décideur indique `DD-cooldown (Xh restantes)` quand actif.
+- LINK passe tier 7 → 8 (consistent loser sur 5 BTs successifs : -$21,
+  -$9, -$18, -$4, -$8). Maintenant bloqué à risk_level<8.
+
+**Motivation** :
+3 backtests 600j successifs montrent DD persistant -33% à -38%. Ni
+CASH stance ni signal switch ne préviennent ces épisodes catastrophiques
+sur des positions déjà tenues. Le circuit-breaker est le filet de
+sécurité absolu : sacrifice une mauvaise sortie occasionnelle pour
+plafonner la perte cumulée à 25%.
+
+**Diff vs champion** :
+
+Compact 1d : zéro changement — DD max ~5% en 24 cycles, jamais proche
+du seuil 25%.
+
+Full 7d : zéro impact du circuit-breaker (DD max -12%, ne déclenche
+pas). LINK→8 sans effet aussi (bench défaut risk_level=5 excluait déjà
+LINK tier 7).
+
+**Validation en backtest 600j** :
+C'est LE test. Les 3 BTs précédents (BT4 -33.9%, BT5 -37.9%, BT6 -35.5%)
+auraient tous déclenché le circuit-breaker. Question : la liquidation
+forcée à -25% améliore-t-elle ou détériore-t-elle le résultat final ?
+
+Hypothèse positive : on évite les derniers 8-13pp de DD + on rentre
+propre quand le marché se stabilise.
+
+Hypothèse négative : on locke des pertes à -25% juste avant un bounce,
+on reste 3 jours en cooldown et on rate la reprise.
+
+Critère de revert : si le BT7 montre return final ≤ +30% (vs BT6 +35.26%)
+OU alpha vs BTC ≤ +$20 (vs BT6 +$27.47), on revert ou on ajuste les params.
+
+**Pistes encore en vie** :
+- Multi-timeframe trend (4h en filtre additionnel)
+- Tuning du circuit-breaker (seuil 20% ou 30% ? cooldown 1j ou 7j ?)
+- Volume signal en mode plus actif (seuil 1.2 au lieu de 1.5)
+
+---
+
 ## 2026-06-03 — Revert ATR-adaptive trailing (critère DD déclenché)
 
 **Ce qui a changé** :

@@ -423,6 +423,76 @@ def test_fng_user_pin_overrides_modulation():
     assert "fng" not in result["summary"]
 
 
+def test_dd_circuit_breaker_liquidates_at_threshold():
+    """Portfolio down ≥25% from peak → liquidate all + cooldown."""
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        "ETHUSDC": {**_sym(trend="haussier"), "price": 60.0},  # was 100, now 60
+    }
+    holdings = {"ETHUSDC": {"qty": 1.0, "avg_price": 100.0}}
+    now = 1_000_000.0
+    # Peak was $1100 (cash 1000 + ETH at $100), now $1060 (cash 1000 + ETH at $60)
+    # That's only -3.6%, but if we set peak higher in state we can trigger.
+    state = {"portfolio_peak": 1500.0}  # we lost 1500 → 1060 = -29% DD
+    result, new_state = regime_decision(
+        market_raw=market, holdings=holdings, cash=1000.0, cycle=0,
+        now_ts=now, risk_level=5,
+        params={"decide_every_cycles": 1},
+        strat_state=state,
+    )
+    assert result["stance"] == "FROZEN"
+    sells = [a for a in result["actions"] if a["type"] == "sell"]
+    assert [s["symbol"] for s in sells] == ["ETHUSDC"]
+    assert "Circuit-breaker" in sells[0]["reason"]
+    assert new_state["dd_cooldown_until"] == now + 3.0 * 86400
+
+
+def test_dd_circuit_breaker_no_trigger_below_threshold():
+    """Portfolio down 20% (under 25%) → normal decision continues."""
+    market = {"BTCUSDC": _sym(trend="haussier")}
+    holdings = {"BTCUSDC": {"qty": 1.0, "avg_price": 100.0}}
+    state = {"portfolio_peak": 1200.0}  # 1200 → 1100 = ~-8% DD only
+    result, _ = regime_decision(
+        market_raw=market, holdings=holdings, cash=1000.0, cycle=0,
+        now_ts=1_000_000.0, risk_level=5,
+        params={"decide_every_cycles": 1},
+        strat_state=state,
+    )
+    assert result["stance"] != "FROZEN"
+
+
+def test_dd_cooldown_blocks_new_entries():
+    """In post-CB cooldown window, no buys regardless of stance/scores."""
+    market = _market(btc_trend="haussier", n_bull=6, n_bear=2)
+    now = 1_000_000.0
+    state = {"dd_cooldown_until": now + 86400.0}  # 1 day remaining
+    result, _ = regime_decision(
+        market_raw=market, holdings={}, cash=1000.0, cycle=0,
+        now_ts=now, risk_level=5,
+        params={"decide_every_cycles": 1},
+        strat_state=state,
+    )
+    assert [a for a in result["actions"] if a["type"] == "buy"] == []
+    assert "DD-cooldown" in result["summary"]
+
+
+def test_dd_cooldown_expires_after_window():
+    """Once cooldown expires, normal decision logic resumes."""
+    market = _market(btc_trend="haussier", n_bull=6, n_bear=2)
+    now = 1_000_000.0
+    # cooldown_until is in the past → not in cooldown anymore
+    state = {"dd_cooldown_until": now - 1.0}
+    result, _ = regime_decision(
+        market_raw=market, holdings={}, cash=1000.0, cycle=0,
+        now_ts=now, risk_level=5,
+        params={"decide_every_cycles": 1},
+        strat_state=state,
+    )
+    # DEPLOY stance, can buy
+    buys = [a for a in result["actions"] if a["type"] == "buy"]
+    assert len(buys) > 0
+
+
 def test_legacy_bear_since_migrated():
     """Old strat_state with `bear_since` key is read as bear_since_1d once."""
     market = {
