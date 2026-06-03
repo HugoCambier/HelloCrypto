@@ -78,6 +78,7 @@ def _maybe_toggle_real_session(before: dict, after: dict) -> None:
             # moment the user armed the runner so we can show them later.
             sid  = uuid.uuid4().hex[:8]
             name = "Réel " + datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+            decider = (after.get("decider") or "llm").lower()
             initial_state = {
                 "budget":               after.get("budget"),
                 "cycle_seconds":        after.get("cycle_seconds"),
@@ -85,13 +86,21 @@ def _maybe_toggle_real_session(before: dict, after: dict) -> None:
                 "stop_loss_pct":        after.get("stop_loss_pct"),
                 "trailing_stop_pct":    after.get("trailing_stop_pct"),
                 "watchlist":            after.get("watchlist", []),
-                "decider":              "llm",
-                "llm":                  after.get("llm"),
+                "decider":              decider,
+                "llm":                  after.get("llm") if decider == "llm" else None,
             }
             upsert_session(sid, name, mode="real", initial_state=initial_state)
             set_state("active_real_session_id", sid)
             set_state("active_real_session_name", name)
-            log.info("[REAL-SESSION] Nouvelle session réelle ouverte: %s (%s)", sid, name)
+            # Reset the deterministic decider's per-session timers so the new
+            # session starts from a clean slate (no stale entry_ts / bear_since
+            # / cooldown / portfolio_peak from a prior run). Other agent_real
+            # fields (cycle, peak_prices) are managed independently.
+            prior = (get_state("agent_real") or {})
+            if prior.get("strat_state"):
+                set_state("agent_real", {**prior, "strat_state": {}})
+            log.info("[REAL-SESSION] Nouvelle session réelle ouverte: %s (%s) decider=%s",
+                     sid, name, decider)
         elif not is_real_on and active_sid:
             # Stop — clear the pointer; the record stays for history.
             set_state("active_real_session_id", None)

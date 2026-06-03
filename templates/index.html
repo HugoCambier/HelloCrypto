@@ -343,7 +343,7 @@
                  oninput="document.getElementById('nr-risk-val').textContent=this.value">
         </div>
 
-        <!-- ─── Décideur (sim only) ─────────────────────────────────────── -->
+        <!-- ─── Décideur (sim + real) ───────────────────────────────────── -->
 
         <div id="nr-decider-row">
           <label class="lbl">Décideur</label>
@@ -354,7 +354,7 @@
           <p id="nr-decider-hint" class="text-[11px] text-slate-500 mt-1.5">Agent LLM (Claude/Gemini) — comme la prod.</p>
         </div>
 
-        <!-- LLM params (only visible when decider=llm, or in real mode) -->
+        <!-- LLM params (only visible when decider=llm) -->
         <div id="nr-llm-row" class="grid grid-cols-2 gap-3">
           <div>
             <label class="lbl">LLM</label>

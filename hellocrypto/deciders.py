@@ -253,11 +253,17 @@ def regime_decision(
                 and (now_ts - bear_ts) >= confirm_sec
                 and (now_ts - ent_ts) >= min_hold_sec
                 and sym_score < score_exit_thr):
+            bear_h = (now_ts - bear_ts) / 3600
+            hold_h = (now_ts - ent_ts) / 3600
             actions.append({
                 "type":   "sell",
                 "symbol": sym,
                 "qty":    holdings[sym]["qty"],
-                "reason": f"{exit_signal} baissier ({p['trend_confirm_hours']:g}h) + score {sym_score}<{score_exit_thr}",
+                "reason": (
+                    f"Exit {exit_signal} baissier {bear_h:.1f}h ≥ {p['trend_confirm_hours']:g}h "
+                    f"+ score {sym_score}/10 < {score_exit_thr} "
+                    f"(hold {hold_h:.1f}h ≥ {p['min_hold_hours']:g}h, stance {stance})"
+                ),
             })
             selling_now.add(sym)
             last_sell_ts[sym] = now_ts
@@ -297,11 +303,18 @@ def regime_decision(
         alloc = cash_after * max_pct
         if alloc < 10:
             break
+        fng_note = ""
+        if fng_adj:
+            sign = "+" if fng_adj > 0 else ""
+            fng_note = f", fng={fng_value} (thr {sign}{fng_adj})"
         actions.append({
             "type":        "buy",
             "symbol":      sym,
             "usdc_amount": round(alloc, 2),
-            "reason":      f"Score {score}/10 entry (risk {risk_level} → {max_pct*100:.0f}%)",
+            "reason": (
+                f"Entry score {score}/10 ≥ {p['buy_threshold']} (stance {stance}{fng_note}), "
+                f"trend_1d={d.get('trend_1d', '?')}, risk {risk_level} → {max_pct*100:.0f}% cash"
+            ),
         })
         if now_ts is not None:
             entry_ts[sym] = now_ts

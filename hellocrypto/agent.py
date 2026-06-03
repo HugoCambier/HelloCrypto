@@ -33,6 +33,7 @@ from .api import (
     market_sell,
     save_trade,
 )
+from .deciders import regime_decision
 from .eval.behavior import section_for_cycle as _behavior_section
 from .eval.capture import capture_snapshots as _capture_snapshots
 from .eval.playbook import section_for_cycle as _playbook_section
@@ -152,13 +153,18 @@ def _execute_cycle(
     peak_prices: dict,
     cooldown_map: dict,
     initial_total_value: float = 0.0,
+    strat_state: dict | None = None,
 ) -> dict:
     """Execute one trading cycle (shared by run_one_cycle and run_agent).
 
     Returns an updated state dict with all mutable fields.
     ``initial_total_value`` is captured once on the first cycle from the real
     Binance portfolio (cash + all open positions) and persisted in state.
+    ``strat_state`` carries the deterministic decider's per-session timers
+    (entry_ts, bear_since_*, last_sell_ts, portfolio_peak, dd_cooldown_until)
+    across cycles. Ignored when decider == "llm".
     """
+    strat_state = dict(strat_state or {})
     watchlist = cfg["watchlist"]
     budget = float(cfg["budget"])
     stop_loss = float(cfg["stop_loss_pct"]) / 100
@@ -217,6 +223,94 @@ def _execute_cycle(
         peak_prices.pop(sym, None)
         cooldown_map[sym] = cycle
         del positions[sym]
+
+    # ── Decider routing ──────────────────────────────────────────────────
+    # ``deterministic`` bypasses the LLM (and its gating): the decider has
+    # its own cadence (``decide_every_cycles``) and runs every cycle, but
+    # only emits actions on its decision windows. Stops above still fire
+    # every cron tick regardless of decider.
+    decider = (cfg.get("decider") or "llm").lower()
+    if decider == "deterministic":
+        det_params = {
+            k: cfg.get(k) for k in (
+                "decide_every_cycles", "top_n", "buy_threshold",
+                "trend_confirm_hours", "min_hold_hours", "rebuy_cooldown_hours",
+                "enable_regime_stance", "exit_signal", "score_exit_threshold",
+                "max_portfolio_dd_pct", "dd_cooldown_days",
+            ) if cfg.get(k) is not None
+        }
+        fng_v = (fear_greed or {}).get("value") if fear_greed else None
+        decision, strat_state = regime_decision(
+            market_raw=market_data_raw, holdings=positions, cash=cash,
+            cycle=cycle, now_ts=time.time(),
+            risk_level=risk_level, strat_state=strat_state,
+            params=det_params, fng_value=fng_v,
+        )
+        sentiment = decision.get("market_sentiment", "")
+        summary   = decision.get("summary", "")
+        log.info("Decider=det | %s | %s", sentiment, summary)
+        recent_decisions = (recent_decisions + [decision])[-3:]
+
+        try:
+            from db.store import save_market_analysis as _db_analysis
+            _db_analysis(
+                sentiment=sentiment, summary=summary,
+                analyses=decision.get("actions", []), mode="real",
+                cycle=cycle, session_id=_real_sid, usage=None, reasoning=None,
+            )
+        except Exception:
+            pass
+
+        # Sells first (free cash), then buys at the decider's pre-sized allocations.
+        for action in decision.get("actions", []):
+            if action.get("type") != "sell":
+                continue
+            sym = action.get("symbol")
+            if sym not in positions:
+                continue
+            qty = action.get("qty", positions[sym]["qty"])
+            price = prices.get(sym) or get_ticker(sym)
+            _, fee, fee_asset = market_sell(sym, qty)
+            save_trade("SELL", sym, qty, price, action.get("reason", ""),
+                       fee, fee_asset, session_id=_real_sid, session_name=_real_sname)
+            peak_prices.pop(sym, None)
+            cooldown_map[sym] = cycle
+            cash += qty * price  # local estimate; next cycle re-fetches real balance
+            del positions[sym]
+            log.info("SELL %.6f %s @ $%.4f — %s", qty, sym, price, action.get("reason", ""))
+
+        for action in decision.get("actions", []):
+            if action.get("type") != "buy":
+                continue
+            sym = action.get("symbol")
+            amount = float(action.get("usdc_amount") or 0)
+            if amount > cash:
+                amount = cash
+            if amount < 10:
+                continue
+            _, fee, fee_asset = market_buy(sym, amount)
+            price = prices.get(sym) or get_ticker(sym)
+            save_trade("BUY", sym, amount, price, action.get("reason", ""),
+                       fee, fee_asset, session_id=_real_sid, session_name=_real_sname)
+            peak_prices[sym] = price
+            cash -= amount
+            log.info("BUY  $%.2f %s @ $%.4f — %s", amount, sym, price, action.get("reason", ""))
+
+        if cycle % 10 == 0:
+            report = _performance_report(prices, positions, cash, initial_total_value)
+            log.info("\n%s", report)
+
+        return {
+            "cycle":               cycle,
+            "last_llm_call":       last_llm_call,
+            "llm_call_count":      llm_call_count,
+            "ref_prices":          ref_prices,
+            "recent_decisions":    recent_decisions,
+            "peak_prices":         peak_prices,
+            "cooldown_map":        cooldown_map,
+            "initial_total_value": initial_total_value,
+            "strat_state":         strat_state,
+        }
 
     # ── LLM gating ────────────────────────────────────────────────────────
     now = time.time()
@@ -389,6 +483,7 @@ def _execute_cycle(
         "peak_prices":         peak_prices,
         "cooldown_map":        cooldown_map,
         "initial_total_value": initial_total_value,
+        "strat_state":         strat_state,
     }
 
 
@@ -434,6 +529,7 @@ def run_one_cycle() -> None:
             peak_prices=state.get("peak_prices", {}),
             cooldown_map=state.get("cooldown_map", {}),
             initial_total_value=state.get("initial_total_value", 0.0),
+            strat_state=state.get("strat_state", {}),
         )
         _save_state(new_state)
     except Exception as exc:
@@ -487,6 +583,7 @@ def run_agent() -> None:
         "peak_prices":         {},
         "cooldown_map":        {},
         "initial_total_value": 0.0,
+        "strat_state":         {},
     }
 
     while True:
@@ -507,6 +604,7 @@ def run_agent() -> None:
                 peak_prices=state["peak_prices"],
                 cooldown_map=state["cooldown_map"],
                 initial_total_value=state["initial_total_value"],
+                strat_state=state.get("strat_state", {}),
             )
         except Exception as exc:
             log.error("Erreur cycle #%d: %s", cycle, exc, exc_info=True)

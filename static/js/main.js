@@ -454,7 +454,7 @@ async function loadRunParams() {
         stop_loss_pct:        c.stop_loss_pct,
         trailing_stop_pct:    c.trailing_stop_pct,
         watchlist:            c.watchlist,
-        decider:              'llm',
+        decider:              c.decider || 'llm',
         llm:                  c.llm,
       };
       label  = 'Réel · historique global';
@@ -621,7 +621,11 @@ function openNewRunModal() {
   const sel = (Array.isArray(stored) && stored.length) ? new Set(stored) : new Set(COIN_UNIVERSE);
   renderCryptoDrop('nr-watchlist-drop', COIN_UNIVERSE, sel);
 
-  _setNrDecider('llm');   // also seeds the cycle default for LLM
+  // Pre-fill decider + top_n from current config so the user sees their
+  // last choice when re-opening the modal.
+  const initialDecider = (_cfg?.decider || 'llm').toLowerCase();
+  if (_cfg?.top_n) document.getElementById('nr-det-topn').value = _cfg.top_n;
+  _setNrDecider(initialDecider);   // also seeds the cycle default
   _setNrMode('simulation');
   document.getElementById('newrun-modal').classList.remove('hidden');
 }
@@ -683,17 +687,9 @@ function _setNrMode(mode) {
   const isSim = mode === 'simulation';
   document.getElementById('nr-name-row').classList.toggle('hidden', !isSim);
   document.getElementById('nr-init-row').classList.toggle('hidden', !isSim);
-  document.getElementById('nr-decider-row')?.classList.toggle('hidden', !isSim);
-  // Real mode has no decider toggle — runner is always the LLM agent, so force
-  // the LLM provider/model row visible and hide the deterministic params.
-  if (!isSim) {
-    document.getElementById('nr-llm-row')?.classList.remove('hidden');
-    document.getElementById('nr-det-params')?.classList.add('hidden');
-  } else {
-    // Re-apply whatever the current decider toggle says.
-    const cur = document.getElementById('nr-decider-seg')?.dataset.val || 'llm';
-    _setNrDecider(cur);
-  }
+  // Decider toggle is available in both modes — re-apply current selection.
+  const cur = document.getElementById('nr-decider-seg')?.dataset.val || 'llm';
+  _setNrDecider(cur);
 
   const resumeRow = document.getElementById('nr-init-resume-row');
   if (resumeRow) resumeRow.classList.toggle('hidden', !_savedResume?.exists);
@@ -726,6 +722,7 @@ async function launchNewRun() {
   // Global config update: only user-level preferences (LLM, risk, budget…).
   // Watchlist is per-run and shipped separately to /api/simulation/start so
   // selecting a subset for one run never shrinks the Marché page's universe.
+  const decider = document.getElementById('nr-decider-seg')?.dataset.val || 'llm';
   const cfgBody = {
     budget:            +document.getElementById('nr-budget').value,
     cycle_seconds:     Math.max(5, +document.getElementById('nr-cycle').value) * 60,
@@ -737,7 +734,16 @@ async function launchNewRun() {
       model:    document.getElementById('nr-llm-model').value,
     },
     mode,
+    decider,
   };
+  // Deterministic decider tuning persisted to global config so the real-mode
+  // agent picks them up via cfg.get(...) on every cron tick. Sim mode uses
+  // the same keys, shipped per-session below.
+  if (decider === 'deterministic') {
+    const tn = +document.getElementById('nr-det-topn')?.value;
+    if (tn) cfgBody.top_n = tn;
+    cfgBody.decide_every_cycles = 1;
+  }
 
   btn.disabled = true; btn.textContent = 'Lancement…';
 
@@ -753,7 +759,6 @@ async function launchNewRun() {
       const resume       = initSel === 'resume';
       const from_binance = initSel === 'binance';
       const name         = document.getElementById('nr-name').value.trim() || null;
-      const decider      = document.getElementById('nr-decider-seg')?.dataset.val || 'llm';
       const startBody = {
         budget: cfgBody.budget, cycle_seconds: cfgBody.cycle_seconds,
         stop_loss_pct: cfgBody.stop_loss_pct, trailing_stop_pct: cfgBody.trailing_stop_pct,
@@ -768,8 +773,7 @@ async function launchNewRun() {
       // Cycle (min) is the single timing knob — the decider decides at every
       // cycle (decide_every_cycles=1). To slow decisions, lengthen Cycle (min).
       if (decider === 'deterministic') {
-        const tn = +document.getElementById('nr-det-topn')?.value;
-        if (tn) startBody.top_n = tn;
+        if (cfgBody.top_n) startBody.top_n = cfgBody.top_n;
         startBody.decide_every_cycles = 1;
       }
       const r = await fetch('/api/simulation/start', {
