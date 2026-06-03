@@ -139,8 +139,15 @@ def _enrich_from_klines(symbols: list[str], all_klines: dict,
         chg_24h = round((closes[-1] - closes[-25]) / closes[-25] * 100, 2) \
                   if len(closes) >= 25 else 0.0
 
-        atr_val = _compute_atr(highs, lows, closes, period=14) \
-                  if len(highs) >= 15 and len(closes) >= 15 else None
+        # ATR needs matching-length highs/lows/closes — use a dedicated 15-bar
+        # window. The earlier ``highs``/``lows`` (24-bar) and ``closes`` (50-bar)
+        # have different sizes and can't be fed to _compute_atr safely.
+        atr_val = None
+        if i >= 14:
+            atr_h = [float(kl[j][2]) for j in range(i - 14, i + 1)]
+            atr_l = [float(kl[j][3]) for j in range(i - 14, i + 1)]
+            atr_c = [float(kl[j][4]) for j in range(i - 14, i + 1)]
+            atr_val = _compute_atr(atr_h, atr_l, atr_c, period=14)
         result[sym] = {
             "price":          price,
             "rsi14":          rsi14,
