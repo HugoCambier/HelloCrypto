@@ -34,6 +34,7 @@ DEFAULTS = {
     "enable_regime_stance":  True,       # modulate threshold+top_n via market stance
     "exit_signal":           "trend_1d", # which signal triggers bear-confirm exits
     "score_exit_threshold":  5,          # anti-whipsaw: block exit while score >= this
+    "disable_signal_exit":   False,      # A/B kill-switch: when True, only stops/trailing close positions
     "max_portfolio_dd_pct":  25.0,       # circuit-breaker: liquidate all if portfolio drops this much
     "dd_cooldown_days":      3.0,        # no new entries for N days after the breaker fires
 }
@@ -263,10 +264,11 @@ def regime_decision(
     # still says the setup is sound (the -$60 net signal-exit problem we
     # measured in the 600d backtest).
     score_exit_thr = int(p["score_exit_threshold"])
+    signal_exit_off = bool(p.get("disable_signal_exit"))
     actions: list[dict] = []
     selling_now: set[str] = set()
     for sym in list(holdings):
-        if now_ts is None:
+        if now_ts is None or signal_exit_off:
             continue
         bear_ts = bear_since.get(sym)
         ent_ts  = entry_ts.get(sym, now_ts)
