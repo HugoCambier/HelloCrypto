@@ -17,6 +17,7 @@ filtered — exits always apply on the full watchlist.
 from __future__ import annotations
 
 from datetime import date
+from functools import lru_cache
 
 COIN_RISK_TIERS_BASELINE: dict[str, int] = {
     "BTCUSDC":  2,  # blue chip
@@ -33,6 +34,32 @@ COIN_RISK_TIERS_BASELINE: dict[str, int] = {
 
 DEFAULT_TIER = 6  # for unknown coins (when neither DB nor baseline has it)
 
+# Hard kill-switch flipped on the first DB failure (table missing, DB down…).
+# Once tripped, subsequent calls go straight to the baseline — without it,
+# a backtest with ~10 symbols × 24 cycles/day × 600 days = 144 k SQL queries
+# all hitting the same "table missing" path, which dominates the run time.
+_TIER_DB_FAILED = False
+
+
+@lru_cache(maxsize=4096)
+def _cached_tier_at(symbol: str, year: int, month: int) -> int | None:
+    """DB tier lookup cached by month.
+
+    ``compute_coin_tiers.py`` writes one row per (symbol, 1st-of-month), so
+    within the same calendar month every ``as_of`` resolves to the same row.
+    Bucketing by (year, month) lets a backtest amortize the DB cost over
+    ~720 cycles per month instead of paying for each one.
+    """
+    global _TIER_DB_FAILED
+    if _TIER_DB_FAILED:
+        return None
+    try:
+        from db.coin_tiers import get_tier_at
+        return get_tier_at(symbol, as_of=date(year, month, 1))
+    except Exception:
+        _TIER_DB_FAILED = True
+        return None
+
 
 def coin_tier(symbol: str, at: date | None = None) -> int:
     """Return the risk tier for *symbol*.
@@ -45,14 +72,19 @@ def coin_tier(symbol: str, at: date | None = None) -> int:
     DB lookup failures (table missing, no DATABASE_URL) silently fall back
     to baseline — the decider must never crash because tier history is empty.
     """
-    try:
-        from db.coin_tiers import get_tier_at
-        db_tier = get_tier_at(symbol, as_of=at)
-        if db_tier is not None:
-            return db_tier
-    except Exception:
-        # Table may not exist yet (fresh DB) or DB unavailable — fall through.
-        pass
+    db_tier: int | None = None
+    if at is not None:
+        db_tier = _cached_tier_at(symbol, at.year, at.month)
+    elif not _TIER_DB_FAILED:
+        # Live path (``at=None`` = "latest known"): not cached so a freshly
+        # written tier is visible to the next decision cycle.
+        try:
+            from db.coin_tiers import get_tier_at
+            db_tier = get_tier_at(symbol, as_of=None)
+        except Exception:
+            pass
+    if db_tier is not None:
+        return db_tier
     return COIN_RISK_TIERS_BASELINE.get(symbol, DEFAULT_TIER)
 
 
