@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 from .api import compute_score_rules
+from .coin_tiers import is_allowed as _coin_allowed
 
 DEFAULTS = {
     "decide_every_cycles":   48,         # cadence gate (units = caller cycle)
@@ -38,9 +39,9 @@ DEFAULTS = {
 # (~25h lag). In defensive stances we want faster exits, so we read from the
 # faster signal. ``top_n=0`` in CASH effectively blocks all new entries.
 STANCE_PARAMS: dict[str, dict] = {
-    "DEPLOY":    {"buy_threshold": 6,  "top_n": 4, "exit_signal": "trend_1d"},
-    "SELECTIVE": {"buy_threshold": 7,  "top_n": 3, "exit_signal": "trend_1d"},
-    "PRESERVE":  {"buy_threshold": 8,  "top_n": 2, "exit_signal": "trend"},
+    "DEPLOY":    {"buy_threshold": 7,  "top_n": 4, "exit_signal": "trend_1d"},
+    "SELECTIVE": {"buy_threshold": 8,  "top_n": 3, "exit_signal": "trend_1d"},
+    "PRESERVE":  {"buy_threshold": 9,  "top_n": 2, "exit_signal": "trend"},
     "CASH":      {"buy_threshold": 11, "top_n": 0, "exit_signal": "trend"},
 }
 
@@ -190,6 +191,7 @@ def regime_decision(
     max_pct    = _max_pct(risk_level)
     cash_after = cash  # mutated as we propose buys
     blocked_cooldown: list[str] = []
+    blocked_tier: list[str]     = []
     candidates = sorted(market_raw.items(), key=lambda kv: -scores.get(kv[0], 0))
     for sym, d in candidates:
         if held_after >= p["top_n"]:
@@ -200,6 +202,10 @@ def regime_decision(
         if score < p["buy_threshold"]:
             continue
         if d.get("trend_1d") == "baissier":
+            continue
+        # Risk-tier gate: skip coins above the user's risk tolerance.
+        if not _coin_allowed(sym, risk_level):
+            blocked_tier.append(sym)
             continue
         if cooldown_sec > 0 and now_ts is not None:
             sold_at = last_sell_ts.get(sym)
@@ -234,6 +240,8 @@ def regime_decision(
     summary_parts = [f"per-sym | held {held_after}/{p['top_n']}",
                      f"breadth bull={bull_count}/bear={bear_count}",
                      f"stance={stance}"]
+    if blocked_tier:
+        summary_parts.append(f"risk-tier bloque: {','.join(blocked_tier)}")
     if blocked_cooldown:
         summary_parts.append(f"cooldown bloque: {','.join(blocked_cooldown)}")
     return {

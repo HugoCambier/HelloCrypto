@@ -204,6 +204,66 @@ def test_deploy_does_not_exit_on_intraday_alone():
     assert [a for a in result["actions"] if a["type"] == "sell"] == []
 
 
+def test_risk_tier_filter_low_risk_only_blue_chips():
+    """risk_level=2 → only BTC (tier 2) passes; high-tier coins skipped."""
+    # Build a market where BTC + POL (tier 8) both score 10
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        "POLUSDC": _sym(trend="haussier"),
+    }
+    result, _ = regime_decision(
+        market_raw=market, holdings={}, cash=1000.0, cycle=0,
+        now_ts=1_000_000.0, risk_level=2,
+        params={"decide_every_cycles": 1, "enable_regime_stance": False,
+                "buy_threshold": 8},
+    )
+    buys = [a["symbol"] for a in result["actions"] if a["type"] == "buy"]
+    assert buys == ["BTCUSDC"]
+
+
+def test_risk_tier_filter_max_risk_allows_all():
+    """risk_level=10 → no tier exclusion."""
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        "POLUSDC": _sym(trend="haussier"),
+    }
+    result, _ = regime_decision(
+        market_raw=market, holdings={}, cash=1000.0, cycle=0,
+        now_ts=1_000_000.0, risk_level=10,
+        params={"decide_every_cycles": 1, "enable_regime_stance": False,
+                "buy_threshold": 8, "top_n": 5},
+    )
+    buys = {a["symbol"] for a in result["actions"] if a["type"] == "buy"}
+    assert buys == {"BTCUSDC", "POLUSDC"}
+
+
+def test_risk_tier_does_not_block_exits():
+    """Held positions can still be sold even if their tier > risk_level."""
+    # POL (tier 8) is held. risk_level=3 would block re-entry, but not the
+    # sell signal — exits are based on trend, not tier.
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        "POLUSDC": {"trend_1d": "baissier", "trend": "baissier",
+                    "price": 100.0, "macd": {"histogram": -1.0},
+                    "sma7": 95.0, "sma25": 100.0},
+    }
+    now = 1_000_000.0
+    state = {
+        "bear_since_1d": {"POLUSDC": now - 100 * 3600},
+        "bear_since_1h": {"POLUSDC": now - 100 * 3600},
+        "entry_ts":      {"POLUSDC": now - 100 * 3600},
+    }
+    result, _ = regime_decision(
+        market_raw=market, holdings={"POLUSDC": {"qty": 1.0}}, cash=0,
+        cycle=0, now_ts=now, risk_level=3,
+        params={"decide_every_cycles": 1, "enable_regime_stance": False,
+                "trend_confirm_hours": 24.0, "min_hold_hours": 12.0},
+        strat_state=state,
+    )
+    sells = [a["symbol"] for a in result["actions"] if a["type"] == "sell"]
+    assert sells == ["POLUSDC"]
+
+
 def test_legacy_bear_since_migrated():
     """Old strat_state with `bear_since` key is read as bear_since_1d once."""
     market = {

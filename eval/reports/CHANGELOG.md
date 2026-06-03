@@ -14,6 +14,66 @@ eval/reports/champion.json eval/reports/bench/<latest>.json`
 
 ---
 
+## 2026-06-03 — Buy_threshold +1 par stance + risk-tier coin filter
+
+**Ce qui a changé** :
+- `STANCE_PARAMS` : `buy_threshold` augmenté de +1 sur les 3 stances actifs
+  (DEPLOY 6→7, SELECTIVE 7→8, PRESERVE 8→9, CASH reste 11). Le backtest 600j
+  montrait que score 8 ne discriminait pas (winners 8.76 / losers 8.56) →
+  on relève la barre.
+- Nouveau module [hellocrypto/coin_tiers.py](hellocrypto/coin_tiers.py) :
+  `COIN_RISK_TIERS` mappe chaque coin sur un tier 2-8, calibré sur la perf
+  du backtest 600j. Filtre appliqué à l'entrée dans `regime_decision` :
+  un coin n'est candidat à l'achat que si son tier ≤ `risk_level` user.
+  Les sorties ne sont JAMAIS filtrées (positions tenues toujours liquidables).
+
+**Tiers calibrés sur le backtest 600j** :
+
+| Tier | Coins | Justification |
+|------|-------|---------------|
+| 2 | BTC | blue chip |
+| 3 | ETH | blue chip |
+| 4 | BNB | top exchange |
+| 5 | SOL, XRP, DOGE | matures + DOGE gagnant du backtest (+$26) |
+| 6 | AVAX | neutre dans le backtest |
+| 7 | ADA, LINK | -$18 / -$21 sur 600j, faible signal-to-noise |
+| 8 | POL | pire perdant (-$7 sur peu de trades) |
+
+À risk_level=5 (défaut bench) : 6 coins admis (BTC ETH BNB SOL XRP DOGE).
+À risk_level=7 (défaut backtest UI) : 9 coins (+ AVAX ADA LINK).
+À risk_level=10 : tout autorisé.
+
+**Diff vs champion précédent (bench_20260603_084403)** :
+
+| variant    | scenario             | champ ret/α        | new ret/α          | Δret    | Δα      |
+|------------|----------------------|--------------------|--------------------|---------|---------|
+| rules_only | bull_to_correction   | -5.74% / +1.52%    | -5.42% / +1.85%    | +0.33pp | +0.33pp |
+| rules_only | fear_bear            | +0.00% / +0.71%    | +0.00% / +0.71%    | 0       | 0       |
+| rules_only | greed_bull           | +1.88% / +2.46%    | +1.59% / +2.17%    | -0.29pp | -0.29pp |
+| rules_only | neutral_bull         | -0.38% / -0.41%    | +0.05% / +0.03%    | +0.43pp | +0.43pp |
+
+**Wins** :
+- Moyenne alpha **+0.12pp**.
+- `bull_to_correction` +0.33pp (effet piste 2 — seuils plus exigeants
+  filtrent les setups marginaux pendant les transitions).
+- `neutral_bull` +0.43pp (effet piste 5 — exclusion de POL/ADA qui pèsent
+  négativement dans ce régime).
+
+**Losses** :
+- `greed_bull` -0.29pp : ADA et AVAX ont été des trades gagnants dans ce
+  scénario spécifique du 2025-07-20 ; le tier filter les exclut. C'est un
+  cost attendu — sur 600j ces coins sont collectivement perdants. Tradeoff
+  cohérent avec l'analyse du backtest user (drop POL/ADA/LINK = +$45).
+
+**Pistes suivantes** :
+- Piste 1 : dédoublonnage SMA + ajout `trend_short` au scoring
+- Piste 4 : score-based exit guard (ne pas sortir sur signal si score
+  reste fort, anti-whipsaw vs les -$60 de signal-exits)
+- Trailing stop ATR-adaptatif (au lieu de hard 10%)
+- Si bench-ollama-full disponible : valider sur scénarios 7j
+
+---
+
 ## 2026-06-03 — CASH stance + exit signal stance-dépendant (bench_20260603_084403)
 
 **Ce qui a changé** :

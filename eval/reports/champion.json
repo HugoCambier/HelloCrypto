@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-03T08:44:03.265081+00:00",
+  "generated_at": "2026-06-03T09:12:43.264249+00:00",
   "variants": {
     "rules_only": {
       "provider": "rules",
@@ -68,15 +68,15 @@
         },
         "metrics": {
           "initial_value": 1000.0,
-          "final_value": 942.56,
-          "return_pct": -5.744,
+          "final_value": 945.85,
+          "return_pct": -5.415,
           "btc_return_pct": -7.2615,
-          "alpha_vs_btc_pct": 1.5175,
-          "max_drawdown_pct": -6.0016,
-          "sharpe": -50.029,
+          "alpha_vs_btc_pct": 1.8465,
+          "max_drawdown_pct": -5.568,
+          "sharpe": -53.0027,
           "win_rate_pct": null,
           "num_trades": 3,
-          "total_fees": 0.5781,
+          "total_fees": 0.5537,
           "tokens_in": 0,
           "tokens_out": 0,
           "tokens_total": 0
@@ -130,15 +130,15 @@
         },
         "metrics": {
           "initial_value": 1000.0,
-          "final_value": 1018.75,
-          "return_pct": 1.875,
+          "final_value": 1015.86,
+          "return_pct": 1.586,
           "btc_return_pct": -0.5813,
-          "alpha_vs_btc_pct": 2.4563,
-          "max_drawdown_pct": -0.7598,
-          "sharpe": 20.6399,
+          "alpha_vs_btc_pct": 2.1673,
+          "max_drawdown_pct": -0.6773,
+          "sharpe": 22.7183,
           "win_rate_pct": null,
           "num_trades": 4,
-          "total_fees": 0.6584,
+          "total_fees": 0.6577,
           "tokens_in": 0,
           "tokens_out": 0,
           "tokens_total": 0
@@ -161,21 +161,21 @@
         },
         "metrics": {
           "initial_value": 1000.0,
-          "final_value": 996.16,
-          "return_pct": -0.384,
+          "final_value": 1000.5,
+          "return_pct": 0.05,
           "btc_return_pct": 0.0247,
-          "alpha_vs_btc_pct": -0.4087,
-          "max_drawdown_pct": -0.3551,
-          "sharpe": -10.3184,
+          "alpha_vs_btc_pct": 0.0253,
+          "max_drawdown_pct": -0.3397,
+          "sharpe": 2.2269,
           "win_rate_pct": null,
-          "num_trades": 3,
-          "total_fees": 0.5275,
+          "num_trades": 2,
+          "total_fees": 0.4052,
           "tokens_in": 0,
           "tokens_out": 0,
           "tokens_total": 0
         },
         "cycles_run": 24,
-        "num_trades": 3
+        "num_trades": 2
       }
     }
   }
