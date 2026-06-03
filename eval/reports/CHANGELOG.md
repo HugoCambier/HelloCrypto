@@ -14,6 +14,53 @@ eval/reports/champion.json eval/reports/bench/<latest>.json`
 
 ---
 
+## 2026-06-03 — Volume confirmation (asymétrique, additif)
+
+**Ce qui a changé** :
+- Nouveau champ `volume_ratio_1h` dans `get_enriched_market_data` :
+  ratio du volume de la dernière bougie 1h sur la moyenne 24h.
+- Nouveau champ aussi dans le scenario builder (`build_holdout_scenarios.py`)
+  pour que le bench puisse mesurer le signal.
+- Ajout dans `compute_score_rules` : si `volume_ratio_1h > 1.5` ET
+  `change_pct_1h > 0` → **+1** (real buying flow). Asymétrique : pas de
+  pénalité sur high-vol red (peut être capitulation/shake-out).
+- SMA7/25 cross **conservé** (premier essai en remplacement régressait
+  -0.26pp : retirer un +1 structurel sur les setups bullish a déplacé
+  les scores et coupé des trades borderline).
+
+**Diff vs champion (bench_20260603_084403)** :
+
+Compact 1d : zéro changement — `volume_ratio` reste < 1.5 ou
+accompagne du rouge dans ces fenêtres. Le signal n'a pas l'occasion
+de tirer.
+
+Full 7d :
+| scénario | baseline α | new α | Δ |
+|----------|----------:|------:|---|
+| bull_to_correction_7d | -1.96% | **-1.75%** | +0.21pp |
+| greed_bull_7d | +3.43% | +3.43% | 0 |
+| neutral_bull_7d | -1.08% | -1.08% | 0 |
+
+**Wins** :
+- +0.21pp alpha sur bull_to_correction_7d : le signal vol détecte
+  quelques accumulations bull en debut de scénario, le bonus +1 tire
+  un setup au-dessus du seuil au bon moment.
+- Aucune régression.
+
+**Trade-offs** :
+- Impact modeste — le signal asymétrique fire rarement (volume_ratio>1.5
+  AND green hour). C'est intentionnel : un filtre de qualité, pas un
+  driver de score.
+
+**Pistes suivantes** :
+- Piste 2 : ATR-adaptive trailing stop (mesurer +$82 → +$120+ ?)
+- Piste 3 : F&G index comme stance-modulator
+- Investigation : pourquoi le volume signal ne fire qu'en 7j ? Possible
+  qu'on doive abaisser le seuil à 1.3 ou ajouter un signal volume
+  basé sur la moyenne mobile plutôt que ratio strict.
+
+---
+
 ## 2026-06-03 — trend_confirm_hours par stance + AND-gate CASH
 
 **Ce qui a changé** :

@@ -302,11 +302,22 @@ def compute_score_rules(d: dict) -> int:
     if hist is not None:
         if hist > 0:   score += 1
         elif hist < 0: score -= 1
-    # SMA7 vs SMA25 cross — trend confirmation
+    # SMA7 vs SMA25 cross — trend confirmation (redundant with ``trend``
+    # signal-wise but the +1 is structurally important for bullish setups
+    # to clear the buy threshold; removing it shifted bench scores -0.26pp).
     sma7, sma25 = d.get("sma7"), d.get("sma25")
     if sma7 is not None and sma25 is not None and sma25 > 0:
         if sma7 > sma25:   score += 1
         elif sma7 < sma25: score -= 1
+    # Volume-direction signal — flow confirmation on top of price action.
+    # Asymmetric: reward high-volume green hours (real buying); high-volume
+    # red can be shake-out, so no symmetric penalty. Final score still
+    # clamped 0-10, so the extra +1 only matters at the lower bands where
+    # it can tip a setup over the buy threshold.
+    vol_ratio = d.get("volume_ratio_1h")
+    change_1h = d.get("change_pct_1h", 0)
+    if vol_ratio is not None and vol_ratio > 1.5 and change_1h > 0:
+        score += 1
     # Bollinger position — overbought/oversold relative to the bands
     bb = d.get("bollinger") or {}
     lower, upper = bb.get("lower"), bb.get("upper")
@@ -551,13 +562,19 @@ def get_enriched_market_data(watchlist: list[str], cycle_seconds: int = 60) -> d
             macd_data = None
             bollinger = None
             atr_val   = None
+            volume_ratio_1h = None  # current 1h volume / 24h average — flow signal
             try:
                 closes_ext = [float(k[4]) for k in klines_ext]
                 highs_ext  = [float(k[2]) for k in klines_ext]
                 lows_ext   = [float(k[3]) for k in klines_ext]
+                vols_ext   = [float(k[5]) for k in klines_ext]
                 macd_data  = _compute_macd(closes_ext)
                 bollinger  = _compute_bollinger(closes_ext)
                 atr_val    = _compute_atr(highs_ext, lows_ext, closes_ext)
+                if len(vols_ext) >= 25 and vols_ext[-1] > 0:
+                    avg_24h_vol = sum(vols_ext[-25:-1]) / 24
+                    if avg_24h_vol > 0:
+                        volume_ratio_1h = round(vols_ext[-1] / avg_24h_vol, 2)
             except Exception:
                 pass
 
@@ -578,6 +595,7 @@ def get_enriched_market_data(watchlist: list[str], cycle_seconds: int = 60) -> d
                 "macd":           macd_data,
                 "bollinger":      bollinger,
                 "atr":            round(atr_val, 4) if atr_val else None,
+                "volume_ratio_1h": volume_ratio_1h,
             }
         except Exception as exc:
             log.warning("Données marché indisponibles pour %s: %s", sym, exc)

@@ -84,7 +84,8 @@ def _load_window(start: datetime, end: datetime, watchlist: list[str]) -> list[d
 # ── Per-cycle market dict reconstruction ──────────────────────────────────────
 
 def _snapshot_to_market_entry(s: dict, prev1h: dict | None, prev24h: dict | None,
-                              prev_168h_highs: list[float] | None = None) -> dict:
+                              prev_168h_highs: list[float] | None = None,
+                              prev_24h_volumes: list[float] | None = None) -> dict:
     """Reshape a snapshot row into the dict shape expected by the runner.
 
     ``prev1h`` / ``prev24h`` are the same symbol's snapshots 1h / 24h earlier
@@ -92,6 +93,8 @@ def _snapshot_to_market_entry(s: dict, prev1h: dict | None, prev24h: dict | None
     directly in the snapshots schema). ``prev_168h_highs`` is the list of
     hourly highs from the past 7 days, used to derive ``drawdown_pct_7d`` —
     the leading bear-protection signal used by the CASH stance.
+    ``prev_24h_volumes`` is the list of hourly volumes from the past 24h,
+    used to derive ``volume_ratio_1h`` for the flow-confirmation signal.
     """
     close = s["close"]
     change_1h  = ((close - prev1h["close"]) / prev1h["close"] * 100) if (prev1h and prev1h["close"]) else 0.0
@@ -103,11 +106,19 @@ def _snapshot_to_market_entry(s: dict, prev1h: dict | None, prev24h: dict | None
         if peak > 0:
             drawdown_pct_7d = round((peak - close) / peak * 100, 2)
 
+    volume_ratio_1h = None
+    if prev_24h_volumes and len(prev_24h_volumes) >= 12:
+        avg_vol = sum(prev_24h_volumes) / len(prev_24h_volumes)
+        cur_vol = s.get("volume")
+        if avg_vol > 0 and cur_vol is not None:
+            volume_ratio_1h = round(float(cur_vol) / avg_vol, 2)
+
     out: dict = {
         "price":           close,
         "change_pct_1h":   round(change_1h, 3),
         "change_pct_24h":  round(change_24h, 3),
         "volume_usdc":     s.get("volume"),
+        "volume_ratio_1h": volume_ratio_1h,
         "high_24h":        s.get("high"),
         "low_24h":         s.get("low"),
         "rsi14":           s.get("rsi14"),
@@ -164,17 +175,22 @@ def build_scenario(name: str, start_ts: datetime, days: int, watchlist: list[str
             s = by_sym.get(sym, {}).get(ts_iso)
             if not s:
                 continue
-            # Collect highs from the past 168h (7 days) for drawdown_pct_7d.
+            # Collect highs from the past 168h (7 days) for drawdown_pct_7d,
+            # and the past 24h hourly volumes for volume_ratio_1h.
             prev_highs: list[float] = []
+            prev_vols:  list[float] = []
             for h in range(1, 169):
                 prev = by_sym.get(sym, {}).get((cur - timedelta(hours=h)).isoformat())
                 if prev and prev.get("high") is not None:
                     prev_highs.append(float(prev["high"]))
+                if h <= 24 and prev and prev.get("volume") is not None:
+                    prev_vols.append(float(prev["volume"]))
             market[sym] = _snapshot_to_market_entry(
                 s,
                 by_sym.get(sym, {}).get(prev1h_iso),
                 by_sym.get(sym, {}).get(prev24h_iso),
                 prev_168h_highs=prev_highs,
+                prev_24h_volumes=prev_vols,
             )
             # F&G is denormalized in every snapshot — pick from BTC for stability
             if sym == "BTCUSDC":
