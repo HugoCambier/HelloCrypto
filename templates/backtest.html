@@ -151,7 +151,14 @@
         <div><label class="lbl">Trailing (%)</label><input class="fld" type="number" id="bt-ts" value="{{ cfg_defaults.trailing_stop_pct }}"></div>
       </div>
 
-      <div class="grid grid-cols-2 gap-3">
+      <div class="flex items-center gap-2 py-1">
+        <input type="checkbox" id="bt-stance" checked class="accent-blue-500 cursor-pointer" onchange="btStanceToggle()">
+        <label for="bt-stance" class="text-xs text-slate-300 cursor-pointer select-none">
+          Régime stance <span class="text-slate-500">(DEPLOY / SELECTIVE / PRESERVE — pilote seuil + top-N)</span>
+        </label>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3" id="bt-stance-manual">
         <div><label class="lbl" title="Score (sur 10) requis pour entrer">Seuil achat</label><input class="fld" type="number" id="bt-buy-thr" value="8" min="1" max="10"></div>
         <div><label class="lbl" title="Nombre max de positions simultanées">Top-N panier</label><input class="fld" type="number" id="bt-top-n" value="3" min="1" max="10"></div>
       </div>

@@ -266,6 +266,7 @@ def run_live(
     trend_confirm_hours: float = 24.0,
     min_hold_hours: float = 12.0,
     rebuy_cooldown_hours: float = 0.0,
+    enable_regime_stance: bool = True,
     llm_mode: bool = False,
     llm_every_n_candles: int = 4,
     on_step=None,
@@ -523,11 +524,16 @@ def run_live(
                 risk_level=risk_level, strat_state=strat_state,
                 params={
                     "decide_every_cycles":  decide_every_n_candles,
-                    "top_n":                top_n,
-                    "buy_threshold":        buy_threshold,
+                    # When stance is on, buy_threshold + top_n are dynamically
+                    # derived per-cycle by _derive_stance; don't pin them so
+                    # STANCE_PARAMS can override.  When off, honour the explicit
+                    # values passed by the caller (backtest UI / propose script).
+                    **({"top_n": top_n, "buy_threshold": buy_threshold}
+                       if not enable_regime_stance else {}),
                     "trend_confirm_hours":  trend_confirm_hours,
                     "min_hold_hours":       min_hold_hours,
                     "rebuy_cooldown_hours": rebuy_cooldown_hours,
+                    "enable_regime_stance": enable_regime_stance,
                 },
             )
             actions = decision.get("actions", [])

@@ -143,6 +143,7 @@ def bt_start():
                 rebuy_cooldown_hours=rebuy_cd_h,
                 sell_cooldown_cycles=sell_cd,
                 decide_every_n_candles=decide_every_n,
+                enable_regime_stance=bool(body.get("enable_regime_stance", True)),
                 llm_mode=llm_mode, llm_every_n_candles=llm_every,
                 on_step=on_step, stop_event=_bt_stop_event, speed_ref=_bt_speed,
             )

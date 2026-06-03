@@ -316,6 +316,7 @@ def run(
         "trend_confirm_hours":  cfg.get("trend_confirm_hours"),
         "min_hold_hours":       cfg.get("min_hold_hours"),
         "rebuy_cooldown_hours": cfg.get("rebuy_cooldown_hours"),
+        "enable_regime_stance": cfg.get("enable_regime_stance"),
     }
 
     if resume:

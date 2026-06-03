@@ -298,7 +298,10 @@ def run(
                 risk_level=cfg.risk_level, strat_state=strat_state,
                 params={
                     "decide_every_cycles": 1,   # bench cycles are daily snapshots
-                    "buy_threshold":       cfg.buy_score_min,
+                    # Only pin buy_threshold when the variant explicitly overrides
+                    # the default — otherwise let stance modulate it freely.
+                    **({"buy_threshold": cfg.buy_score_min}
+                       if cfg.buy_score_min != 8 else {}),
                 },
             )
             usage = None

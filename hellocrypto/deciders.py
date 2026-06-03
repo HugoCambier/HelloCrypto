@@ -29,7 +29,27 @@ DEFAULTS = {
     "trend_confirm_hours":   24.0,  # bearish trend duration required to exit
     "min_hold_hours":        12.0,  # minimum holding period before any exit
     "rebuy_cooldown_hours":  0.0,   # anti-whipsaw: hours before re-entering a sold sym
+    "enable_regime_stance":  True,  # modulate threshold+top_n via market stance
 }
+
+STANCE_PARAMS: dict[str, dict] = {
+    "DEPLOY":    {"buy_threshold": 6, "top_n": 4},
+    "SELECTIVE": {"buy_threshold": 7, "top_n": 3},
+    "PRESERVE":  {"buy_threshold": 8, "top_n": 2},
+}
+
+
+def _derive_stance(market_raw: dict) -> str:
+    """Derive DEPLOY / SELECTIVE / PRESERVE from BTC trend + market breadth."""
+    btc = market_raw.get("BTCUSDC") or {}
+    btc_trend = btc.get("trend_1d")
+    bull = sum(1 for d in market_raw.values() if d.get("trend_1d") == "haussier")
+    bear = sum(1 for d in market_raw.values() if d.get("trend_1d") == "baissier")
+    if btc_trend == "haussier" and bull >= bear:
+        return "DEPLOY"
+    if btc_trend == "baissier":
+        return "PRESERVE"
+    return "SELECTIVE"
 
 
 def _params(params: dict | None) -> dict:
@@ -70,6 +90,13 @@ def regime_decision(
     Returns actions with ``usdc_amount`` populated so the caller just executes.
     """
     p = _params(params)
+    user_pinned = {k for k, v in (params or {}).items() if v is not None}
+    stance = "OFF"
+    if p.get("enable_regime_stance"):
+        stance = _derive_stance(market_raw)
+        for k, v in STANCE_PARAMS[stance].items():
+            if k not in user_pinned:
+                p[k] = v
     st = dict(strat_state or {})
 
     # Cadence gate.
@@ -164,7 +191,8 @@ def regime_decision(
                  else "bearish" if bear_count > bull_count else "neutral")
 
     summary_parts = [f"per-sym | held {held_after}/{p['top_n']}",
-                     f"breadth bull={bull_count}/bear={bear_count}"]
+                     f"breadth bull={bull_count}/bear={bear_count}",
+                     f"stance={stance}"]
     if blocked_cooldown:
         summary_parts.append(f"cooldown bloque: {','.join(blocked_cooldown)}")
     return {
@@ -172,4 +200,5 @@ def regime_decision(
         "summary":          " | ".join(summary_parts),
         "actions":          actions,
         "scores":           scores,
+        "stance":           stance,
     }, st

@@ -14,6 +14,45 @@ eval/reports/champion.json eval/reports/bench/<latest>.json`
 
 ---
 
+## 2026-06-03 — Stance système DEPLOY/SELECTIVE/PRESERVE (bench_20260602_194122)
+
+**Ce qui a changé** : ajout d'un système de régime stance dans
+[hellocrypto/deciders.py](hellocrypto/deciders.py) (`_derive_stance` + `STANCE_PARAMS`).
+Selon BTC trend + breadth marché, le décideur entre en mode :
+- **DEPLOY** (BTC haussier + bull ≥ bear) → seuil 6, top_n 4
+- **SELECTIVE** (défaut) → seuil 7, top_n 3
+- **PRESERVE** (BTC baissier) → seuil 8, top_n 2
+
+Les params UI restent prioritaires (`user_pinned` guard). Backtest : checkbox stance
+pour activer/désactiver. Eval runner : ne pin plus `buy_threshold` si valeur = défaut
+(libère la modulation par stance).
+
+**Diff vs champion précédent (bench_20260602_171056)** :
+
+| variant    | scenario      | champ ret/α        | new ret/α          | Δret    | Δα      |
+|------------|---------------|--------------------|--------------------|---------|---------|
+| rules_only | greed_bull    | +1.67% / +2.25%    | +1.88% / +2.46%    | +0.20pp | +0.20pp |
+| rules_only | neutral_bull  | -0.33% / -0.35%    | -0.38% / -0.41%    | -0.05pp | -0.05pp |
+| rules_only | fear_bear     | +0.00% / +0.71%    | +0.00% / +0.71%    | 0       | 0       |
+| others     | all           | —                  | —                  | 0       | 0       |
+
+**Wins** :
+- `rules_only` gagne +0.20pp alpha sur `greed_bull` → DEPLOY stance (seuil 6, top_n 4)
+  capte plus d'opportunités en bull market, exactement le comportement voulu.
+- `fear_bear` inchangé → PRESERVE seuil 8 filtre correctement, pas de suractivité en bear.
+- Moyenne `rules_only` : **+0.05pp** ret/alpha.
+
+**Losses** :
+- `neutral_bull` perd -0.05pp : SELECTIVE (seuil 7) génère légèrement plus de bruit que
+  l'ancien seuil fixe 8 sur ce scénario. Marginal et acceptable.
+
+**Pistes suivantes** :
+- `bench-ollama-full` (7j) pour valider sur horizon plus long
+- Tuner `min_hold_hours` / `trend_confirm_hours` : 8h/12h comme compromis court⇔long
+- Ajouter timing params dans `STANCE_PARAMS` (DEPLOY → confirm plus court pour réagir plus vite)
+
+---
+
 ## 2026-06-02 — Bench `rules_only` aligné sur la prod (bench_20260602_171056)
 
 **Ce qui a changé** : `_rule_based_decision` (simple buy-top-score / sell-low-score,

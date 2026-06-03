@@ -393,16 +393,31 @@ async function copyRecapToClipboard() {
   }
 }
 
+// ── Stance toggle helper ──────────────────────────────────────────────────────
+function btStanceToggle() {
+  const on = document.getElementById('bt-stance').checked;
+  const manual = document.getElementById('bt-stance-manual');
+  if (manual) manual.style.opacity = on ? '0.35' : '1';
+  ['bt-buy-thr', 'bt-top-n'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = on;
+  });
+}
+// Apply initial state on load.
+document.addEventListener('DOMContentLoaded', btStanceToggle);
+
 // ── Backtest control ─────────────────────────────────────────────────────────
 async function startBacktest() {
   const syms = getCryptoSelection('bt-cryptos-drop');
   if (!syms.length) { toast('Sélectionne au moins une crypto', 'warn'); return; }
+  const stanceOn = document.getElementById('bt-stance')?.checked ?? true;
   const body = {
     symbols:        syms.join(','),
     days:           Number(document.getElementById('bt-days').value),
     budget:         Number(document.getElementById('bt-budget').value),
     stop_loss_pct:  Number(document.getElementById('bt-sl').value),
     trailing_stop_pct: Number(document.getElementById('bt-ts').value),
+    enable_regime_stance: stanceOn,
     buy_threshold:  Number(document.getElementById('bt-buy-thr').value),
     top_n:          Math.max(1, Number(document.getElementById('bt-top-n').value) || 3),
     trend_confirm_hours: Math.max(0, Number(document.getElementById('bt-trend-confirm').value) || 0),
