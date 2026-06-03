@@ -88,23 +88,35 @@ def test_disable_regime_stance():
 # ── CASH stance (leading-signal bear protection) ─────────────────────────────
 
 
-def test_stance_cash_on_btc_drawdown():
-    """BTC drawdown ≥ 7% from 7d high is a leading signal → CASH."""
-    market = _market(btc_trend="haussier", n_bull=6, n_bear=2)
-    market["BTCUSDC"]["drawdown_pct_7d"] = 8.5
-    assert _derive_stance(market) == "CASH"
-
-
-def test_stance_cash_on_intraday_breadth_collapse():
-    """Intraday `trend` baissier on ≥70% of watchlist → CASH."""
-    # 1 BTC haussier + 2 bull haussier + 8 bear baissier = 8/11 ≈ 73% intraday bear
+def test_stance_cash_requires_both_drawdown_and_breadth():
+    """CASH fires only when BTC drawdown ≥7% AND intraday bear breadth ≥70%."""
     market = _market(btc_trend="haussier", n_bull=2, n_bear=8)
+    market["BTCUSDC"]["drawdown_pct_7d"] = 8.5
+    # Now both conditions are met: drawdown 8.5% ≥ 7%, breadth 8/11 ≈ 73% ≥ 70%
     assert _derive_stance(market) == "CASH"
+
+
+def test_stance_no_cash_on_drawdown_alone():
+    """Drawdown without breadth collapse is NOT enough — anti-false-positive."""
+    market = _market(btc_trend="haussier", n_bull=6, n_bear=2)
+    market["BTCUSDC"]["drawdown_pct_7d"] = 10.0
+    # Breadth bear = 2/9 ≈ 22% < 70% → not CASH (still DEPLOY since btc haussier)
+    assert _derive_stance(market) == "DEPLOY"
+
+
+def test_stance_no_cash_on_breadth_alone():
+    """Breadth collapse without confirmed BTC drawdown is NOT CASH either."""
+    market = _market(btc_trend="haussier", n_bull=2, n_bear=8)
+    # No drawdown set → AND-gate not met → falls through to next branches.
+    # bull_count=3 (BTC+2), bear_count=8 → not DEPLOY (bull < bear),
+    # btc_trend=haussier (not baissier) → SELECTIVE
+    assert _derive_stance(market) == "SELECTIVE"
 
 
 def test_cash_blocks_all_buys():
     """CASH stance has top_n=0; no buys regardless of scores."""
     market = _market(btc_trend="haussier", n_bull=2, n_bear=8)
+    market["BTCUSDC"]["drawdown_pct_7d"] = 8.5  # both conditions met
     result, _ = regime_decision(
         market_raw=market, holdings={}, cash=1000.0, cycle=0,
         now_ts=1_000_000.0, risk_level=5,

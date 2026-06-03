@@ -40,13 +40,19 @@ DEFAULTS = {
 # (~25h lag). In defensive stances we want faster exits, so we read from the
 # faster signal. ``top_n=0`` in CASH effectively blocks all new entries.
 STANCE_PARAMS: dict[str, dict] = {
-    # ``score_exit_threshold`` gates exits by a holistic score check. We turn
-    # the gate ON in bull/neutral stances (let winners run, ignore intraday
-    # noise) and OFF in defensive stances (exit fast, don't second-guess).
-    "DEPLOY":    {"buy_threshold": 7,  "top_n": 4, "exit_signal": "trend_1d", "score_exit_threshold": 5},
-    "SELECTIVE": {"buy_threshold": 8,  "top_n": 3, "exit_signal": "trend_1d", "score_exit_threshold": 5},
-    "PRESERVE":  {"buy_threshold": 9,  "top_n": 2, "exit_signal": "trend",    "score_exit_threshold": 99},
-    "CASH":      {"buy_threshold": 11, "top_n": 0, "exit_signal": "trend",    "score_exit_threshold": 99},
+    # Per-stance behavior:
+    # - ``buy_threshold`` / ``top_n``: how selective/aggressive on entries
+    # - ``exit_signal``: which trend signal gates exits (trend_1d = slow daily,
+    #   trend = fast 1h SMA cross)
+    # - ``score_exit_threshold``: anti-whipsaw gate (require score < N to exit).
+    #   ON in bull (5) to let winners run, OFF in defensive (99) to exit fast.
+    # - ``trend_confirm_hours``: how long the bear signal must persist before
+    #   exit fires. Long in bull (48h: filter transient trend_1d flips) ;
+    #   moderate in PRESERVE (24h) ; fast in CASH (12h: capitulation mode).
+    "DEPLOY":    {"buy_threshold": 7,  "top_n": 4, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0},
+    "SELECTIVE": {"buy_threshold": 8,  "top_n": 3, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0},
+    "PRESERVE":  {"buy_threshold": 9,  "top_n": 2, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0},
+    "CASH":      {"buy_threshold": 11, "top_n": 0, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0},
 }
 
 # CASH triggers — leading signals so we don't lag the lagging trend_1d.
@@ -57,23 +63,23 @@ CASH_BEAR_BREADTH_INTRA   = 0.7  # ratio of watchlist with intraday `trend` == b
 def _derive_stance(market_raw: dict) -> str:
     """Derive DEPLOY / SELECTIVE / PRESERVE / CASH from market signals.
 
-    CASH (no new entries, fast exits via intraday signal) is triggered by
-    *leading* indicators — BTC drawdown from its 7d high, or intraday bear
-    breadth — rather than the lagging daily trend, so it activates *before*
-    the worst of the downturn lands.
+    CASH (no new entries, fast exits via intraday signal) requires *both*
+    leading conditions — BTC drawdown ≥7% from its 7d high AND intraday bear
+    breadth ≥70%. The AND gate avoids false positives on transient hourly
+    breadth flips during normal bull pullbacks (which would otherwise force
+    us out of bull-market positions).
     """
     btc = market_raw.get("BTCUSDC") or {}
     btc_trend    = btc.get("trend_1d")
     btc_drawdown = btc.get("drawdown_pct_7d")
 
-    # Leading: BTC is in a >7% pullback from its 7d high → defense.
-    if btc_drawdown is not None and btc_drawdown >= CASH_BTC_DRAWDOWN_PCT:
-        return "CASH"
-
-    # Leading: intraday breadth collapse on 1h SMA cross.
+    # Leading: both BTC drawdown AND intraday breadth confirm a real downturn.
     if market_raw:
         bear_intra = sum(1 for d in market_raw.values() if d.get("trend") == "baissier")
-        if bear_intra / len(market_raw) >= CASH_BEAR_BREADTH_INTRA:
+        breadth_ratio = bear_intra / len(market_raw)
+        if (btc_drawdown is not None
+                and btc_drawdown >= CASH_BTC_DRAWDOWN_PCT
+                and breadth_ratio >= CASH_BEAR_BREADTH_INTRA):
             return "CASH"
 
     # Lagging: daily breadth — used only when leading signals are clean.

@@ -14,6 +14,56 @@ eval/reports/champion.json eval/reports/bench/<latest>.json`
 
 ---
 
+## 2026-06-03 — trend_confirm_hours par stance + AND-gate CASH
+
+**Ce qui a changé** :
+- `trend_confirm_hours` devient stance-dépendant dans `STANCE_PARAMS` :
+  DEPLOY/SELECTIVE 36h (au lieu de 24h), PRESERVE/CASH gardent 24h.
+- **Plus important** : `_derive_stance` passe en **AND-gate** pour CASH.
+  Avant : drawdown ≥7% OR breadth bear ≥70% (sensible). Maintenant : les
+  deux conditions doivent être vraies. Évite les faux positifs lors des
+  pullbacks bull normaux qui font brièvement flipper le breadth intraday.
+
+**Motivation** :
+- En testant DEPLOY/SEL 48h, on a découvert que CASH OR-gate causait
+  -3.78pp alpha sur greed_bull_7d : breadth intraday flippait à 70%
+  brièvement pendant un pullback bull normal, CASH se déclenchait, on
+  sortait au mauvais moment.
+- L'AND-gate est plus restrictif mais bien plus précis : CASH ne fire
+  qu'en correction *broad AND deep*, pas sur un blip horaire.
+
+**Diff vs champion précédent (bench_20260603_084403)** :
+
+Compact 1d : zéro changement (CASH fire au même cycle dans
+bull_to_correction_1d, où les deux conditions étaient déjà remplies).
+
+Full 7d (test interne) :
+| scénario | baseline α | new α | Δ |
+|----------|----------:|------:|---|
+| bull_to_correction_7d | -1.62% | -1.96% | **-0.34pp** |
+| fear_bear_7d | -1.27% | -1.27% | 0 |
+| greed_bull_7d | +2.30% | **+3.43%** | **+1.14pp** |
+| neutral_bull_7d | -0.82% | -1.08% | -0.26pp |
+| **Moyenne** | **-0.35%** | **-0.22%** | **+0.18pp** |
+
+**Wins** :
+- greed_bull_7d +1.14pp : plus de faux CASH sur pullbacks normaux.
+- Pas de régression dramatique : -0.34pp sur bull_to_correction (CASH
+  déclenche un peu plus tard maintenant que les deux conditions sont
+  requises, mais finit par se déclencher).
+- Moyenne +0.18pp.
+
+**Trade-offs** :
+- bull_to_correction perd 0.34pp d'alpha — la protection bear est un peu
+  plus tardive. C'est le prix pour éviter les faux positifs en bull.
+
+**Pistes suivantes** :
+- Piste 1 : signal cleanup (dedupe SMA + ajout trend_short)
+- Trailing stop ATR-adaptatif
+- Mesurer impact sur backtest 600j user (le vrai juge)
+
+---
+
 ## 2026-06-03 — Score-based exit guard (stance-dépendant)
 
 **Ce qui a changé** :
