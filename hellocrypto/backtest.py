@@ -602,6 +602,7 @@ def run_live(
             # est gérée par le décideur lui-même via ``strat_state``.
             market_raw = _enrich_from_klines(symbols, all_klines, all_klines_1d, i)
             fng_v = (fear_greed or {}).get("value") if fear_greed else None
+            cycle_date = datetime.fromtimestamp(ts / 1000, tz=UTC).date()
             decision, strat_state = regime_decision(
                 market_raw=market_raw, holdings=holdings, cash=cash,
                 cycle=current_step, now_ts=ts / 1000.0,
@@ -620,6 +621,7 @@ def run_live(
                     "enable_regime_stance": enable_regime_stance,
                 },
                 fng_value=fng_v,
+                as_of_date=cycle_date,
             )
             actions = decision.get("actions", [])
             scores  = decision.get("scores", {}) or {}

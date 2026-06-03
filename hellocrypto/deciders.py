@@ -18,10 +18,11 @@ cycles, etc.).
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from .api import compute_score_rules
-from .coin_tiers import is_allowed as _coin_allowed
+from .coin_tiers import coin_tier
 
 DEFAULTS = {
     "decide_every_cycles":   48,         # cadence gate (units = caller cycle)
@@ -111,6 +112,26 @@ def _max_pct(risk_level: int) -> float:
     return (5 + max(1, min(10, int(risk_level))) * 4) / 100
 
 
+def _per_coin_threshold(base_threshold: int, tier: int) -> int:
+    """Coins with tier > 6 require a higher score to clear the entry bar.
+
+    Net rule: +1 to threshold per tier above 6 (so tier 7→+1, 8→+2, 9→+3).
+    Tiers ≤ 6 use the base threshold unmodified. Combined with the existing
+    `tier > risk_level` filter, this gives a graded discouragement rather
+    than a binary cliff.
+    """
+    return base_threshold + max(0, tier - 6)
+
+
+def _per_coin_size_factor(tier: int) -> float:
+    """Reduce position size on higher-risk coins (10% smaller per tier > 5).
+
+    Capped at 50% so even the riskiest allowed coin still gets a meaningful
+    position. Tier ≤ 5 (blue chips) get full size.
+    """
+    return max(0.5, 1.0 - max(0, tier - 5) * 0.10)
+
+
 def regime_decision(
     *,
     market_raw: dict[str, dict],
@@ -122,6 +143,7 @@ def regime_decision(
     strat_state: dict[str, Any] | None = None,
     params: dict | None = None,
     fng_value: int | None = None,
+    as_of_date: date | None = None,
 ) -> tuple[dict, dict]:
     """Per-symbol deterministic decider with top-N cap and risk-aware sizing.
 
@@ -287,12 +309,17 @@ def regime_decision(
         if sym in holdings and sym not in selling_now:
             continue
         score = scores.get(sym, 0)
-        if score < p["buy_threshold"]:
+        # Per-coin tier modulates BOTH the entry threshold (higher bar for
+        # risky coins) AND the position size (smaller allocation). Tier is
+        # looked up at ``as_of_date`` so backtests use point-in-time info.
+        tier = coin_tier(sym, at=as_of_date)
+        sym_threshold = _per_coin_threshold(p["buy_threshold"], tier)
+        if score < sym_threshold:
             continue
         if d.get("trend_1d") == "baissier":
             continue
-        # Risk-tier gate: skip coins above the user's risk tolerance.
-        if not _coin_allowed(sym, risk_level):
+        # Risk-tier hard gate (filter on user risk_level) — also uses as_of_date.
+        if tier > risk_level:
             blocked_tier.append(sym)
             continue
         if cooldown_sec > 0 and now_ts is not None:
@@ -300,7 +327,8 @@ def regime_decision(
             if sold_at is not None and (now_ts - sold_at) < cooldown_sec:
                 blocked_cooldown.append(sym)
                 continue
-        alloc = cash_after * max_pct
+        size_factor = _per_coin_size_factor(tier)
+        alloc = cash_after * max_pct * size_factor
         if alloc < 10:
             break
         fng_note = ""
@@ -312,8 +340,9 @@ def regime_decision(
             "symbol":      sym,
             "usdc_amount": round(alloc, 2),
             "reason": (
-                f"Entry score {score}/10 ≥ {p['buy_threshold']} (stance {stance}{fng_note}), "
-                f"trend_1d={d.get('trend_1d', '?')}, risk {risk_level} → {max_pct*100:.0f}% cash"
+                f"Entry score {score}/10 ≥ {sym_threshold} (tier {tier}, stance {stance}{fng_note}), "
+                f"trend_1d={d.get('trend_1d', '?')}, "
+                f"risk {risk_level} → {max_pct*size_factor*100:.0f}% cash"
             ),
         })
         if now_ts is not None:

@@ -493,6 +493,28 @@ def test_dd_cooldown_expires_after_window():
     assert len(buys) > 0
 
 
+def test_per_coin_threshold_higher_for_risky_coins():
+    """Tier > 6 adds +1 to threshold per tier step."""
+    from hellocrypto.deciders import _per_coin_threshold
+    assert _per_coin_threshold(7, 2) == 7   # blue chip: no bump
+    assert _per_coin_threshold(7, 6) == 7   # mid-tier: no bump
+    assert _per_coin_threshold(7, 7) == 8   # +1
+    assert _per_coin_threshold(7, 8) == 9   # +2
+    assert _per_coin_threshold(7, 9) == 10  # +3
+
+
+def test_per_coin_size_factor_smaller_for_risky_coins():
+    """Tier > 5 reduces size by 10% per tier step, capped at 50%."""
+    from hellocrypto.deciders import _per_coin_size_factor
+    assert _per_coin_size_factor(2) == 1.0
+    assert _per_coin_size_factor(5) == 1.0
+    assert abs(_per_coin_size_factor(6) - 0.9) < 1e-9
+    assert abs(_per_coin_size_factor(7) - 0.8) < 1e-9
+    assert abs(_per_coin_size_factor(9) - 0.6) < 1e-9
+    # Floor at 0.5
+    assert _per_coin_size_factor(15) == 0.5
+
+
 def test_legacy_bear_since_migrated():
     """Old strat_state with `bear_since` key is read as bear_since_1d once."""
     market = {

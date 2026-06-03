@@ -239,12 +239,14 @@ def _execute_cycle(
                 "max_portfolio_dd_pct", "dd_cooldown_days",
             ) if cfg.get(k) is not None
         }
+        from datetime import date as _date
         fng_v = (fear_greed or {}).get("value") if fear_greed else None
         decision, strat_state = regime_decision(
             market_raw=market_data_raw, holdings=positions, cash=cash,
             cycle=cycle, now_ts=time.time(),
             risk_level=risk_level, strat_state=strat_state,
             params=det_params, fng_value=fng_v,
+            as_of_date=_date.today(),
         )
         sentiment = decision.get("market_sentiment", "")
         summary   = decision.get("summary", "")

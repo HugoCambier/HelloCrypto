@@ -291,8 +291,11 @@ def run(
         elif cfg.provider == "rules":
             # Use the *same* deterministic decider as live sim/réel/backtest so
             # the bench measures what actually ships in prod.
+            from datetime import datetime as _dt
+
             from ..deciders import regime_decision
             fng_v = (cyc.fear_greed or {}).get("value") if cyc.fear_greed else None
+            cyc_date = _dt.fromtimestamp(_ts_to_unix(cyc.timestamp)).date()
             decision, strat_state = regime_decision(
                 market_raw=cyc.market, holdings=holdings, cash=cash,
                 cycle=idx, now_ts=_ts_to_unix(cyc.timestamp),
@@ -305,6 +308,7 @@ def run(
                        if cfg.buy_score_min != 8 else {}),
                 },
                 fng_value=fng_v,
+                as_of_date=cyc_date,
             )
             usage = None
         else:

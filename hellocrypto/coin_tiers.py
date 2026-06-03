@@ -1,21 +1,24 @@
-"""Per-coin risk tiers used to filter the watchlist on entry.
+"""Per-coin risk tiers used to filter and modulate decisions.
 
-The ``risk_level`` param (1-10, set by the user) now controls *which coins
-we'll consider entering*, not just position sizing. A coin enters the
-candidate list only when its tier ≤ ``risk_level``. Held positions are
-never filtered — exits still apply on the full watchlist.
+Two-layer source:
 
-Tiers are hardcoded (not data-driven) to remain interpretable. Lower tier
-= more conservative pick (blue chip, mature, lower historical whipsaw).
-Higher tier = more speculative (alt with weaker signal-to-noise).
+1. **DB-backed monthly tiers** (``db.coin_tiers``) — computed from 30d
+   vol / drawdown / beta in ``scripts/compute_coin_tiers.py``. Looked up
+   at the decision-cycle's date so backtests use point-in-time info.
 
-Baseline calibration uses 600-day backtest (2024-10 → 2026-06) PnL by
-coin: winners stay tier ≤ 5, structural losers (LINK, ADA, POL) push
-into tiers 7-8 since their signals proved unreliable over that window.
+2. **Hardcoded baseline** (``COIN_RISK_TIERS_BASELINE``) — fallback for
+   the period before DB tier history starts, or for symbols not yet
+   profiled. Calibrated on 600d backtest (2024-10 → 2026-06).
+
+The ``risk_level`` param (1-10, user-set) controls *which coins* are
+candidates for entry: tier ≤ risk_level. Held positions are never
+filtered — exits always apply on the full watchlist.
 """
 from __future__ import annotations
 
-COIN_RISK_TIERS: dict[str, int] = {
+from datetime import date
+
+COIN_RISK_TIERS_BASELINE: dict[str, int] = {
     "BTCUSDC":  2,  # blue chip
     "ETHUSDC":  3,
     "BNBUSDC":  4,
@@ -23,19 +26,36 @@ COIN_RISK_TIERS: dict[str, int] = {
     "XRPUSDC":  5,
     "DOGEUSDC": 5,  # backtest winner despite meme status
     "AVAXUSDC": 6,
-    "LINKUSDC": 8,  # consistent loser (-$21 / -$9 / -$18 / -$4 / -$8 across 5 BTs)
+    "LINKUSDC": 8,  # consistent loser (-$21/-$9/-$18/-$4/-$8 across 5 BTs)
     "ADAUSDC":  8,  # consistent loser (-$28 over 3 successive 600d backtests)
     "POLUSDC":  8,  # worst backtest loser
 }
 
-DEFAULT_TIER = 6  # for unknown coins
+DEFAULT_TIER = 6  # for unknown coins (when neither DB nor baseline has it)
 
 
-def coin_tier(symbol: str) -> int:
-    """Return the risk tier for *symbol*, falling back to DEFAULT_TIER."""
-    return COIN_RISK_TIERS.get(symbol, DEFAULT_TIER)
+def coin_tier(symbol: str, at: date | None = None) -> int:
+    """Return the risk tier for *symbol*.
+
+    Order of precedence:
+      1. DB row with max(computed_at) ≤ *at* (or absolute latest if at is None)
+      2. ``COIN_RISK_TIERS_BASELINE`` hardcoded baseline
+      3. ``DEFAULT_TIER``
+
+    DB lookup failures (table missing, no DATABASE_URL) silently fall back
+    to baseline — the decider must never crash because tier history is empty.
+    """
+    try:
+        from db.coin_tiers import get_tier_at
+        db_tier = get_tier_at(symbol, as_of=at)
+        if db_tier is not None:
+            return db_tier
+    except Exception:
+        # Table may not exist yet (fresh DB) or DB unavailable — fall through.
+        pass
+    return COIN_RISK_TIERS_BASELINE.get(symbol, DEFAULT_TIER)
 
 
-def is_allowed(symbol: str, risk_level: int) -> bool:
+def is_allowed(symbol: str, risk_level: int, at: date | None = None) -> bool:
     """True if *symbol* is allowed at the given user *risk_level*."""
-    return coin_tier(symbol) <= risk_level
+    return coin_tier(symbol, at=at) <= risk_level
