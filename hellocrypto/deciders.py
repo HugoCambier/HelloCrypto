@@ -32,6 +32,7 @@ DEFAULTS = {
     "rebuy_cooldown_hours":  0.0,        # anti-whipsaw: hours before re-entering a sold sym
     "enable_regime_stance":  True,       # modulate threshold+top_n via market stance
     "exit_signal":           "trend_1d", # which signal triggers bear-confirm exits
+    "score_exit_threshold":  5,          # anti-whipsaw: block exit while score >= this
 }
 
 # Per-stance overrides. ``exit_signal`` switches the source of the bearish-trend
@@ -39,10 +40,13 @@ DEFAULTS = {
 # (~25h lag). In defensive stances we want faster exits, so we read from the
 # faster signal. ``top_n=0`` in CASH effectively blocks all new entries.
 STANCE_PARAMS: dict[str, dict] = {
-    "DEPLOY":    {"buy_threshold": 7,  "top_n": 4, "exit_signal": "trend_1d"},
-    "SELECTIVE": {"buy_threshold": 8,  "top_n": 3, "exit_signal": "trend_1d"},
-    "PRESERVE":  {"buy_threshold": 9,  "top_n": 2, "exit_signal": "trend"},
-    "CASH":      {"buy_threshold": 11, "top_n": 0, "exit_signal": "trend"},
+    # ``score_exit_threshold`` gates exits by a holistic score check. We turn
+    # the gate ON in bull/neutral stances (let winners run, ignore intraday
+    # noise) and OFF in defensive stances (exit fast, don't second-guess).
+    "DEPLOY":    {"buy_threshold": 7,  "top_n": 4, "exit_signal": "trend_1d", "score_exit_threshold": 5},
+    "SELECTIVE": {"buy_threshold": 8,  "top_n": 3, "exit_signal": "trend_1d", "score_exit_threshold": 5},
+    "PRESERVE":  {"buy_threshold": 9,  "top_n": 2, "exit_signal": "trend",    "score_exit_threshold": 99},
+    "CASH":      {"buy_threshold": 11, "top_n": 0, "exit_signal": "trend",    "score_exit_threshold": 99},
 }
 
 # CASH triggers — leading signals so we don't lag the lagging trend_1d.
@@ -166,6 +170,12 @@ def regime_decision(
     cooldown_sec = float(p["rebuy_cooldown_hours"]) * 3600
 
     # ── Exits ───────────────────────────────────────────────────────────────
+    # Trend-bear timer must elapse AND the holistic score must have fallen
+    # under ``score_exit_threshold`` — this anti-whipsaw guard prevents the
+    # 1h trend from kicking us out of positions whose multi-signal score
+    # still says the setup is sound (the -$60 net signal-exit problem we
+    # measured in the 600d backtest).
+    score_exit_thr = int(p["score_exit_threshold"])
     actions: list[dict] = []
     selling_now: set[str] = set()
     for sym in list(holdings):
@@ -173,14 +183,16 @@ def regime_decision(
             continue
         bear_ts = bear_since.get(sym)
         ent_ts  = entry_ts.get(sym, now_ts)
+        sym_score = scores.get(sym, 5)
         if (bear_ts is not None
                 and (now_ts - bear_ts) >= confirm_sec
-                and (now_ts - ent_ts) >= min_hold_sec):
+                and (now_ts - ent_ts) >= min_hold_sec
+                and sym_score < score_exit_thr):
             actions.append({
                 "type":   "sell",
                 "symbol": sym,
                 "qty":    holdings[sym]["qty"],
-                "reason": f"{exit_signal} baissier confirmé ({p['trend_confirm_hours']:g}h)",
+                "reason": f"{exit_signal} baissier ({p['trend_confirm_hours']:g}h) + score {sym_score}<{score_exit_thr}",
             })
             selling_now.add(sym)
             last_sell_ts[sym] = now_ts

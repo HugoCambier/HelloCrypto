@@ -144,21 +144,24 @@ def test_bear_since_tracked_per_signal():
     assert "BARUSDC" in st["bear_since_1d"]
 
 
-def test_preserve_exits_on_intraday_signal():
-    """PRESERVE stance triggers exits on intraday `trend`, not the daily SMA."""
+def test_preserve_exits_on_intraday_signal_when_score_weak():
+    """PRESERVE stance triggers exits on intraday `trend` *iff* the score
+    has also fallen under the anti-whipsaw threshold."""
     market = {
         # BTC trend_1d baissier → PRESERVE. BTC trend haussier and no drawdown
         # so CASH is NOT triggered.
         "BTCUSDC": {"trend_1d": "baissier", "trend": "haussier",
                     "price": 100.0, "drawdown_pct_7d": 0.0,
                     "macd": {"histogram": 0}, "sma7": 100.0, "sma25": 100.0},
-        # FOO: daily still bullish, but intraday flipped bear.
+        # FOO: daily bullish but intraday bearish, with weak multi-signal
+        # state pushing the score under the exit threshold (5).
+        # Score: 5 +2 (trend_1d) -1 (trend) -1 (MACD) -1 (sma cross)
+        #        -3 (RSI>75) = 1
         "FOOUSDC": {"trend_1d": "haussier", "trend": "baissier",
-                    "price": 100.0, "macd": {"histogram": 0},
-                    "sma7": 100.0, "sma25": 100.0},
+                    "price": 100.0, "macd": {"histogram": -1.0},
+                    "sma7": 95.0, "sma25": 100.0, "rsi14": 80.0},
     }
     now = 1_000_000.0
-    # FOO has been intraday-bear for 25h, entered 30h ago.
     state = {
         "bear_since_1h": {"FOOUSDC": now - 25 * 3600},
         "bear_since_1d": {},
@@ -174,7 +177,89 @@ def test_preserve_exits_on_intraday_signal():
     assert result["stance"] == "PRESERVE"
     sells = [a for a in result["actions"] if a["type"] == "sell"]
     assert [s["symbol"] for s in sells] == ["FOOUSDC"]
-    assert "trend baissier" in sells[0]["reason"]
+
+
+def test_score_gate_blocks_whipsaw_in_DEPLOY():
+    """In DEPLOY/SELECTIVE the score gate is ON: a strong-score position
+    survives a trend_1d flip if other signals still support it."""
+    # BTC haussier → DEPLOY. FOO with trend_1d just-flipped but otherwise
+    # bullish: score 5 -2 (trend_1d) +1 (trend) +1 (MACD) +1 (sma) = 6 ≥ 5.
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        "FOOUSDC": {"trend_1d": "baissier", "trend": "haussier",
+                    "price": 100.0, "macd": {"histogram": 1.0},
+                    "sma7": 105.0, "sma25": 100.0},
+    }
+    now = 1_000_000.0
+    state = {
+        "bear_since_1d": {"FOOUSDC": now - 100 * 3600},
+        "bear_since_1h": {},
+        "entry_ts":      {"FOOUSDC": now - 100 * 3600},
+    }
+    result, _ = regime_decision(
+        market_raw=market, holdings={"FOOUSDC": {"qty": 1.0}}, cash=0,
+        cycle=0, now_ts=now,
+        params={"decide_every_cycles": 1,
+                "trend_confirm_hours": 24.0, "min_hold_hours": 12.0},
+        strat_state=state,
+    )
+    assert result["stance"] == "DEPLOY"
+    assert [a for a in result["actions"] if a["type"] == "sell"] == []
+
+
+def test_score_gate_allows_exit_in_DEPLOY_when_score_weak():
+    """Same DEPLOY context, but score is now genuinely weak → exit fires."""
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        # Weak: 5 -2 (trend_1d) -1 (trend) -1 (MACD) -1 (sma) -3 (RSI>75) = 0
+        "FOOUSDC": {"trend_1d": "baissier", "trend": "baissier",
+                    "price": 100.0, "macd": {"histogram": -1.0},
+                    "sma7": 95.0, "sma25": 100.0, "rsi14": 80.0},
+    }
+    now = 1_000_000.0
+    state = {
+        "bear_since_1d": {"FOOUSDC": now - 100 * 3600},
+        "bear_since_1h": {"FOOUSDC": now - 100 * 3600},
+        "entry_ts":      {"FOOUSDC": now - 100 * 3600},
+    }
+    result, _ = regime_decision(
+        market_raw=market, holdings={"FOOUSDC": {"qty": 1.0}}, cash=0,
+        cycle=0, now_ts=now,
+        params={"decide_every_cycles": 1,
+                "trend_confirm_hours": 24.0, "min_hold_hours": 12.0},
+        strat_state=state,
+    )
+    assert result["stance"] == "DEPLOY"
+    assert [a["symbol"] for a in result["actions"] if a["type"] == "sell"] == ["FOOUSDC"]
+
+
+def test_score_gate_off_in_PRESERVE_exits_on_intraday_alone():
+    """In PRESERVE the gate is off (threshold 99): exit on intraday trend
+    fires regardless of score — defensive stance prioritizes speed."""
+    market = {
+        "BTCUSDC": {"trend_1d": "baissier", "trend": "haussier",
+                    "price": 100.0, "drawdown_pct_7d": 0.0,
+                    "macd": {"histogram": 0}, "sma7": 100.0, "sma25": 100.0},
+        # FOO has a HIGH score (would block in DEPLOY) but PRESERVE bypasses.
+        "FOOUSDC": {"trend_1d": "haussier", "trend": "baissier",
+                    "price": 100.0, "macd": {"histogram": 1.0},
+                    "sma7": 105.0, "sma25": 100.0},
+    }
+    now = 1_000_000.0
+    state = {
+        "bear_since_1h": {"FOOUSDC": now - 25 * 3600},
+        "bear_since_1d": {},
+        "entry_ts":      {"FOOUSDC": now - 30 * 3600},
+    }
+    result, _ = regime_decision(
+        market_raw=market, holdings={"FOOUSDC": {"qty": 1.0}}, cash=0,
+        cycle=0, now_ts=now,
+        params={"decide_every_cycles": 1,
+                "trend_confirm_hours": 24.0, "min_hold_hours": 12.0},
+        strat_state=state,
+    )
+    assert result["stance"] == "PRESERVE"
+    assert [a["symbol"] for a in result["actions"] if a["type"] == "sell"] == ["FOOUSDC"]
 
 
 def test_deploy_does_not_exit_on_intraday_alone():

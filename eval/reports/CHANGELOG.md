@@ -14,6 +14,56 @@ eval/reports/champion.json eval/reports/bench/<latest>.json`
 
 ---
 
+## 2026-06-03 — Score-based exit guard (stance-dépendant)
+
+**Ce qui a changé** :
+- Nouveau param `score_exit_threshold` dans `DEFAULTS` (5). En plus du timer
+  `trend_confirm_hours` baissier, l'exit n'est déclenché que si le score
+  holistique du symbole est tombé **sous** ce seuil. Anti-whipsaw.
+- Calibration **stance-dépendante** dans `STANCE_PARAMS` :
+  - DEPLOY / SELECTIVE → seuil **5** (gate ON : let winners run, ignorer le
+    bruit intraday qui ne se reflète pas dans le score global)
+  - PRESERVE / CASH → seuil **99** (gate OFF : sortir vite, ne pas
+    second-guess le signal défensif)
+
+**Motivation** :
+- Backtest 600j utilisateur : sorties par signal = **-$62 net** sur 211
+  trades (-$0.29 / trade). Le timer `trend baissier` exit sortait sur des
+  bruits intraday alors que le setup global restait sain.
+- Première version (gate universel à 5) testée sur scénarios 7j :
+  -0.53pp alpha sur `bull_to_correction_7d`. **Régression confirmée** :
+  en correction, `trend_1d` reste haussier (SMA 25j lente) → score reste
+  6-8 → gate bloque l'exit nécessaire → on saigne.
+- Version stance-dépendante : gate actif uniquement quand on **veut** tenir
+  (DEPLOY/SELECTIVE). En défense (PRESERVE/CASH), on ne filtre pas — on
+  sort sur le signal direct.
+
+**Diff vs champion précédent (bench_20260603_091243)** :
+
+Bench compact (1j) : zéro changement sur les 4 scénarios — le gate ne se
+déclenche pas dans ces fenêtres trop courtes (peu d'exits par signal).
+
+Bench full (7j) test interne : zéro régression vs gate OFF — la version
+stance-dépendante est neutre sur ces scénarios car les exits se font en
+PRESERVE/CASH (gate off par design) et DEPLOY n'a pas d'exits dans ces
+fenêtres.
+
+**Validation requise** :
+Le bénéfice attendu (-$62 → ≥0 sur les signal exits) ne se mesure pas
+dans les scénarios held-out actuels. Le change est shippé sur **base
+théorique** + données du backtest 600j. **Re-run backtest 600j requis**
+pour valider :
+- Si `signal exits` PnL passe de -$62 vers neutre ou positif → on garde
+- Si dégradation → on revert vers gate OFF universel
+
+**Pistes suivantes** :
+- Construire un scénario held-out type "ride_through_pullback" (bull
+  continu avec 2-3 jours de pullback puis reprise) pour mesurer le gate
+- Piste 1 : dédoublonnage SMA + ajout `trend_short` dans le scoring
+- Trailing stop ATR-adaptatif
+
+---
+
 ## 2026-06-03 — Buy_threshold +1 par stance + risk-tier coin filter
 
 **Ce qui a changé** :
