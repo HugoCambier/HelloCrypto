@@ -32,10 +32,13 @@ from .api import (
     get_fear_and_greed,
     load_config,
 )
+from .coin_tiers import is_allowed as _coin_allowed
 from .deciders import regime_decision
 from .llm import call as llm_call
 from .prompts import SYSTEM, build_analysis
 from .trading import FEE_RATE, paper_buy, paper_sell
+
+HOUR_MS = 3_600_000
 
 log = logging.getLogger(__name__)
 
@@ -105,12 +108,17 @@ def _enrich_from_klines(symbols: list[str], all_klines: dict,
     result = {}
     for sym in symbols:
         kl    = all_klines[sym]
+        if i >= len(kl) or kl[i] is None:
+            continue  # symbol has no data at this hour
         kl_1d = all_klines_1d.get(sym, [])
+        # Skip None entries in the lookback window (gaps in low-liquidity pairs).
         start = max(0, i - 49)
-        closes  = [float(kl[j][4]) for j in range(start, i + 1)]
-        volumes = [float(kl[j][5]) for j in range(start, i + 1)]
-        highs   = [float(kl[j][2]) for j in range(max(0, i - 23), i + 1)]
-        lows    = [float(kl[j][3]) for j in range(max(0, i - 23), i + 1)]
+        closes  = [float(kl[j][4]) for j in range(start, i + 1) if kl[j] is not None]
+        volumes = [float(kl[j][5]) for j in range(start, i + 1) if kl[j] is not None]
+        highs   = [float(kl[j][2]) for j in range(max(0, i - 23), i + 1) if kl[j] is not None]
+        lows    = [float(kl[j][3]) for j in range(max(0, i - 23), i + 1) if kl[j] is not None]
+        if len(closes) < 2:
+            continue  # not enough data for any indicator
         ts_ms   = int(kl[i][0])
 
         price   = closes[-1]
@@ -139,15 +147,17 @@ def _enrich_from_klines(symbols: list[str], all_klines: dict,
         chg_24h = round((closes[-1] - closes[-25]) / closes[-25] * 100, 2) \
                   if len(closes) >= 25 else 0.0
 
-        # ATR needs matching-length highs/lows/closes — use a dedicated 15-bar
-        # window. The earlier ``highs``/``lows`` (24-bar) and ``closes`` (50-bar)
-        # have different sizes and can't be fed to _compute_atr safely.
+        # ATR needs matching-length highs/lows/closes from a dedicated 15-bar
+        # window. Aligned klines may contain None entries (gaps in the source
+        # data) — filter them out and only compute ATR if enough bars remain.
         atr_val = None
         if i >= 14:
-            atr_h = [float(kl[j][2]) for j in range(i - 14, i + 1)]
-            atr_l = [float(kl[j][3]) for j in range(i - 14, i + 1)]
-            atr_c = [float(kl[j][4]) for j in range(i - 14, i + 1)]
-            atr_val = _compute_atr(atr_h, atr_l, atr_c, period=14)
+            atr_window = [kl[j] for j in range(i - 14, i + 1) if kl[j] is not None]
+            if len(atr_window) >= 15:
+                atr_h = [float(k[2]) for k in atr_window]
+                atr_l = [float(k[3]) for k in atr_window]
+                atr_c = [float(k[4]) for k in atr_window]
+                atr_val = _compute_atr(atr_h, atr_l, atr_c, period=14)
         result[sym] = {
             "price":          price,
             "rsi14":          rsi14,
@@ -246,7 +256,10 @@ def _make_snapshot(current_step, total_steps, ts_ms, cash, budget, holdings,
 def _check_stops(sym, all_klines, i, holdings, prices, peak_prices,
                  stop_loss, trail_stop):
     """Return (triggered, action_label, sell_price) for a symbol."""
-    candle_low = float(all_klines[sym][i][3])
+    kl_now = all_klines[sym][i] if i < len(all_klines[sym]) else None
+    if kl_now is None or sym not in prices:
+        return False, "", 0.0  # no data for this symbol this hour — skip
+    candle_low = float(kl_now[3])
     entry      = holdings[sym]["avg_price"]
     peak       = peak_prices.get(sym, entry)
     cur        = prices[sym]
@@ -309,13 +322,27 @@ def run_live(
 
     end_ms   = int(datetime.now(UTC).timestamp() * 1000)
     start_ms = _start_ms_from(start_date, days)
+    # Align start_ms / end_ms to UTC hourly boundaries so lookup keys match
+    # exactly the open-time timestamps Binance returns for 1h klines.
+    start_ms = ((start_ms + HOUR_MS - 1) // HOUR_MS) * HOUR_MS
+    end_ms   = (end_ms // HOUR_MS) * HOUR_MS
     # 1d klines need 25+ finalized candles before the run starts so the daily
     # SMA25 is warm on the first decision; pull 30 extra days to be safe.
     start_ms_1d = start_ms - 30 * 86_400_000
 
     cfg = load_config()
 
-    # ── Phase 1 : fetch klines (1h pour la replay, 1d pour le trend daily) ───
+    # ── Phase 1a : pré-filtre par tier (don't fetch what we won't trade) ─────
+    excluded_by_tier = [s for s in symbols if not _coin_allowed(s, risk_level)]
+    if excluded_by_tier:
+        log.info("[BACKTEST] Tier > risk_level %d, exclu du fetch: %s",
+                 risk_level, ", ".join(excluded_by_tier))
+    symbols = [s for s in symbols if s not in excluded_by_tier]
+
+    if not symbols:
+        return {"error": "Aucun symbole compatible avec le risk_level demandé"}
+
+    # ── Phase 1b : fetch klines (1h pour la replay, 1d pour le trend daily) ──
     all_klines: dict[str, list]    = {}
     all_klines_1d: dict[str, list] = {}
     for idx, sym in enumerate(symbols):
@@ -335,7 +362,7 @@ def run_live(
             log.warning("[BACKTEST] %s: échec fetch 1d (%s) — trend_1d sera None", sym, exc)
             all_klines_1d[sym] = []
 
-    # Drop symbols with insufficient history so one bad pair doesn't abort the run
+    # ── Phase 1c : drop symbols with insufficient history ────────────────────
     skipped = [s for s, k in all_klines.items() if len(k) <= warmup]
     for s in skipped:
         log.warning("[BACKTEST] %s: %d bougies (< %d), exclu du run", s, len(all_klines[s]), warmup)
@@ -345,25 +372,62 @@ def run_live(
     if not symbols:
         return {"error": "Aucun symbole avec suffisamment de données (min ~50 bougies)"}
 
-    min_len = min(len(v) for v in all_klines.values())
-    max_len = max(len(v) for v in all_klines.values())
-    # When one symbol stops trading (low-volume gaps) before the others, min_len
-    # truncates everyone to the shortest series — silently cutting hours off
-    # the end of the run. Identify the bottleneck so the user sees why.
-    tail_truncated_hours = max(0, max_len - min_len)
-    tail_bottleneck = [
-        s for s, k in all_klines.items() if len(k) == min_len
-    ] if tail_truncated_hours > 0 else []
-    skipped_msg = f" — {len(skipped)} crypto(s) exclue(s): {', '.join(skipped)}" if skipped else ""
-    if skipped_msg:
-        log.info("[BACKTEST] Run sur %d symbole(s)%s", len(symbols), skipped_msg)
-    if tail_truncated_hours > 0:
-        log.warning(
-            "[BACKTEST] Période tronquée de %dh à la fin par %s (min_len=%d vs max_len=%d)",
-            tail_truncated_hours, ",".join(tail_bottleneck), min_len, max_len,
-        )
+    # ── Phase 2 : timestamp alignment ────────────────────────────────────────
+    # Iterate by GLOBAL HOUR, not per-symbol index. This fixes two bugs:
+    # (a) Late-launch symbols (e.g. POLUSDC born 2024-09-13) used to truncate
+    #     the entire run via ``min_len`` ; now they simply don't participate
+    #     for the cycles before their first kline.
+    # (b) Symbols with intra-period gaps (low-liquidity USDC pairs) used to
+    #     index-shift relative to BTC, so prices['SOL'] at iteration i was a
+    #     different DATE than prices['BTC'] at the same i. Now both keys at
+    #     index i resolve to the exact same hourly timestamp.
+    total_hours = (end_ms - start_ms) // HOUR_MS
+    aligned_klines:    dict[str, list] = {}
+    aligned_klines_1d: dict[str, list] = {}
+    for sym in symbols:
+        ts_to_k = {int(k[0]): k for k in all_klines[sym]}
+        aligned_klines[sym] = [ts_to_k.get(start_ms + i * HOUR_MS) for i in range(total_hours)]
+        # Daily klines stay timestamp-queryable (sparse, ~30/year) — keep as-is.
+        aligned_klines_1d[sym] = all_klines_1d.get(sym, [])
 
-    total_steps   = min_len - warmup
+    # ── Phase 3 : exclude late-launch symbols (<50% coverage of requested range) ─
+    # Forward-fill *within* the run is acceptable (gaps of a few hours), but
+    # a symbol that doesn't exist for half the period would skew breadth and
+    # confuse the user. Drop with explicit warning.
+    late_launch: list[tuple[str, float]] = []
+    for sym in list(aligned_klines.keys()):
+        valid = sum(1 for k in aligned_klines[sym] if k is not None)
+        coverage = valid / total_hours if total_hours else 0
+        if coverage < 0.5:
+            late_launch.append((sym, coverage))
+            del aligned_klines[sym]
+            aligned_klines_1d.pop(sym, None)
+    for sym, cov in late_launch:
+        log.warning("[BACKTEST] %s: %.0f%% de coverage seulement (lance trop tard / délisté) — exclu",
+                    sym, cov * 100)
+    symbols = list(aligned_klines.keys())
+
+    if not symbols:
+        return {"error": "Aucun symbole couvre suffisamment la période demandée"}
+
+    skipped_msg = ""
+    if skipped or excluded_by_tier or late_launch:
+        parts = []
+        if excluded_by_tier:
+            parts.append(f"tier: {', '.join(excluded_by_tier)}")
+        if skipped:
+            parts.append(f"data<warmup: {', '.join(skipped)}")
+        if late_launch:
+            parts.append(f"coverage<50%: {', '.join(s for s, _ in late_launch)}")
+        skipped_msg = " — exclus (" + " ; ".join(parts) + ")"
+    log.info("[BACKTEST] Run sur %d symbole(s)%s", len(symbols), skipped_msg)
+
+    # The remaining code iterates from warmup up to total_hours.  Replace the
+    # legacy ``min_len``-based view with the aligned one.
+    min_len      = total_hours
+    all_klines   = aligned_klines     # downstream code reads this name
+    all_klines_1d = aligned_klines_1d
+    total_steps  = min_len - warmup
     cash          = budget
     holdings: dict = {}
     peak_prices: dict = {}
@@ -377,8 +441,8 @@ def run_live(
     timeseries: list = []
     strat_state: dict = {}  # last_decision_cycle for regime_decision cadence
     start_ts_iso = datetime.utcfromtimestamp(
-        int(all_klines[symbols[0]][warmup][0]) / 1000
-    ).strftime("%Y-%m-%d %H:%M") if all_klines else None
+        (start_ms + warmup * HOUR_MS) / 1000
+    ).strftime("%Y-%m-%d %H:%M")
 
     # Pre-fetch global context once (cached, doesn't change during replay)
     fear_greed    = get_fear_and_greed()
@@ -391,8 +455,16 @@ def run_live(
         if stop_event and stop_event.is_set():
             break
 
-        ts           = int(all_klines[symbols[0]][i][0])
-        prices       = {sym: float(all_klines[sym][i][4]) for sym in symbols}
+        # ts is deterministic from the global hour grid — independent of any
+        # symbol's index, so all symbols at i refer to the same wall-clock hour.
+        ts = start_ms + i * HOUR_MS
+        # Only include symbols that have actual data at this hour (no
+        # forward-fill — we want a price decision based on real market data).
+        prices = {sym: float(kl[4])
+                  for sym in symbols
+                  if (kl := all_klines[sym][i]) is not None}
+        if not prices:
+            continue  # global gap; advance the clock
         current_step = i - warmup + 1
 
         if not initial_prices:
@@ -626,9 +698,10 @@ def run_live(
         last_snap["start_ts"] = start_ts_iso
         if skipped:
             last_snap["skipped_symbols"] = skipped
-        if tail_truncated_hours > 0:
-            last_snap["tail_truncated_hours"] = tail_truncated_hours
-            last_snap["tail_bottleneck"]     = tail_bottleneck
+        if excluded_by_tier:
+            last_snap["excluded_by_tier"] = excluded_by_tier
+        if late_launch:
+            last_snap["excluded_late_launch"] = [s for s, _ in late_launch]
         if llm_mode:
             last_snap["llm_calls"] = llm_call_count
             if llm_last_error:
@@ -648,7 +721,7 @@ def run_live(
 
     # ── Final liquidation: sell all remaining positions at last price ─────────
     if holdings and prices:
-        final_ts = int(all_klines[symbols[0]][min_len - 1][0])
+        final_ts = start_ms + (min_len - 1) * HOUR_MS
         dt_str   = datetime.fromtimestamp(final_ts / 1000, tz=UTC).replace(tzinfo=None).isoformat()
         for sym in list(holdings):
             if sym not in prices:
@@ -690,9 +763,10 @@ def run_live(
         last_snap["start_ts"] = start_ts_iso
         if skipped:
             last_snap["skipped_symbols"] = skipped
-        if tail_truncated_hours > 0:
-            last_snap["tail_truncated_hours"] = tail_truncated_hours
-            last_snap["tail_bottleneck"]     = tail_bottleneck
+        if excluded_by_tier:
+            last_snap["excluded_by_tier"] = excluded_by_tier
+        if late_launch:
+            last_snap["excluded_late_launch"] = [s for s, _ in late_launch]
         if on_step:
             on_step(last_snap)
 
