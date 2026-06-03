@@ -221,6 +221,8 @@ def main() -> int:
     p.add_argument("--to",   dest="to_date",
                    help="Backfill up to YYYY-MM-DD (default: today)")
     p.add_argument("--at",   help="Single date YYYY-MM-DD (overrides --from/--to)")
+    p.add_argument("--symbols",
+                   help="Comma-separated symbols to restrict the compute to (default: full config watchlist)")
     p.add_argument("--log-level", default="INFO")
     args = p.parse_args()
 
@@ -231,7 +233,10 @@ def main() -> int:
     )
 
     init_coin_tiers_table()
-    watchlist = _load_watchlist()
+    if args.symbols:
+        watchlist = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
+    else:
+        watchlist = _load_watchlist()
     log.info("Watchlist (%d symbols): %s", len(watchlist), ", ".join(watchlist))
 
     if args.at:

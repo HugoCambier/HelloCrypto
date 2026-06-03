@@ -40,10 +40,12 @@ HelloCrypto/
 ├── runner/
 │   └── main.py          # Point d'entrée commun (agent / simulation)
 ├── scripts/
-│   ├── backfill_binance.py  # Bootstrap 12mo d'historique depuis Binance
-│   ├── snapshot_scenario.py # Capture un scénario figé pour replay
-│   ├── propose.py           # Proposer-agent : recherche de params supervisée (voir section dédiée)
-│   └── eval.py, compare.py  # Outils d'évaluation/comparaison
+│   ├── backfill_binance.py    # Bootstrap N mois d'historique depuis Binance
+│   ├── add_coin.py            # Onboard une nouvelle crypto (validation + backfill + tiers)
+│   ├── compute_coin_tiers.py  # Calcule les tiers de risque mensuels (vol/dd/beta)
+│   ├── snapshot_scenario.py   # Capture un scénario figé pour replay
+│   ├── propose.py             # Proposer-agent : recherche de params supervisée (voir section dédiée)
+│   └── eval.py, compare.py    # Outils d'évaluation/comparaison
 ├── templates/           # index.html, backtest.html, market.html
 ├── static/js/           # main.js, backtest.js, market.js, analytics.js, orders.js
 ├── .env.example         # Template des variables d'environnement
@@ -166,6 +168,17 @@ feedback bâties sur l'historique sont injectées dans le prompt à chaque déci
 poetry run python -m scripts.backfill_binance --days 365
 ```
 Charge 12 mois d'OHLCV horaires de toute la watchlist + F&G historique, calcule les indicateurs (RSI, MACD, Bollinger, ATR, SMA, trend), pré-tague le régime, et persiste dans `price_snapshots`. ~25 Mo / 87k lignes pour une watchlist de 10 symboles.
+
+**Ajouter une crypto à la watchlist** — un seul script orchestre les 4 étapes d'init (validation Binance → `config.json` → backfill klines → calcul des tiers historiques) :
+
+```bash
+poetry run python -m scripts.add_coin LTCUSDC
+poetry run python -m scripts.add_coin LTCUSDC --days 600 --from-date 2024-10-01  # fenêtre courte
+poetry run python -m scripts.add_coin LTCUSDC --skip-config                       # déjà dans config.json
+poetry run python -m scripts.add_coin LTCUSDC --skip-tiers                        # utilisable tout de suite avec tier=DEFAULT (6)
+```
+
+Idempotent : re-le lancer sans risque (watchlist append skip si déjà présent, klines et tiers en UPSERT). Le symbole est utilisable dès la fin du backfill — le calcul des tiers calibre ensuite le niveau de risque (vol/dd/beta) au lieu du `DEFAULT_TIER=6` du fallback.
 
 **Cycle de vie automatique** — le cron tick (ping `/api/cron/tick` toutes les 5 min) déclenche :
 
