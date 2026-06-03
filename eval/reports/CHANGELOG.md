@@ -14,6 +14,57 @@ eval/reports/champion.json eval/reports/bench/<latest>.json`
 
 ---
 
+## 2026-06-03 — ATR-adaptive trailing stop
+
+**Ce qui a changé** :
+- `trading.check_stops` accepte un `market_raw` optionnel et dérive le
+  trailing % par symbole : `trail = clamp(5%, 15%, K=5 × ATR/price)`.
+- Backtest (`_check_stops`) calcule ATR sur les 14 dernières bougies du
+  symbole et applique la même formule.
+- Eval runner et strategy.apply_paper_stops thread `market_raw`.
+- Fallback fixe (10%) si ATR indisponible.
+
+**Motivation** :
+Trailing fixe à 10% est trop tight sur BTC (atr_pct ~0.5% → grosse marge),
+trop loose sur DOGE/POL volatils (atr_pct ~2-3%). ATR-adaptive donne à
+chaque position une marge calibrée sur sa volatilité propre.
+
+**Diff vs champion (volume signal)** :
+
+Compact 1d : zéro changement — le trailing ne fire pas en 24 cycles.
+
+Full 7d (test interne) :
+| scénario | baseline α | ATR α | Δ |
+|----------|----------:|------:|---|
+| bull_to_correction_7d | -1.75% | **-0.17%** | **+1.58pp** |
+| greed_bull_7d | +3.43% | +0.93% | **-2.50pp** |
+| neutral_bull_7d | -1.08% | -1.07% | ~0 |
+| **Moyenne** | **+0.20%** | **-0.10%** | **-0.30pp** |
+
+**Trade-off fondamental** :
+- Trail plus tight → exit plus tôt sur les vraies corrections (gain
+  bull_to_correction +1.58pp d'alpha, DD -11.3% → -9.85%)
+- Trail plus tight → exit aussi sur pullbacks transients qui se reprennent
+  (perte greed_bull -2.50pp, on coupe avant le rebond)
+
+**Décision de ship** :
+Bench montre 7j moyenne -0.30pp avg. **Ce n'est PAS un clear win.** On
+ship en pariant sur le 600j user : si la distribution des événements en
+favorise les vraies corrections (vs pullbacks transients), ATR-adaptive
+gagne. Sinon on revert.
+
+**Critère de revert** :
+- Si DD 600j user augmente OU
+- Si trailing-stops PnL passe en dessous de +$70 (vs +$82 actuel)
+
+→ revert vers fixed 10%.
+
+**Pistes suivantes** :
+- Piste 3 : F&G index comme stance-modulator (signal indépendant)
+- LINK → tier 8 si confirmé loser persistant en 600j
+
+---
+
 ## 2026-06-03 — Volume confirmation (asymétrique, additif)
 
 **Ce qui a changé** :

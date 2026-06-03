@@ -94,16 +94,18 @@ def apply_paper_stops(
     stop_loss: float,
     trail_stop: float,
     cycle: int,
+    market_raw: dict | None = None,
 ) -> tuple[float, float, list[PaperTrade]]:
     """Sell every position that breaches a stop. Mutates `holdings`, `peak_prices`,
     `cooldown_map`.
 
-    Returns (cash_received_total, fees_total, executed_trades).
+    ``market_raw`` enables ATR-adaptive trailing if provided. Returns
+    (cash_received_total, fees_total, executed_trades).
     """
     cash_recv = 0.0
     fees      = 0.0
     trades: list[PaperTrade] = []
-    for sig in check_stops(holdings, prices, peak_prices, stop_loss, trail_stop):
+    for sig in check_stops(holdings, prices, peak_prices, stop_loss, trail_stop, market_raw):
         sym   = sig.symbol
         entry = holdings[sym]["avg_price"]
         result = paper_sell(sym, sig.qty, sig.price, holdings)

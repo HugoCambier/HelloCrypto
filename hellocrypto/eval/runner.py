@@ -265,10 +265,10 @@ def run(
 
         strategy.update_peak_prices(holdings, prices, peak_prices)
 
-        # stop-loss / trailing
+        # stop-loss / trailing (ATR-adaptive when market_raw supplies atr)
         recv, fees, stop_trades = strategy.apply_paper_stops(
             holdings, prices, peak_prices, cooldown_map,
-            stop_loss, trail_stop, idx,
+            stop_loss, trail_stop, idx, market_raw=cyc.market,
         )
         cash += recv
         total_fees += fees
