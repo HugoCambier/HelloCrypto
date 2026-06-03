@@ -14,6 +14,44 @@ eval/reports/champion.json eval/reports/bench/<latest>.json`
 
 ---
 
+## 2026-06-03 — Revert ATR-adaptive trailing (critère DD déclenché)
+
+**Ce qui a changé** :
+- `check_stops` revient au trailing fixe (param `trail_stop` direct).
+- `_check_stops` du backtest pareil — plus de calcul ATR par symbole.
+- `ATR_TRAIL_K/MIN/MAX` supprimés, helper `_adaptive_trail_pct` supprimé.
+- Le paramètre `market_raw` reste optionnel dans `check_stops` (réservé
+  pour usage futur — éventuellement piste sizing par volatilité plus tard).
+- `atr` reste calculé dans le snapshot marché (live + backtest enrich) —
+  on garde le champ disponible.
+
+**Motivation du revert** :
+Backtest 600j post-piste-2 :
+- DD : -33.9% → **-37.9%** (+4pp, critère explicite de revert du CHANGELOG)
+- Trades totaux : 268 → **388** (+45%) — over-trading
+- WR : 16.5% → 12.4% (-4pp)
+- Total return : +34.93% → +31.13% (-3.80pp)
+- vs BTC : +$27.84 → +$24.06 (-$3.78)
+
+Le trailing ATR-adaptive faisait bien plus de sorties (+$70 trailing PnL)
+mais déclenchait un cycle vicieux : exit serré → re-entrée rapide → exit
+serré → … Chaque cycle accumule des micro-pertes et la friction explose
+les signal exits (-$77 → -$138).
+
+**Leçon** : un trailing plus tight améliore mécaniquement la sortie
+individuelle mais dégrade le système global via le coût d'opportunité
+des re-entrées et la friction (fees). Le fixed 10% restait calibré.
+
+**Pistes encore en vie après revert** :
+- F&G modulator : gardé (bench +0.80pp sur bull_to_correction, signal
+  indépendant prouvé utile)
+- Volume signal asymétrique : gardé (effet modeste mais sans régression
+  prouvée en bench)
+- Multi-timeframe trend 4h, portfolio drawdown stop, LINK→tier 8 : à
+  attaquer ensuite
+
+---
+
 ## 2026-06-03 — Fear & Greed contrarian modulator
 
 **Ce qui a changé** :

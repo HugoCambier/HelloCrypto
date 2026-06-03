@@ -245,12 +245,7 @@ def _make_snapshot(current_step, total_steps, ts_ms, cash, budget, holdings,
 
 def _check_stops(sym, all_klines, i, holdings, prices, peak_prices,
                  stop_loss, trail_stop):
-    """Return (triggered, action_label, sell_price) for a symbol.
-
-    Trailing fraction is ATR-adaptive: ``trail_stop`` acts as a fallback if
-    the ATR-derived value is unavailable. See ``trading._adaptive_trail_pct``
-    for the formula — both code paths use the same K/min/max constants.
-    """
+    """Return (triggered, action_label, sell_price) for a symbol."""
     candle_low = float(all_klines[sym][i][3])
     entry      = holdings[sym]["avg_price"]
     peak       = peak_prices.get(sym, entry)
@@ -258,21 +253,9 @@ def _check_stops(sym, all_klines, i, holdings, prices, peak_prices,
     hard_loss  = (candle_low - entry) / entry
     trail_loss = (cur - peak) / peak
 
-    sym_trail = trail_stop
-    if i >= 14:
-        kl     = all_klines[sym]
-        highs  = [float(kl[j][2]) for j in range(i - 14, i + 1)]
-        lows   = [float(kl[j][3]) for j in range(i - 14, i + 1)]
-        closes = [float(kl[j][4]) for j in range(i - 14, i + 1)]
-        atr_val = _compute_atr(highs, lows, closes, period=14)
-        if atr_val is not None and cur > 0:
-            from .trading import ATR_TRAIL_K, ATR_TRAIL_MAX, ATR_TRAIL_MIN
-            raw = ATR_TRAIL_K * (atr_val / cur)
-            sym_trail = max(ATR_TRAIL_MIN, min(ATR_TRAIL_MAX, raw))
-
     if hard_loss < -stop_loss:
         return True, "SELL (stop-loss)", entry * (1 - stop_loss)
-    if trail_loss < -sym_trail and peak > entry and cur >= entry:
+    if trail_loss < -trail_stop and peak > entry and cur >= entry:
         return True, "SELL (trailing-stop)", cur
     return False, "", cur
 

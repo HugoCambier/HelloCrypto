@@ -95,36 +95,13 @@ def paper_sell(
 
 # ── Stop-loss checker ─────────────────────────────────────────────────────────
 
-ATR_TRAIL_K   = 5.0   # multiplier: trail_pct ≈ K * (ATR / price)
-ATR_TRAIL_MIN = 0.05  # never trail tighter than 5% — avoids whipsaw on stable assets
-ATR_TRAIL_MAX = 0.15  # never trail looser than 15% — caps tail risk on noisy alts
-
-
-def _adaptive_trail_pct(sym: str, cur_price: float, market_raw: dict | None,
-                        fallback: float) -> float:
-    """Per-symbol trailing % derived from ATR if available, else *fallback*.
-
-    Reasoning: a 10% trail is tight on a volatile alt (atr_pct ~3% → daily
-    range exceeds the trail, frequent whipsaw) and loose on stable BTC
-    (atr_pct ~0.5% → we give back 9% before exit). Scaling with ATR lets
-    each position breathe according to its own volatility.
-    """
-    if not market_raw or cur_price <= 0:
-        return fallback
-    atr = (market_raw.get(sym) or {}).get("atr")
-    if atr is None:
-        return fallback
-    raw = ATR_TRAIL_K * (atr / cur_price)
-    return max(ATR_TRAIL_MIN, min(ATR_TRAIL_MAX, raw))
-
-
 def check_stops(
     holdings: dict,
     prices: dict,
     peak_prices: dict,
     stop_loss: float,
     trail_stop: float,
-    market_raw: dict | None = None,
+    market_raw: dict | None = None,  # noqa: ARG001 (reserved for future use)
 ) -> list[StopSignal]:
     """Return stop signals for all positions that breach their thresholds.
 
@@ -133,9 +110,8 @@ def check_stops(
         prices:      Current market prices {symbol: float}.
         peak_prices: Highest price seen since entry {symbol: float}.
         stop_loss:   Hard stop fraction, e.g. 0.10 for 10 %.
-        trail_stop:  Default trailing fraction (fallback when ATR missing).
-        market_raw:  Optional per-symbol enriched data (must contain ``atr``)
-                     used to derive an adaptive trailing fraction per symbol.
+        trail_stop:  Trailing fraction, e.g. 0.10 for 10 %.
+        market_raw:  Reserved for future per-symbol stop logic (unused).
 
     Returns:
         List of StopSignal for each triggered position.
@@ -150,14 +126,13 @@ def check_stops(
 
         hard_loss  = (cur - entry) / entry
         trail_loss = (cur - peak)  / peak
-        sym_trail  = _adaptive_trail_pct(sym, cur, market_raw, trail_stop)
 
         if hard_loss < -stop_loss:
             log.warning("[STOP-LOSS] %s: %.1f%%", sym, hard_loss * 100)
             signals.append(StopSignal(sym, pos["qty"], cur, "stop-loss", hard_loss))
-        elif trail_loss < -sym_trail and peak > entry and cur >= entry:
-            log.warning("[TRAILING-STOP] %s: %.1f%% (trail=%.1f%%, peak $%.4f)",
-                        sym, trail_loss * 100, sym_trail * 100, peak)
+        elif trail_loss < -trail_stop and peak > entry and cur >= entry:
+            log.warning("[TRAILING-STOP] %s: %.1f%% depuis pic $%.4f",
+                        sym, trail_loss * 100, peak)
             signals.append(StopSignal(sym, pos["qty"], cur, "trailing-stop", trail_loss))
 
     return signals
