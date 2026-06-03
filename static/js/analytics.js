@@ -331,12 +331,13 @@ function _bucketTs(date, granularity) {
 }
 
 function _formatBucket(date, granularity) {
-  if (granularity === 'minute') return date.toISOString().slice(11, 16);
-  if (granularity === 'hour')   return date.toISOString().slice(11, 16);
-  if (granularity === 'day')    return date.toISOString().slice(5, 10);
-  if (granularity === 'week')   return date.toISOString().slice(5, 10);
-  if (granularity === 'month')  return date.toISOString().slice(0, 7);
-  return date.toISOString().slice(0, 16);
+  const iso = date.toISOString();
+  if (granularity === 'minute') return `${iso.slice(5, 10)} ${iso.slice(11, 16)}`;
+  if (granularity === 'hour')   return `${iso.slice(5, 10)} ${iso.slice(11, 16)}`;
+  if (granularity === 'day')    return iso.slice(5, 10);
+  if (granularity === 'week')   return iso.slice(5, 10);
+  if (granularity === 'month')  return iso.slice(0, 7);
+  return iso.slice(0, 16);
 }
 
 // Filter a timeseries (array of {ts, v, ...}) by period, then bucket by granularity.
