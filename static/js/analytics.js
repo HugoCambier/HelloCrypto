@@ -870,51 +870,109 @@ function renderHoldings(containerId, positions, prices) {
   }).join('');
 }
 
-// ─── Per-table symbol filter (multi-select chips) ────────────────────────────
+// ─── Per-table symbol filter (compact multi-select dropdown) ─────────────────
 // Persists selection in the container's dataset so it survives re-renders.
-// Empty dataset.symbols == "all selected" (sentinel that auto-grows when a
-// new symbol appears in history — otherwise unseen symbols would be hidden
-// by default).
+// Empty dataset.symbols == "all selected" — auto-grows when a new symbol
+// appears in history.
+//
+// Idempotent: re-rendering with the same {symbols, selection} state is a
+// no-op. This matters because backtest.js polls /api/backtest/status every
+// 1s and calls renderTradesTable on every poll; without idempotence the
+// dropdown DOM would be torn down and rebuilt 60×/min.
+const _symFilterClickListenerAttached = { v: false };
 function _renderSymbolFilter(containerId, allSymbols, selectedSet, onChange) {
   const el = document.getElementById(containerId);
   if (!el) return;
-  if (!allSymbols.length) { el.innerHTML = ''; el.dataset.symbols = ''; return; }
+  if (!allSymbols.length) {
+    if (el.innerHTML !== '') el.innerHTML = '';
+    el.dataset.symbols = '';
+    return;
+  }
   const allOn = selectedSet.size === allSymbols.length;
   el.dataset.symbols = allOn ? '' : [...selectedSet].join(',');
-  const chips = allSymbols.map(s => {
+
+  // Skip the DOM write when the rendered state hasn't changed.
+  const sig = `${allSymbols.length}|${allOn ? '*' : [...selectedSet].sort().join(',')}|${allSymbols.join(',')}`;
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  // Preserve open-state across rebuilds so toggling a checkbox doesn't
+  // close the dropdown.
+  const wasOpen = !!el.querySelector('.symfilter-menu.open');
+
+  const label = allOn
+    ? `Toutes (${allSymbols.length})`
+    : selectedSet.size === 0 ? 'Aucune' : `${selectedSet.size}/${allSymbols.length}`;
+  const items = allSymbols.map(s => {
     const on = selectedSet.has(s);
-    return `<button data-sym="${escHtml(s)}" class="fbtn ${on ? 'on' : ''}">${escHtml(shortSym(s))}</button>`;
+    return `<label class="symfilter-item">
+      <input type="checkbox" data-sym="${escHtml(s)}" ${on ? 'checked' : ''}>
+      <span>${escHtml(shortSym(s))}</span>
+    </label>`;
   }).join('');
-  el.innerHTML = `<div class="flex items-center gap-1 flex-wrap text-xs">
-    <span class="text-slate-500 mr-1">Cryptos</span>
-    <button data-sym="__all__" class="fbtn ${allOn ? 'on' : ''}">Tout</button>
-    ${chips}
+  el.innerHTML = `<div class="symfilter">
+    <button type="button" class="symfilter-btn" data-toggle>Cryptos · ${label} <span class="text-slate-500">▾</span></button>
+    <div class="symfilter-menu">
+      <div class="symfilter-actions">
+        <button type="button" class="symfilter-action" data-action="all">Tout</button>
+        <button type="button" class="symfilter-action" data-action="none">Aucune</button>
+      </div>
+      ${items}
+    </div>
   </div>`;
+
+  const menu = el.querySelector('.symfilter-menu');
+  if (wasOpen) menu.classList.add('open');
   el.onclick = (e) => {
-    const t = e.target.closest('button[data-sym]');
-    if (!t) return;
-    const sym = t.dataset.sym;
-    if (sym === '__all__') {
-      if (allOn) selectedSet.clear();
-      else { selectedSet.clear(); allSymbols.forEach(s => selectedSet.add(s)); }
-    } else if (selectedSet.has(sym)) {
-      selectedSet.delete(sym);
-    } else {
-      selectedSet.add(sym);
+    if (e.target.closest('[data-toggle]')) {
+      menu.classList.toggle('open');
+      return;
     }
-    _renderSymbolFilter(containerId, allSymbols, selectedSet, onChange);
-    if (onChange) onChange();
+    const action = e.target.closest('[data-action]')?.dataset.action;
+    if (action === 'all')  { selectedSet.clear(); allSymbols.forEach(s => selectedSet.add(s)); }
+    if (action === 'none') { selectedSet.clear(); }
+    if (action) {
+      _renderSymbolFilter(containerId, allSymbols, selectedSet, onChange);
+      if (onChange) onChange();
+      return;
+    }
+    const cb = e.target.closest('input[type="checkbox"][data-sym]');
+    if (cb) {
+      const sym = cb.dataset.sym;
+      if (cb.checked) selectedSet.add(sym); else selectedSet.delete(sym);
+      _renderSymbolFilter(containerId, allSymbols, selectedSet, onChange);
+      if (onChange) onChange();
+    }
   };
+
+  // Single outside-click listener for all dropdowns on the page.
+  if (!_symFilterClickListenerAttached.v) {
+    document.addEventListener('click', (e) => {
+      document.querySelectorAll('.symfilter-menu.open').forEach(m => {
+        if (!m.parentElement.contains(e.target)) m.classList.remove('open');
+      });
+    });
+    _symFilterClickListenerAttached.v = true;
+  }
 }
 
 // ─── Numbered pagination control (compact with ellipses) ─────────────────────
+// Idempotent (same signature → no DOM write). « / » jump to first/last page.
 function _renderPagination(el, current, totalPages, totalItems, onChange) {
   if (!el) return;
   if (totalPages <= 1) {
-    el.innerHTML = `<span class="text-xs text-slate-500">${totalItems} trade${totalItems === 1 ? '' : 's'}</span>`;
+    const sig = `single|${totalItems}`;
+    if (el.dataset.sig === sig) return;
+    el.dataset.sig = sig;
+    el.innerHTML = totalItems
+      ? `<span class="text-xs text-slate-500">1 page · ${totalItems} trade${totalItems === 1 ? '' : 's'}</span>`
+      : '';
     el.onclick = null;
     return;
   }
+  const sig = `${current}/${totalPages}/${totalItems}`;
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+
   const set = new Set([1, totalPages, current, current - 1, current + 1, 2, totalPages - 1]);
   const pages = [...set].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
   const items = [];
@@ -929,13 +987,15 @@ function _renderPagination(el, current, totalPages, totalItems, onChange) {
     const on = it === current;
     return `<button data-page="${it}" class="fbtn ${on ? 'on' : ''}">${it}</button>`;
   }).join('');
-  const prevDisabled = current === 1 ? 'disabled' : '';
-  const nextDisabled = current === totalPages ? 'disabled' : '';
+  const atStart = current === 1;
+  const atEnd   = current === totalPages;
   el.innerHTML = `<div class="flex items-center gap-1 flex-wrap text-xs">
-    <button data-page="${Math.max(1, current - 1)}" class="fbtn" ${prevDisabled}>‹</button>
+    <button data-page="1" class="fbtn" ${atStart ? 'disabled' : ''} title="Première page">«</button>
+    <button data-page="${Math.max(1, current - 1)}" class="fbtn" ${atStart ? 'disabled' : ''} title="Page précédente">‹</button>
     ${btns}
-    <button data-page="${Math.min(totalPages, current + 1)}" class="fbtn" ${nextDisabled}>›</button>
-    <span class="text-slate-500 ml-2">${totalItems} au total</span>
+    <button data-page="${Math.min(totalPages, current + 1)}" class="fbtn" ${atEnd ? 'disabled' : ''} title="Page suivante">›</button>
+    <button data-page="${totalPages}" class="fbtn" ${atEnd ? 'disabled' : ''} title="Dernière page">»</button>
+    <span class="text-slate-500 ml-2">${totalPages} pages · ${totalItems} trades</span>
   </div>`;
   el.onclick = (e) => {
     const b = e.target.closest('button[data-page]');
@@ -1032,31 +1092,46 @@ async function renderTradesTable(opts) {
 
   if (!trades.length) {
     header?.classList.add('hidden');
-    list.innerHTML = '<p class="text-xs text-slate-600 italic">Aucun trade dans la période sélectionnée</p>';
-    if (paginationEl) paginationEl.innerHTML = '';
+    if (list.dataset.sig !== 'empty') {
+      list.dataset.sig = 'empty';
+      list.innerHTML = '<p class="text-xs text-slate-600 italic">Aucun trade dans la période sélectionnée</p>';
+    }
+    if (paginationEl) {
+      if (paginationEl.dataset.sig !== 'empty') {
+        paginationEl.dataset.sig = 'empty';
+        paginationEl.innerHTML = '';
+      }
+    }
     return;
   }
   header?.classList.remove('hidden');
-  list.innerHTML = trades.map(t => {
-    const action = t.action || '';
-    const color = /BUY|Acheté/.test(action) ? 'text-green-400'
-                : /SELL|Vendu|stop/i.test(action) ? 'text-orange-400'
-                : 'text-slate-400';
-    const pnlVal = t.pnl;
-    const pnlStr = pnlVal == null ? '—' : `${pnlVal >= 0 ? '+' : ''}$${fmt(pnlVal)}`;
-    const pnlCls = pnlVal == null ? 'text-slate-500' : pnlVal >= 0 ? 'pnl-pos' : 'pnl-neg';
-    const reason = (t.reason || '').trim() || '—';
-    return `<div class="trade-row">
-      <span class="text-slate-500">${(t.timestamp || '').slice(0,16).replace('T',' ')}</span>
-      <span class="${color}">${escHtml(action)}</span>
-      <span class="text-slate-300">${escHtml(shortSym(t.symbol || ''))}</span>
-      <span class="text-slate-400 text-right">${t.price != null ? '$' + fmt(t.price, 4) : '—'}</span>
-      <span class="text-slate-400 text-right">${fmtQty(t.qty)}</span>
-      <span class="text-slate-400 text-right">${t.amount != null ? '$' + fmt(t.amount) : '—'}</span>
-      <span class="${pnlCls} text-right">${pnlStr}</span>
-      <span class="text-slate-400 truncate" title="${escHtml(reason)}">${escHtml(reason)}</span>
-    </div>`;
-  }).join('');
+
+  // Skip the heavy innerHTML write when the page contents haven't changed
+  // (eg. backtest polls every 1s but the visible page may be stable).
+  const rowsSig = `${currentPg}|${total}|${trades.map(t => `${t.id ?? t.timestamp}:${t.cycle ?? ''}`).join(';')}`;
+  if (list.dataset.sig !== rowsSig) {
+    list.dataset.sig = rowsSig;
+    list.innerHTML = trades.map(t => {
+      const action = t.action || '';
+      const color = /BUY|Acheté/.test(action) ? 'text-green-400'
+                  : /SELL|Vendu|stop/i.test(action) ? 'text-orange-400'
+                  : 'text-slate-400';
+      const pnlVal = t.pnl;
+      const pnlStr = pnlVal == null ? '—' : `${pnlVal >= 0 ? '+' : ''}$${fmt(pnlVal)}`;
+      const pnlCls = pnlVal == null ? 'text-slate-500' : pnlVal >= 0 ? 'pnl-pos' : 'pnl-neg';
+      const reason = (t.reason || '').trim() || '—';
+      return `<div class="trade-row">
+        <span class="text-slate-500">${(t.timestamp || '').slice(0,16).replace('T',' ')}</span>
+        <span class="${color}">${escHtml(action)}</span>
+        <span class="text-slate-300">${escHtml(shortSym(t.symbol || ''))}</span>
+        <span class="text-slate-400 text-right">${t.price != null ? '$' + fmt(t.price, 4) : '—'}</span>
+        <span class="text-slate-400 text-right">${fmtQty(t.qty)}</span>
+        <span class="text-slate-400 text-right">${t.amount != null ? '$' + fmt(t.amount) : '—'}</span>
+        <span class="${pnlCls} text-right">${pnlStr}</span>
+        <span class="text-slate-400 truncate" title="${escHtml(reason)}">${escHtml(reason)}</span>
+      </div>`;
+    }).join('');
+  }
 
   if (paginationEl) {
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
