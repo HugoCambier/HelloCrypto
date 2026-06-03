@@ -59,6 +59,11 @@ STANCE_PARAMS: dict[str, dict] = {
 CASH_BTC_DRAWDOWN_PCT     = 7.0  # BTC down this much from its 7d high
 CASH_BEAR_BREADTH_INTRA   = 0.7  # ratio of watchlist with intraday `trend` == baissier
 
+# Fear & Greed contrarian thresholds — raise the buy bar when crowd is greedy,
+# lower it when crowd capitulates. Classic mean-reversion on sentiment.
+FNG_EXTREME_GREED         = 75   # ≥ → harder to enter (crowd at the top)
+FNG_EXTREME_FEAR          = 25   # ≤ → easier to enter (crowd at the bottom)
+
 
 def _derive_stance(market_raw: dict) -> str:
     """Derive DEPLOY / SELECTIVE / PRESERVE / CASH from market signals.
@@ -114,6 +119,7 @@ def regime_decision(
     risk_level: int = 5,
     strat_state: dict[str, Any] | None = None,
     params: dict | None = None,
+    fng_value: int | None = None,
 ) -> tuple[dict, dict]:
     """Per-symbol deterministic decider with top-N cap and risk-aware sizing.
 
@@ -132,11 +138,22 @@ def regime_decision(
     p = _params(params)
     user_pinned = {k for k, v in (params or {}).items() if v is not None}
     stance = "OFF"
+    fng_adj = 0
     if p.get("enable_regime_stance"):
         stance = _derive_stance(market_raw)
         for k, v in STANCE_PARAMS[stance].items():
             if k not in user_pinned:
                 p[k] = v
+        # Contrarian sentiment modulation on top of stance: when the crowd
+        # is at extremes, the next move tends to mean-revert. Raise the bar
+        # in extreme greed, lower it in extreme fear. Only nudges by ±1, so
+        # it's a tiebreaker on borderline setups rather than a regime change.
+        if fng_value is not None and "buy_threshold" not in user_pinned:
+            if fng_value >= FNG_EXTREME_GREED:
+                fng_adj = +1
+            elif fng_value <= FNG_EXTREME_FEAR:
+                fng_adj = -1
+            p["buy_threshold"] = max(1, p["buy_threshold"] + fng_adj)
     st = dict(strat_state or {})
 
     # Cadence gate.
@@ -258,6 +275,9 @@ def regime_decision(
     summary_parts = [f"per-sym | held {held_after}/{p['top_n']}",
                      f"breadth bull={bull_count}/bear={bear_count}",
                      f"stance={stance}"]
+    if fng_adj:
+        sign = "+" if fng_adj > 0 else ""
+        summary_parts.append(f"fng={fng_value} (thr {sign}{fng_adj})")
     if blocked_tier:
         summary_parts.append(f"risk-tier bloque: {','.join(blocked_tier)}")
     if blocked_cooldown:

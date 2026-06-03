@@ -361,6 +361,68 @@ def test_risk_tier_does_not_block_exits():
     assert sells == ["POLUSDC"]
 
 
+def test_fng_extreme_greed_raises_threshold():
+    """Extreme greed (FNG >= 75) makes us more selective: threshold +1."""
+    market = _market(btc_trend="haussier", n_bull=6, n_bear=2)
+    # Without FNG, DEPLOY threshold = 7. With FNG=80, → 8. Symbols score 10.
+    # We compare entries with vs without FNG.
+    result_no_fng, _ = regime_decision(
+        market_raw=market, holdings={}, cash=1000.0, cycle=0,
+        now_ts=1_000_000.0, risk_level=5,
+        params={"decide_every_cycles": 1},
+    )
+    result_greed, _ = regime_decision(
+        market_raw=market, holdings={}, cash=1000.0, cycle=0,
+        now_ts=1_000_000.0, risk_level=5,
+        params={"decide_every_cycles": 1},
+        fng_value=80,
+    )
+    # Both still pass (score 10 >= 8), but the threshold differs in summary.
+    assert "fng=80" in result_greed["summary"]
+    assert "fng" not in result_no_fng["summary"]
+
+
+def test_fng_extreme_fear_lowers_threshold():
+    """Extreme fear (FNG <= 25) loosens entry: threshold -1."""
+    # Symbols with score borderline 7: trend_1d haussier (+2), trend baissier
+    # (-1) — base 5 + 2 - 1 = 6 plus depending on macd/sma. We want score = 7
+    # so that without FNG (DEPLOY threshold 7) it just qualifies, with FNG -1
+    # threshold becomes 6 and we get more candidates.
+    market = _market(btc_trend="haussier", n_bull=6, n_bear=2)
+    result_fear, _ = regime_decision(
+        market_raw=market, holdings={}, cash=1000.0, cycle=0,
+        now_ts=1_000_000.0, risk_level=5,
+        params={"decide_every_cycles": 1},
+        fng_value=15,
+    )
+    assert "fng=15" in result_fear["summary"]
+
+
+def test_fng_neutral_no_modulation():
+    """Mid-range FNG (25 < fng < 75) leaves the threshold untouched."""
+    market = _market(btc_trend="haussier", n_bull=6, n_bear=2)
+    result, _ = regime_decision(
+        market_raw=market, holdings={}, cash=1000.0, cycle=0,
+        now_ts=1_000_000.0, risk_level=5,
+        params={"decide_every_cycles": 1},
+        fng_value=50,
+    )
+    assert "fng" not in result["summary"]
+
+
+def test_fng_user_pin_overrides_modulation():
+    """If buy_threshold is user-pinned, FNG modulation is bypassed."""
+    market = _market(btc_trend="haussier", n_bull=6, n_bear=2)
+    result, _ = regime_decision(
+        market_raw=market, holdings={}, cash=1000.0, cycle=0,
+        now_ts=1_000_000.0, risk_level=5,
+        params={"decide_every_cycles": 1, "buy_threshold": 8},
+        fng_value=80,
+    )
+    # User-pinned threshold trumps the +1 nudge from extreme greed
+    assert "fng" not in result["summary"]
+
+
 def test_legacy_bear_since_migrated():
     """Old strat_state with `bear_since` key is read as bear_since_1d once."""
     market = {

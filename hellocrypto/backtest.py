@@ -539,6 +539,7 @@ def run_live(
             # que la simulation et le run réel. La cadence (decide_every_cycles)
             # est gérée par le décideur lui-même via ``strat_state``.
             market_raw = _enrich_from_klines(symbols, all_klines, all_klines_1d, i)
+            fng_v = (fear_greed or {}).get("value") if fear_greed else None
             decision, strat_state = regime_decision(
                 market_raw=market_raw, holdings=holdings, cash=cash,
                 cycle=current_step, now_ts=ts / 1000.0,
@@ -556,6 +557,7 @@ def run_live(
                     "rebuy_cooldown_hours": rebuy_cooldown_hours,
                     "enable_regime_stance": enable_regime_stance,
                 },
+                fng_value=fng_v,
             )
             actions = decision.get("actions", [])
             scores  = decision.get("scores", {}) or {}

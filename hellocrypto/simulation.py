@@ -548,11 +548,12 @@ def run(
         # ── Deterministic decider (approach C) — isolated from the LLM path ───
         if decider == "deterministic":
             from .deciders import regime_decision
+            fng_v = (fear_greed or {}).get("value") if fear_greed else None
             decision, strat_state = regime_decision(
                 market_raw=market_raw, holdings=holdings, cash=cash,
                 cycle=cycle, now_ts=time.time(),
                 risk_level=risk_level, strat_state=strat_state,
-                params=det_params,
+                params=det_params, fng_value=fng_v,
             )
             sentiment = decision.get("market_sentiment", "—")
             summary   = decision.get("summary", "")

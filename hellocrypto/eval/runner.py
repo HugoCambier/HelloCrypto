@@ -292,6 +292,7 @@ def run(
             # Use the *same* deterministic decider as live sim/réel/backtest so
             # the bench measures what actually ships in prod.
             from ..deciders import regime_decision
+            fng_v = (cyc.fear_greed or {}).get("value") if cyc.fear_greed else None
             decision, strat_state = regime_decision(
                 market_raw=cyc.market, holdings=holdings, cash=cash,
                 cycle=idx, now_ts=_ts_to_unix(cyc.timestamp),
@@ -303,6 +304,7 @@ def run(
                     **({"buy_threshold": cfg.buy_score_min}
                        if cfg.buy_score_min != 8 else {}),
                 },
+                fng_value=fng_v,
             )
             usage = None
         else:
