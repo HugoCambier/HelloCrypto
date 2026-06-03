@@ -358,7 +358,7 @@ def api_performance():
         "win_rate":          win_rate,
         "best_trade":        best_trade,
         "worst_trade":       worst_trade,
-        "history":           list(reversed(sorted_trades[-200:])),
+        "history":           list(reversed(sorted_trades[-2000:])),
         "timeseries":        timeseries,
         "bh_timeseries":     bh_ts,
         "btc_timeseries":    btc_ts,

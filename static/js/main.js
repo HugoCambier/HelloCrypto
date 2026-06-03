@@ -1129,14 +1129,22 @@ function _renderPnlChart() {
   }
 }
 
-function _renderTradesList() {
+function _renderTradesList(resetPage = false) {
   if (!_lastPerf) return;
+  if (resetPage) {
+    const list = document.getElementById('trades-list');
+    if (list) list.dataset.page = '1';
+  }
+  // Client-side pagination over the history already shipped by /api/performance
+  // (consumed by the charts + position synthesis): no extra DB roundtrip.
   renderTradesTable({
-    containerId: 'trades-list',
-    headerId:    'trades-header',
-    filterId:    'trades-filters',
-    history:     _lastPerf.history || [],
-    limit:       100,
+    containerId:      'trades-list',
+    headerId:         'trades-header',
+    filterId:         'trades-filters',
+    symbolFilterId:   'trades-symbol-filter',
+    paginationId:     'trades-pagination',
+    pageSize:         100,
+    history:          _lastPerf.history || [],
   });
 }
 
@@ -1481,7 +1489,7 @@ async function boot() {
   });
   renderFilterToolbar('trades-filters', {
     showGranularity: false, periodDefault: 'all',
-    onChange: () => _renderTradesList(),
+    onChange: () => _renderTradesList(true),
   });
 
   // No default selection — show empty state until user picks a run

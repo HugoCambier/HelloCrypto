@@ -64,6 +64,7 @@ function renderRunParamsTab() {
     ['Seuil achat',    fmtVal(p.buy_threshold)],
     ['Top-N panier',   fmtVal(p.top_n)],
     ['Confirm bear',   p.trend_confirm_hours != null ? `${p.trend_confirm_hours}h` : '—'],
+    ['Sortie signal',  p.disable_signal_exit ? 'désactivée (A/B)' : 'active'],
     ['Min-hold',       p.min_hold_hours != null ? `${p.min_hold_hours}h` : '—'],
     ['Cooldown rebuy', p.rebuy_cooldown_hours ? `${p.rebuy_cooldown_hours}h` : 'off'],
     ['Décision /N bougies', p.decide_every_n_candles ? `toutes les ${p.decide_every_n_candles}h` : 'chaque heure'],
@@ -137,11 +138,14 @@ function _buildRecapMarkdown() {
   // ── Holding period (h) + entry-score outcome, FIFO match BUY → SELL ───────
   // We pair each closing sell with its oldest open buy on the same symbol so
   // a partial-then-full sell still produces reasonable hold/score samples.
+  // The snapshot serves `history` newest-first for table rendering — FIFO
+  // matching needs chronological order, so iterate over a cycle-sorted copy.
   const cycleStack = {};
   const scoreStack = {};
   const holdHours = [];
   const scoredOutcomes = [];
-  for (const t of history) {
+  const chronological = history.slice().sort((a, b) => (a.cycle ?? 0) - (b.cycle ?? 0));
+  for (const t of chronological) {
     const sym = t.symbol;
     if (!sym) continue;
     cycleStack[sym] = cycleStack[sym] || [];
@@ -321,6 +325,7 @@ function _buildRecapMarkdown() {
     `- Stop-loss : ${fmtNum(p.stop_loss_pct, 1)}% · Trailing : ${fmtNum(p.trailing_stop_pct, 1)}%`,
     `- Risque : ${p.risk_level ?? '—'}/10`,
     `- Seuil achat ${p.buy_threshold ?? '—'} · top-N ${p.top_n ?? '—'} · confirm-bear ${p.trend_confirm_hours ?? '—'}h · min-hold ${p.min_hold_hours ?? '—'}h · cooldown ${p.rebuy_cooldown_hours ?? 0}h`,
+    ...(p.disable_signal_exit ? [`- **Sortie signal désactivée (A/B)** : seuls stop-loss et trailing peuvent fermer une position`] : []),
     `- Décision toutes les ${p.decide_every_n_candles ?? 4} bougie${(p.decide_every_n_candles ?? 4) > 1 ? 's' : ''} (1h chacune)`,
     `- Vitesse de simulation : ${p.speed ?? '—'}x`,
     '',
@@ -418,6 +423,7 @@ async function startBacktest() {
     stop_loss_pct:  Number(document.getElementById('bt-sl').value),
     trailing_stop_pct: Number(document.getElementById('bt-ts').value),
     enable_regime_stance: stanceOn,
+    disable_signal_exit: document.getElementById('bt-no-signal-exit')?.checked ?? false,
     buy_threshold:  Number(document.getElementById('bt-buy-thr').value),
     top_n:          Math.max(1, Number(document.getElementById('bt-top-n').value) || 3),
     trend_confirm_hours: Math.max(0, Number(document.getElementById('bt-trend-confirm').value) || 0),
@@ -550,12 +556,16 @@ function renderFromSnapshot(snap) {
 
   renderHoldings('holdings-list', snap.positions || []);
 
+  // Backtest trades live only in the in-memory snapshot (never persisted to
+  // the DB), so we paginate client-side over snap.history.
   renderTradesTable({
-    containerId: 'bt-trades-list',
-    headerId:    'bt-trades-header',
-    filterId:    'trades-filters',
-    history:     snap.history || [],
-    limit:       100,
+    containerId:    'bt-trades-list',
+    headerId:       'bt-trades-header',
+    filterId:       'trades-filters',
+    symbolFilterId: 'bt-trades-symbol-filter',
+    paginationId:   'bt-trades-pagination',
+    pageSize:       100,
+    history:        snap.history || [],
   });
 
   // Charts tab
@@ -624,7 +634,12 @@ function renderKpis(snap) {
   renderFilterToolbar('trades-filters', {
     showGranularity: false,
     periodDefault: 'all',
-    onChange: () => _latestSnap && renderFromSnapshot(_latestSnap),
+    onChange: () => {
+      // Period change resets the trades table to page 1.
+      const list = document.getElementById('bt-trades-list');
+      if (list) list.dataset.page = '1';
+      if (_latestSnap) renderFromSnapshot(_latestSnap);
+    },
   });
 
   try {

@@ -138,8 +138,11 @@
     .fbtn { padding:3px 9px; border-radius:5px; font-size:11px; color:#94a3b8; background:transparent; cursor:pointer; border:1px solid transparent; transition:all .15s; font-weight:500; }
     .fbtn:hover { color:#cbd5e1; background:#1e293b; }
     .fbtn.on { background:#1d4ed8; color:white; border-color:#1d4ed8; }
-    .trade-row { display:grid; grid-template-columns: 110px 80px 60px 80px 90px 80px 1fr; gap:8px; align-items:center; padding:6px 4px; border-bottom:1px solid #1e293b; font-size:12px; }
+    .trade-row { display:grid; grid-template-columns: 110px 90px 70px 90px 100px 90px 90px minmax(120px,1fr); gap:8px; align-items:center; padding:6px 4px; border-bottom:1px solid #1e293b; font-size:12px; min-width:830px; }
+    .trade-row > span.truncate { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .trade-header { font-size:10px; text-transform:uppercase; letter-spacing:.3px; color:#64748b; border-bottom:1px solid #334155; padding-bottom:6px; margin-bottom:4px; font-weight:600; }
+    .trades-scroll { overflow-x:auto; }
+    .trades-scroll::-webkit-scrollbar { height:6px; } .trades-scroll::-webkit-scrollbar-thumb { background:#334155; border-radius:3px; }
 
     .run-filter { padding:2px 8px; font-size:10px; font-weight:600; letter-spacing:.3px; text-transform:uppercase; border:1px solid transparent; background:transparent; color:#64748b; border-radius:4px; cursor:pointer; transition:all .15s; }
     .run-filter:hover { color:#cbd5e1; background:#1e293b; }
@@ -201,8 +204,6 @@
       .sidebar.collapsed { width:32px; }
       nav.shrink-0 { overflow-x:auto; }
       #rtab-cockpit, #rtab-charts, #rtab-orders { padding:1rem !important; }
-      .trade-row { grid-template-columns: 1fr 1fr; gap:4px 10px; padding:8px 6px; }
-      .trade-row.trade-header { display:none !important; }
       .kpi-hero-val { font-size:20px; }
       .modal-card { padding:18px; }
     }
@@ -579,16 +580,21 @@
               <button onclick="toggleLogs()" class="text-xs text-slate-500 hover:text-blue-300 transition-colors">Logs complets →</button>
             </div>
           </div>
-          <div id="trades-header" class="trade-row trade-header hidden">
-            <span>Date</span>
-            <span>Action</span>
-            <span>Crypto</span>
-            <span class="text-right">Prix</span>
-            <span class="text-right">Quantité</span>
-            <span class="text-right">Montant</span>
-            <span class="text-right">PnL</span>
+          <div id="trades-symbol-filter" class="mb-3"></div>
+          <div class="trades-scroll">
+            <div id="trades-header" class="trade-row trade-header hidden">
+              <span>Date</span>
+              <span>Action</span>
+              <span>Crypto</span>
+              <span class="text-right">Prix</span>
+              <span class="text-right">Quantité</span>
+              <span class="text-right">Montant</span>
+              <span class="text-right">PnL</span>
+              <span>Raison</span>
+            </div>
+            <div id="trades-list" class="text-sm text-slate-400 max-h-[28rem] overflow-y-auto">—</div>
           </div>
-          <div id="trades-list" class="text-sm text-slate-400 max-h-[28rem] overflow-y-auto">—</div>
+          <div id="trades-pagination" class="mt-3"></div>
         </div>
 
         </div><!-- /cockpit-content -->

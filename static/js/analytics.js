@@ -870,25 +870,174 @@ function renderHoldings(containerId, positions, prices) {
   }).join('');
 }
 
-// ─── Trade history with period filter ────────────────────────────────────────
-function renderTradesTable(opts) {
+// ─── Per-table symbol filter (multi-select chips) ────────────────────────────
+// Persists selection in the container's dataset so it survives re-renders.
+// Empty dataset.symbols == "all selected" (sentinel that auto-grows when a
+// new symbol appears in history — otherwise unseen symbols would be hidden
+// by default).
+function _renderSymbolFilter(containerId, allSymbols, selectedSet, onChange) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!allSymbols.length) { el.innerHTML = ''; el.dataset.symbols = ''; return; }
+  const allOn = selectedSet.size === allSymbols.length;
+  el.dataset.symbols = allOn ? '' : [...selectedSet].join(',');
+  const chips = allSymbols.map(s => {
+    const on = selectedSet.has(s);
+    return `<button data-sym="${escHtml(s)}" class="fbtn ${on ? 'on' : ''}">${escHtml(shortSym(s))}</button>`;
+  }).join('');
+  el.innerHTML = `<div class="flex items-center gap-1 flex-wrap text-xs">
+    <span class="text-slate-500 mr-1">Cryptos</span>
+    <button data-sym="__all__" class="fbtn ${allOn ? 'on' : ''}">Tout</button>
+    ${chips}
+  </div>`;
+  el.onclick = (e) => {
+    const t = e.target.closest('button[data-sym]');
+    if (!t) return;
+    const sym = t.dataset.sym;
+    if (sym === '__all__') {
+      if (allOn) selectedSet.clear();
+      else { selectedSet.clear(); allSymbols.forEach(s => selectedSet.add(s)); }
+    } else if (selectedSet.has(sym)) {
+      selectedSet.delete(sym);
+    } else {
+      selectedSet.add(sym);
+    }
+    _renderSymbolFilter(containerId, allSymbols, selectedSet, onChange);
+    if (onChange) onChange();
+  };
+}
+
+// ─── Numbered pagination control (compact with ellipses) ─────────────────────
+function _renderPagination(el, current, totalPages, totalItems, onChange) {
+  if (!el) return;
+  if (totalPages <= 1) {
+    el.innerHTML = `<span class="text-xs text-slate-500">${totalItems} trade${totalItems === 1 ? '' : 's'}</span>`;
+    el.onclick = null;
+    return;
+  }
+  const set = new Set([1, totalPages, current, current - 1, current + 1, 2, totalPages - 1]);
+  const pages = [...set].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+  const items = [];
+  let prev = 0;
+  for (const p of pages) {
+    if (p - prev > 1) items.push('…');
+    items.push(p);
+    prev = p;
+  }
+  const btns = items.map(it => {
+    if (it === '…') return `<span class="text-slate-600 px-1">…</span>`;
+    const on = it === current;
+    return `<button data-page="${it}" class="fbtn ${on ? 'on' : ''}">${it}</button>`;
+  }).join('');
+  const prevDisabled = current === 1 ? 'disabled' : '';
+  const nextDisabled = current === totalPages ? 'disabled' : '';
+  el.innerHTML = `<div class="flex items-center gap-1 flex-wrap text-xs">
+    <button data-page="${Math.max(1, current - 1)}" class="fbtn" ${prevDisabled}>‹</button>
+    ${btns}
+    <button data-page="${Math.min(totalPages, current + 1)}" class="fbtn" ${nextDisabled}>›</button>
+    <span class="text-slate-500 ml-2">${totalItems} au total</span>
+  </div>`;
+  el.onclick = (e) => {
+    const b = e.target.closest('button[data-page]');
+    if (!b || b.hasAttribute('disabled')) return;
+    const p = parseInt(b.dataset.page, 10);
+    if (p && p !== current) onChange(p);
+  };
+}
+
+// Client-side fallback (sim/backtest snapshots that aren't in the DB).
+function _slicePageFromHistory(history, ctx) {
+  const all = (history || []).filter(t =>
+    t.action && t.action !== 'ANALYSE' && t.action !== 'HOLD');
+  const allSymbols = [...new Set(all.map(t => t.symbol).filter(Boolean))].sort();
+  let filtered = filterTradesByPeriod(all, ctx.period);
+  if (ctx.symbols && ctx.symbols.length) {
+    const set = new Set(ctx.symbols);
+    filtered = filtered.filter(t => !t.symbol || set.has(t.symbol));
+  }
+  filtered.sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
+  const total = filtered.length;
+  const offset = (ctx.page - 1) * ctx.pageSize;
+  return {
+    trades: filtered.slice(offset, offset + ctx.pageSize),
+    total, page: ctx.page, pageSize: ctx.pageSize, symbols: allSymbols,
+  };
+}
+
+// ─── Trade history with period + symbol filter + pagination ──────────────────
+// Two modes (mutually exclusive):
+//   - opts.fetcher  → async ({page, pageSize, period, symbols}) → server result
+//                     Used for real + live sims (DB-backed).
+//   - opts.history  → static array, sliced client-side. Used for backtests
+//                     (in-memory snapshot, never hits the DB).
+async function renderTradesTable(opts) {
   const list = document.getElementById(opts.containerId);
   const header = opts.headerId ? document.getElementById(opts.headerId) : null;
   if (!list) return;
-  const filters = opts.filterId ? getFilters(opts.filterId) : { period: 'all' };
-  const filtered = filterTradesByPeriod((opts.history || []), filters.period);
-  const visible = filtered
-    .filter(t => t.action && t.action !== 'ANALYSE' && t.action !== 'HOLD')
-    .sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')))
-    .slice(0, opts.limit || 100);
 
-  if (!visible.length) {
+  const filterEl       = opts.filterId       ? document.getElementById(opts.filterId)       : null;
+  const symbolFilterEl = opts.symbolFilterId ? document.getElementById(opts.symbolFilterId) : null;
+  const paginationEl   = opts.paginationId   ? document.getElementById(opts.paginationId)   : null;
+
+  const period   = filterEl ? (getFilters(opts.filterId).period || 'all') : 'all';
+  const pageSize = opts.pageSize || 100;
+  const reqPage  = parseInt(list.dataset.page || '1', 10) || 1;
+
+  const symbolsCsv     = symbolFilterEl?.dataset.symbols || '';
+  const explicitSyms   = symbolsCsv ? symbolsCsv.split(',').filter(Boolean) : null;
+
+  // Loading placeholder only on first render; avoid flashing on filter clicks.
+  if (!list.dataset.loaded) {
+    list.innerHTML = '<p class="text-xs text-slate-600 italic">Chargement…</p>';
+  }
+
+  let result;
+  try {
+    if (opts.fetcher) {
+      result = await opts.fetcher({
+        page: reqPage, pageSize, period, symbols: explicitSyms,
+      });
+    } else {
+      result = _slicePageFromHistory(opts.history, {
+        page: reqPage, pageSize, period, symbols: explicitSyms,
+      });
+    }
+  } catch (e) {
+    list.innerHTML = `<p class="text-xs text-red-400">Erreur chargement (${escHtml(e.message || 'inconnu')})</p>`;
+    return;
+  }
+  list.dataset.loaded = '1';
+
+  const trades     = result.trades || [];
+  const total      = result.total || 0;
+  const currentPg  = result.page || reqPage;
+  const allSymbols = result.symbols || [];
+  list.dataset.page = String(currentPg);
+
+  // Re-mount chip filter against the up-to-date symbol set.
+  if (symbolFilterEl) {
+    let selectedSet;
+    if (!symbolsCsv) {
+      selectedSet = new Set(allSymbols);
+    } else {
+      const prev = new Set(symbolsCsv.split(',').filter(Boolean));
+      selectedSet = new Set(allSymbols.filter(s => prev.has(s)));
+      if (!selectedSet.size) selectedSet = new Set(allSymbols);
+    }
+    _renderSymbolFilter(opts.symbolFilterId, allSymbols, selectedSet, () => {
+      list.dataset.page = '1';
+      renderTradesTable(opts);
+    });
+  }
+
+  if (!trades.length) {
     header?.classList.add('hidden');
     list.innerHTML = '<p class="text-xs text-slate-600 italic">Aucun trade dans la période sélectionnée</p>';
+    if (paginationEl) paginationEl.innerHTML = '';
     return;
   }
   header?.classList.remove('hidden');
-  list.innerHTML = visible.map(t => {
+  list.innerHTML = trades.map(t => {
     const action = t.action || '';
     const color = /BUY|Acheté/.test(action) ? 'text-green-400'
                 : /SELL|Vendu|stop/i.test(action) ? 'text-orange-400'
@@ -896,6 +1045,7 @@ function renderTradesTable(opts) {
     const pnlVal = t.pnl;
     const pnlStr = pnlVal == null ? '—' : `${pnlVal >= 0 ? '+' : ''}$${fmt(pnlVal)}`;
     const pnlCls = pnlVal == null ? 'text-slate-500' : pnlVal >= 0 ? 'pnl-pos' : 'pnl-neg';
+    const reason = (t.reason || '').trim() || '—';
     return `<div class="trade-row">
       <span class="text-slate-500">${(t.timestamp || '').slice(0,16).replace('T',' ')}</span>
       <span class="${color}">${escHtml(action)}</span>
@@ -904,6 +1054,15 @@ function renderTradesTable(opts) {
       <span class="text-slate-400 text-right">${fmtQty(t.qty)}</span>
       <span class="text-slate-400 text-right">${t.amount != null ? '$' + fmt(t.amount) : '—'}</span>
       <span class="${pnlCls} text-right">${pnlStr}</span>
+      <span class="text-slate-400 truncate" title="${escHtml(reason)}">${escHtml(reason)}</span>
     </div>`;
   }).join('');
+
+  if (paginationEl) {
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    _renderPagination(paginationEl, currentPg, totalPages, total, (p) => {
+      list.dataset.page = String(p);
+      renderTradesTable(opts);
+    });
+  }
 }
