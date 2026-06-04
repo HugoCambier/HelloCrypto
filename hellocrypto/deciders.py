@@ -37,6 +37,7 @@ DEFAULTS = {
     "max_portfolio_dd_pct":  25.0,       # circuit-breaker: liquidate all if portfolio drops this much
     "dd_cooldown_days":      3.0,        # no new entries for N days after the breaker fires
     "size_multiplier":       1.0,        # per-stance allocation multiplier on top of risk-level/tier sizing
+    "trailing_multiplier":   1.0,        # per-stance multiplier applied to the trailing-stop pct (e.g. 1.5 in DEPLOY → 15% from a 10% base)
     "rank_inertia":          False,      # if True, switch to rank-based hold/swap logic (DEPLOY default)
     "top_n_keep":            6,          # rank-inertia: a held position is sold when its rank drops below this
     "swap_score_delta":      3,          # rank-inertia: a new candidate must score this much higher than the worst-held to swap
@@ -63,13 +64,17 @@ STANCE_PARAMS: dict[str, dict] = {
     #   bigger in bull, smaller in defensive stances.
     # - ``rank_inertia``: DEPLOY only — switches exit/entry logic to a rank-
     #   based regime. Entry uses ``top_n``; a held position is kept as long as
-    #   its score-rank stays within ``top_n_keep`` (wider band). Trailing is
-    #   suspended upstream (in backtest.py) when this fires. Designed to ride
-    #   long bull legs without churning on routine pullbacks.
-    "DEPLOY":    {"buy_threshold": 7,  "top_n": 3, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0, "size_multiplier": 1.4, "rank_inertia": True},
-    "SELECTIVE": {"buy_threshold": 8,  "top_n": 3, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0, "size_multiplier": 1.0},
-    "PRESERVE":  {"buy_threshold": 9,  "top_n": 2, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0, "size_multiplier": 0.7},
-    "CASH":      {"buy_threshold": 11, "top_n": 0, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0, "size_multiplier": 0.5},
+    #   its score-rank stays within ``top_n_keep`` (wider band). The trailing
+    #   stop reste actif et co-existe avec le rank-drop : c'est la mécanique
+    #   qui capture les peaks locaux pendant que l'inertie de rang évite les
+    #   sorties prématurées sur rotations relatives.
+    # - ``trailing_multiplier``: élargit le trailing par stance. 1.5 en DEPLOY
+    #   donne 15% (depuis un trailing utilisateur de 10%) pour absorber les
+    #   pullbacks normaux d'un bull confirmé sans churner.
+    "DEPLOY":    {"buy_threshold": 7,  "top_n": 3, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0, "size_multiplier": 1.4, "trailing_multiplier": 1.5, "rank_inertia": True},
+    "SELECTIVE": {"buy_threshold": 8,  "top_n": 3, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0, "size_multiplier": 1.0, "trailing_multiplier": 1.0},
+    "PRESERVE":  {"buy_threshold": 9,  "top_n": 2, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0, "size_multiplier": 0.7, "trailing_multiplier": 1.0},
+    "CASH":      {"buy_threshold": 11, "top_n": 0, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0, "size_multiplier": 0.5, "trailing_multiplier": 1.0},
 }
 
 # CASH triggers — leading signals so we don't lag the lagging trend_1d.
@@ -519,7 +524,8 @@ def regime_decision(
     st.pop("bear_since", None)  # legacy key, superseded by per-signal trackers
     st["entry_ts"]      = entry_ts
     st["last_sell_ts"]  = last_sell_ts
-    st["stance"]        = stance  # cached for backtest stop-checking (trailing off in DEPLOY)
+    st["stance"]        = stance  # cached for backtest stop-checking
+    st["trailing_multiplier"] = float(p.get("trailing_multiplier", 1.0))
 
     bull_count = sum(1 for d in market_raw.values() if d.get("trend_1d") == "haussier")
     bear_count = sum(1 for d in market_raw.values() if d.get("trend_1d") == "baissier")

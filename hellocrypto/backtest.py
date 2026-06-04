@@ -478,14 +478,14 @@ def run_live(
                 peak_prices[sym] = max(peak_prices.get(sym, prices[sym]), prices[sym])
 
         # Stop-loss (hard + trailing). Trailing reste actif en toutes
-        # stances, y compris DEPLOY rank-inertia : le trailing capture les
-        # peaks locaux (exit sur prix), le rank-drop capture la perte de
-        # leadership relative (exit sur rang). Les deux mécaniques sont
-        # complémentaires et ne se cannibalisent pas — celle qui fire en
-        # premier l'emporte.
+        # stances. Le ``trailing_multiplier`` caché dans strat_state laisse
+        # chaque stance élargir ou resserrer le trailing (DEPLOY 1.5× pour
+        # absorber les pullbacks normaux d'un bull confirmé sans churner).
+        trail_mult   = float(strat_state.get("trailing_multiplier") or 1.0) if isinstance(strat_state, dict) else 1.0
+        trail_eff    = trail_stop * trail_mult
         for sym in list(holdings):
             triggered, action_label, sell_price = _check_stops(
-                sym, all_klines, i, holdings, prices, peak_prices, stop_loss, trail_stop)
+                sym, all_klines, i, holdings, prices, peak_prices, stop_loss, trail_eff)
             if triggered:
                 qty   = holdings[sym]["qty"]
                 entry = holdings[sym]["avg_price"]

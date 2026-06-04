@@ -415,6 +415,27 @@ def test_rank_inertia_reinforces_on_rank_improvement():
     assert new_state["last_ranks"]["FOOUSDC"] == 2
 
 
+def test_trailing_multiplier_widens_in_DEPLOY_only():
+    """DEPLOY widens trailing (1.5× user pct) to absorb routine bull
+    pullbacks; SELECTIVE/PRESERVE/CASH stay at 1.0×. The multiplier is
+    cached in strat_state so backtest.py / cron can apply it stop-side."""
+    deploy_market = _market(btc_trend="haussier", n_bull=6, n_bear=4)
+    _, deploy_st = regime_decision(
+        market_raw=deploy_market, holdings={}, cash=0, cycle=0, now_ts=1.0,
+        params={"decide_every_cycles": 1},
+    )
+    assert deploy_st["stance"] == "DEPLOY"
+    assert deploy_st["trailing_multiplier"] == 1.5
+
+    selective_market = _market(btc_trend="haussier", n_bull=2, n_bear=6)
+    _, sel_st = regime_decision(
+        market_raw=selective_market, holdings={}, cash=0, cycle=0, now_ts=1.0,
+        params={"decide_every_cycles": 1},
+    )
+    assert sel_st["stance"] == "SELECTIVE"
+    assert sel_st["trailing_multiplier"] == 1.0
+
+
 def test_rank_inertia_does_not_reinforce_a_losing_position():
     """DEPLOY rank-inertia anti-pyramid-on-loss: a held position whose rank
     improved (because peers fell harder) but whose current price is BELOW
