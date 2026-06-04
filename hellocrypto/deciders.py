@@ -386,7 +386,12 @@ def regime_decision(
             held_after += 1
             bought_this_cycle.append(sym)
 
-        # 3. Reinforce held winners whose rank improved meaningfully
+        # 3. Reinforce held winners whose rank improved meaningfully.
+        # Anti-pyramid-on-loss guard: rank is RELATIVE — a held position can
+        # see its rank improve simply because peers fell harder. In a market
+        # correction this would lead to averaging down on a falling position.
+        # We require the current price to be above the entry avg_price so
+        # reinforce only fires on positions that are genuinely up.
         for sym in list(holdings):
             if sym in selling_now or sym in bought_this_cycle:
                 continue
@@ -402,6 +407,10 @@ def regime_decision(
             rank_gain = prev_rank - cur_rank  # positive when rank improves
             if rank_gain < reinforce_delta:
                 continue
+            avg_price = float(holdings[sym].get("avg_price") or 0)
+            cur_price = float((market_raw.get(sym) or {}).get("price") or 0)
+            if avg_price > 0 and cur_price > 0 and cur_price < avg_price:
+                continue  # don't pyramid into a losing position
             tier = coin_tier(sym, at=as_of_date)
             size_factor = _per_coin_size_factor(tier)
             size_mult   = float(p.get("size_multiplier", 1.0))
@@ -414,6 +423,7 @@ def regime_decision(
                 "usdc_amount": round(alloc, 2),
                 "reason": (
                     f"Reinforce: rank {prev_rank} → {cur_rank} (+{rank_gain}), "
+                    f"price ${cur_price:.4f} ≥ avg ${avg_price:.4f}, "
                     f"size {reinforce_pct*100:.0f}% of normal entry (stance {stance})"
                 ),
             })

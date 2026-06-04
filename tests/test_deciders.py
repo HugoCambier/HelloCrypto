@@ -415,6 +415,33 @@ def test_rank_inertia_reinforces_on_rank_improvement():
     assert new_state["last_ranks"]["FOOUSDC"] == 2
 
 
+def test_rank_inertia_does_not_reinforce_a_losing_position():
+    """DEPLOY rank-inertia anti-pyramid-on-loss: a held position whose rank
+    improved (because peers fell harder) but whose current price is BELOW
+    its entry avg_price must not be reinforced. Rank is relative — a falling
+    position can see its rank rise mechanically in a market correction."""
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        # FOO is "still bullish on signals" (so rank can improve) but the
+        # current price has dropped under the entry avg_price.
+        "FOOUSDC": {**_sym(trend="haussier"), "price": 90.0},
+    }
+    now = 1_000_000.0
+    state = {
+        "entry_ts":   {"FOOUSDC": now - 100 * 3600},
+        "last_ranks": {"BTCUSDC": 1, "FOOUSDC": 5},  # rank improved 5 → 2 (+3)
+    }
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"FOOUSDC": {"qty": 1.0, "avg_price": 100.0}},  # entry $100 > cur $90
+        cash=100.0, cycle=0, now_ts=now, risk_level=7,
+        params={"decide_every_cycles": 1, "min_hold_hours": 12.0},
+        strat_state=state,
+    )
+    assert result["stance"] == "DEPLOY"
+    assert [a for a in result["actions"] if a["type"] == "reinforce"] == []
+
+
 def test_risk_tier_filter_low_risk_only_blue_chips():
     """risk_level=2 → only BTC (tier 2) passes; high-tier coins skipped."""
     # Build a market where BTC + POL (tier 8) both score 10
