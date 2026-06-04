@@ -261,16 +261,21 @@
         </div>
 
         <!-- Comparisons -->
-        <div class="grid grid-cols-3 gap-3">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="kpi">
+            <div class="kpi-label">Total sans fees</div>
+            <div class="kpi-val" id="kpi-total-no-fees">—</div>
+            <div class="kpi-sub" id="kpi-total-no-fees-sub">—</div>
+          </div>
           <div class="kpi">
             <div class="kpi-label">vs Buy &amp; Hold</div>
             <div class="kpi-val" id="kpi-alpha">—</div>
-            <div class="kpi-sub text-slate-500">stratégie − hold</div>
+            <div class="kpi-sub" id="kpi-alpha-pct">stratégie − hold</div>
           </div>
           <div class="kpi">
             <div class="kpi-label">vs BTC seul</div>
             <div class="kpi-val" id="kpi-btc-bh">—</div>
-            <div class="kpi-sub text-slate-500">si tout en BTC</div>
+            <div class="kpi-sub" id="kpi-btc-bh-pct">si tout en BTC</div>
           </div>
           <div class="kpi">
             <div class="kpi-label">Meilleur / Pire trade</div>

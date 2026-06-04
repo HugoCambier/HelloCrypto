@@ -333,8 +333,9 @@ def test_rank_inertia_holds_through_routine_pullback():
 
 
 def test_rank_inertia_exits_when_rank_drops_out_of_keep_band():
-    """DEPLOY rank-inertia: a held position whose rank falls below
-    top_n_keep (default 6) is sold, regardless of trend/bear timers."""
+    """DEPLOY rank-inertia: a held position whose rank fell below top_n_keep
+    AND has been confirmed out-of-band for ``rank_drop_confirm_hours`` is
+    sold. The confirmation timer (rank_drop_since) was set on a prior cycle."""
     # 7 strong bull + FOO (worst) → FOO ranks 8 > top_n_keep=6 → exit.
     market = {
         "BTCUSDC": _sym(trend="haussier"),
@@ -344,7 +345,11 @@ def test_rank_inertia_exits_when_rank_drops_out_of_keep_band():
                     "sma7": 95.0, "sma25": 100.0, "rsi14": 80.0},
     }
     now = 1_000_000.0
-    state = {"entry_ts": {"FOOUSDC": now - 100 * 3600}}
+    state = {
+        "entry_ts":        {"FOOUSDC": now - 100 * 3600},
+        # FOO has been out-of-band for 48h, well past the default 36h confirm.
+        "rank_drop_since": {"FOOUSDC": now - 48 * 3600},
+    }
     result, _ = regime_decision(
         market_raw=market, holdings={"FOOUSDC": {"qty": 1.0, "avg_price": 100.0}},
         cash=0, cycle=0, now_ts=now,
@@ -353,6 +358,33 @@ def test_rank_inertia_exits_when_rank_drops_out_of_keep_band():
     )
     assert result["stance"] == "DEPLOY"
     assert [a["symbol"] for a in result["actions"] if a["type"] == "sell"] == ["FOOUSDC"]
+
+
+def test_rank_inertia_does_not_exit_before_confirmation_window():
+    """DEPLOY rank-inertia: a rank that just dropped out of top_n_keep but
+    hasn't persisted ``rank_drop_confirm_hours`` does NOT trigger an exit —
+    anti-whipsaw against rank flicker in bunched-score regimes."""
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        **{f"BULL{i}USDC": _sym(trend="haussier") for i in range(6)},
+        "FOOUSDC": {"trend_1d": "baissier", "trend": "baissier",
+                    "price": 100.0, "macd": {"histogram": -1.0},
+                    "sma7": 95.0, "sma25": 100.0, "rsi14": 80.0},
+    }
+    now = 1_000_000.0
+    # No prior rank_drop_since → first observation arms the timer at `now`,
+    # confirmation window hasn't elapsed yet → no exit this cycle.
+    state = {"entry_ts": {"FOOUSDC": now - 100 * 3600}}
+    result, new_state = regime_decision(
+        market_raw=market, holdings={"FOOUSDC": {"qty": 1.0, "avg_price": 100.0}},
+        cash=0, cycle=0, now_ts=now,
+        params={"decide_every_cycles": 1, "min_hold_hours": 12.0},
+        strat_state=state,
+    )
+    assert result["stance"] == "DEPLOY"
+    assert [a for a in result["actions"] if a["type"] == "sell"] == []
+    # But the timer is armed for next cycle.
+    assert new_state["rank_drop_since"]["FOOUSDC"] == now
 
 
 def test_rank_inertia_reinforces_on_rank_improvement():

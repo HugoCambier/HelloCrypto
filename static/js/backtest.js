@@ -599,17 +599,44 @@ function renderKpis(snap) {
     snap.win_rate >= 50 ? 'pnl-pos' : (snap.win_rate != null ? 'pnl-neg' : 'text-slate-300'),
     `${snap.trades_count ?? snap.trades ?? 0} trades`);
 
-  const alphaEl = document.getElementById('kpi-alpha');
+  // Total sans fees : ce qu'aurait été le total si on n'avait pas payé de
+  // frais. Approximation (n'inclut pas la compounding du surplus de qty),
+  // utile pour mesurer le coût brut du churn de la stratégie.
+  const fees        = snap.total_fees ?? 0;
+  const totalNoFee  = total + fees;
+  const pnlNoFee    = totalNoFee - budget;
+  const pnlNoFeePct = budget > 0 ? pnlNoFee / budget * 100 : null;
+  _setKpi('kpi-total-no-fees',
+          `$${fmt(totalNoFee)}`,
+          pnlClass(pnlNoFee),
+          `${fmtPnl(pnlNoFee)} · ${fmtPct(pnlNoFeePct)}`,
+          pnlClass(pnlNoFee));
+
+  const alphaEl    = document.getElementById('kpi-alpha');
+  const alphaSubEl = document.getElementById('kpi-alpha-pct');
   if (alphaEl) {
     alphaEl.textContent = snap.alpha != null ? fmtPnl(snap.alpha) : '—';
     alphaEl.className   = 'kpi-val ' + pnlClass(snap.alpha);
   }
+  if (alphaSubEl) {
+    const alphaPct = (snap.pnl_pct != null && snap.bh_pct != null)
+      ? snap.pnl_pct - snap.bh_pct : null;
+    alphaSubEl.textContent = alphaPct != null ? fmtPct(alphaPct) : 'stratégie − hold';
+    alphaSubEl.className   = 'kpi-sub ' + (alphaPct != null ? pnlClass(alphaPct) : 'text-slate-500');
+  }
 
-  const btcEl = document.getElementById('kpi-btc-bh');
+  const btcEl    = document.getElementById('kpi-btc-bh');
+  const btcSubEl = document.getElementById('kpi-btc-bh-pct');
+  const btcDiff  = (snap.pnl != null && snap.btc_bh_pnl != null) ? snap.pnl - snap.btc_bh_pnl : null;
   if (btcEl) {
-    const diff = (snap.pnl != null && snap.btc_bh_pnl != null) ? snap.pnl - snap.btc_bh_pnl : null;
-    btcEl.textContent = diff != null ? fmtPnl(diff) : '—';
-    btcEl.className   = 'kpi-val ' + pnlClass(diff);
+    btcEl.textContent = btcDiff != null ? fmtPnl(btcDiff) : '—';
+    btcEl.className   = 'kpi-val ' + pnlClass(btcDiff);
+  }
+  if (btcSubEl) {
+    const btcDiffPct = (snap.pnl_pct != null && snap.btc_bh_pct != null)
+      ? snap.pnl_pct - snap.btc_bh_pct : null;
+    btcSubEl.textContent = btcDiffPct != null ? fmtPct(btcDiffPct) : 'si tout en BTC';
+    btcSubEl.className   = 'kpi-sub ' + (btcDiffPct != null ? pnlClass(btcDiffPct) : 'text-slate-500');
   }
 
   const sells = (snap.history || []).filter(t => t.pnl != null);

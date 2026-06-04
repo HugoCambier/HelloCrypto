@@ -42,6 +42,7 @@ DEFAULTS = {
     "swap_score_delta":      3,          # rank-inertia: a new candidate must score this much higher than the worst-held to swap
     "reinforce_rank_delta":  2,          # rank-inertia: held position is reinforced if its rank improves by this many places
     "reinforce_size_pct":    0.5,        # rank-inertia: reinforcement uses this fraction of a normal new-entry alloc
+    "rank_drop_confirm_hours": 36.0,     # rank-inertia: a rank > top_n_keep must persist this many hours before triggering exit (anti-whipsaw on bunched-score regimes)
 }
 
 # Per-stance overrides. ``exit_signal`` switches the source of the bearish-trend
@@ -286,19 +287,33 @@ def regime_decision(
     if p.get("rank_inertia"):
         # ── Rank-inertia branch (DEPLOY) ───────────────────────────────────
         # Hold a position as long as its score-rank stays within ``top_n_keep``
-        # (wider than entry top_n). When rank drops out, sell. Reinforce
-        # winners whose rank improved by ``reinforce_rank_delta`` since the
-        # previous cycle. Designed to reduce churn through routine pullbacks.
-        top_n_keep      = int(p.get("top_n_keep", 6))
-        reinforce_delta = int(p.get("reinforce_rank_delta", 2))
-        reinforce_pct   = float(p.get("reinforce_size_pct", 0.5))
+        # (wider than entry top_n). When rank drops out, the exit fires only
+        # after ``rank_drop_confirm_hours`` of *continuous* out-of-band rank —
+        # anti-whipsaw against bunched-score regimes where rank flips on every
+        # decimal of score. Reinforce winners whose rank improved by
+        # ``reinforce_rank_delta`` since the previous cycle.
+        top_n_keep        = int(p.get("top_n_keep", 6))
+        reinforce_delta   = int(p.get("reinforce_rank_delta", 2))
+        reinforce_pct     = float(p.get("reinforce_size_pct", 0.5))
+        rank_confirm_sec  = float(p.get("rank_drop_confirm_hours", 36.0)) * 3600
 
         # Deterministic ordering: ties broken by symbol name.
         sorted_syms = sorted(market_raw.keys(), key=lambda s: (-scores.get(s, 0), s))
         ranks = {sym: idx + 1 for idx, sym in enumerate(sorted_syms)}
         prev_ranks = dict(st.get("last_ranks") or {})
+        rank_drop_since = dict(st.get("rank_drop_since") or {})
 
-        # 1. Rank-drop exit
+        # Maintain the out-of-band timer per held symbol: arm on first
+        # observation outside top_n_keep, clear as soon as rank recovers.
+        if now_ts is not None:
+            for sym in list(holdings):
+                sym_rank = ranks.get(sym)
+                if sym_rank is None or sym_rank > top_n_keep:
+                    rank_drop_since.setdefault(sym, now_ts)
+                else:
+                    rank_drop_since.pop(sym, None)
+
+        # 1. Rank-drop exit (with confirmation window)
         for sym in list(holdings):
             if now_ts is None:
                 continue
@@ -306,19 +321,25 @@ def regime_decision(
             if (now_ts - ent_ts) < min_hold_sec:
                 continue
             sym_rank = ranks.get(sym)
-            if sym_rank is None or sym_rank > top_n_keep:
+            drop_ts  = rank_drop_since.get(sym)
+            if (drop_ts is not None
+                    and (sym_rank is None or sym_rank > top_n_keep)
+                    and (now_ts - drop_ts) >= rank_confirm_sec):
+                drop_h = (now_ts - drop_ts) / 3600
                 actions.append({
                     "type":   "sell",
                     "symbol": sym,
                     "qty":    holdings[sym]["qty"],
                     "reason": (
                         f"Rank-inertia exit: rank {sym_rank or '∅'} > {top_n_keep} "
+                        f"confirmé {drop_h:.1f}h ≥ {p.get('rank_drop_confirm_hours', 36.0):g}h "
                         f"(stance {stance})"
                     ),
                 })
                 selling_now.add(sym)
                 last_sell_ts[sym] = now_ts
                 entry_ts.pop(sym, None)
+                rank_drop_since.pop(sym, None)
 
         # 2. New entries — fill up to top_n with the highest-scored non-held
         held_after = len(holdings) - len(selling_now)
@@ -398,7 +419,8 @@ def regime_decision(
             })
             cash_after -= alloc
 
-        st["last_ranks"] = ranks
+        st["last_ranks"]      = ranks
+        st["rank_drop_since"] = rank_drop_since
     else:
         # ── Classic branch (non-DEPLOY): bear-trend exit + new entries ─────
         # Trend-bear timer must elapse AND the holistic score must have fallen
@@ -479,7 +501,8 @@ def regime_decision(
                 entry_ts[sym] = now_ts
             cash_after -= alloc
             held_after += 1
-        st.pop("last_ranks", None)  # clear when not in rank-inertia mode
+        st.pop("last_ranks", None)        # clear when not in rank-inertia mode
+        st.pop("rank_drop_since", None)
 
     st["bear_since_1d"] = bear_since_1d
     st["bear_since_1h"] = bear_since_1h
