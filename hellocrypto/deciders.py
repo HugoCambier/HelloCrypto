@@ -34,9 +34,9 @@ DEFAULTS = {
     "enable_regime_stance":  True,       # modulate threshold+top_n via market stance
     "exit_signal":           "trend_1d", # which signal triggers bear-confirm exits
     "score_exit_threshold":  5,          # anti-whipsaw: block exit while score >= this
-    "disable_signal_exit":   False,      # A/B kill-switch: when True, only stops/trailing close positions
     "max_portfolio_dd_pct":  25.0,       # circuit-breaker: liquidate all if portfolio drops this much
     "dd_cooldown_days":      3.0,        # no new entries for N days after the breaker fires
+    "size_multiplier":       1.0,        # per-stance allocation multiplier on top of risk-level/tier sizing
 }
 
 # Per-stance overrides. ``exit_signal`` switches the source of the bearish-trend
@@ -53,10 +53,12 @@ STANCE_PARAMS: dict[str, dict] = {
     # - ``trend_confirm_hours``: how long the bear signal must persist before
     #   exit fires. Long in bull (48h: filter transient trend_1d flips) ;
     #   moderate in PRESERVE (24h) ; fast in CASH (12h: capitulation mode).
-    "DEPLOY":    {"buy_threshold": 7,  "top_n": 4, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0},
-    "SELECTIVE": {"buy_threshold": 8,  "top_n": 3, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0},
-    "PRESERVE":  {"buy_threshold": 9,  "top_n": 2, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0},
-    "CASH":      {"buy_threshold": 11, "top_n": 0, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0},
+    # - ``size_multiplier``: scales per-buy allocation. Asymmetric exposure:
+    #   bigger in bull, smaller in defensive stances.
+    "DEPLOY":    {"buy_threshold": 7,  "top_n": 4, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0, "size_multiplier": 1.4},
+    "SELECTIVE": {"buy_threshold": 8,  "top_n": 3, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0, "size_multiplier": 1.0},
+    "PRESERVE":  {"buy_threshold": 9,  "top_n": 2, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0, "size_multiplier": 0.7},
+    "CASH":      {"buy_threshold": 11, "top_n": 0, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0, "size_multiplier": 0.5},
 }
 
 # CASH triggers — leading signals so we don't lag the lagging trend_1d.
@@ -264,11 +266,10 @@ def regime_decision(
     # still says the setup is sound (the -$60 net signal-exit problem we
     # measured in the 600d backtest).
     score_exit_thr = int(p["score_exit_threshold"])
-    signal_exit_off = bool(p.get("disable_signal_exit"))
     actions: list[dict] = []
     selling_now: set[str] = set()
     for sym in list(holdings):
-        if now_ts is None or signal_exit_off:
+        if now_ts is None:
             continue
         bear_ts = bear_since.get(sym)
         ent_ts  = entry_ts.get(sym, now_ts)
@@ -330,7 +331,8 @@ def regime_decision(
                 blocked_cooldown.append(sym)
                 continue
         size_factor = _per_coin_size_factor(tier)
-        alloc = cash_after * max_pct * size_factor
+        size_mult   = float(p.get("size_multiplier", 1.0))
+        alloc = cash_after * max_pct * size_factor * size_mult
         if alloc < 10:
             break
         fng_note = ""
@@ -344,7 +346,7 @@ def regime_decision(
             "reason": (
                 f"Entry score {score}/10 ≥ {sym_threshold} (tier {tier}, stance {stance}{fng_note}), "
                 f"trend_1d={d.get('trend_1d', '?')}, "
-                f"risk {risk_level} → {max_pct*size_factor*100:.0f}% cash"
+                f"risk {risk_level} → {max_pct*size_factor*size_mult*100:.0f}% cash"
             ),
         })
         if now_ts is not None:

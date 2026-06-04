@@ -92,7 +92,6 @@ def bt_start():
         trend_confirm_h = max(0.0, float(body.get("trend_confirm_hours", 24)))
         min_hold_h      = max(0.0, float(body.get("min_hold_hours", 12)))
         rebuy_cd_h      = max(0.0, float(body.get("rebuy_cooldown_hours", 0)))
-        disable_sig_ex  = bool(body.get("disable_signal_exit", False))
         risk       = max(1, min(int(body.get("risk_level", cfg.get("risk_level", 3))), 10))
         sell_cd    = max(0, int(body.get("sell_cooldown_cycles", cfg.get("sell_cooldown_cycles", 3))))
         speed      = max(1.0, min(500.0, float(body.get("speed", 10.0))))
@@ -117,7 +116,6 @@ def bt_start():
             "trend_confirm_hours":  trend_confirm_h,
             "min_hold_hours":       min_hold_h,
             "rebuy_cooldown_hours": rebuy_cd_h,
-            "disable_signal_exit":  disable_sig_ex,
             "decide_every_n_candles": decide_every_n,
             "speed":             speed,
         }
@@ -146,7 +144,6 @@ def bt_start():
                 sell_cooldown_cycles=sell_cd,
                 decide_every_n_candles=decide_every_n,
                 enable_regime_stance=bool(body.get("enable_regime_stance", True)),
-                disable_signal_exit=disable_sig_ex,
                 llm_mode=llm_mode, llm_every_n_candles=llm_every,
                 on_step=on_step, stop_event=_bt_stop_event, speed_ref=_bt_speed,
             )
