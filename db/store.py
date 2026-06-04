@@ -151,29 +151,55 @@ def _pg_pool():
             import psycopg2.pool  # type: ignore
             # minconn=1 pour ne pas saturer au cold start serverless.
             # maxconn=5 reste large pour un dashboard solo + cron.
+            # TCP keepalives: Supabase coupe les conn idle > ~60s. Les scripts
+            # longs (backfill, compute_tiers) ont des gaps de plusieurs minutes
+            # entre 2 INSERT — sans keepalives, la conn meurt silencieusement.
             _PG_POOL = psycopg2.pool.ThreadedConnectionPool(
                 minconn=1, maxconn=int(os.getenv("PG_POOL_MAX", "5")),
                 dsn=_DATABASE_URL,
+                keepalives=1,
+                keepalives_idle=30,
+                keepalives_interval=10,
+                keepalives_count=5,
             )
     return _PG_POOL
 
 
 @contextmanager
 def _postgres():
-    """Yield a psycopg2 DictCursor backed by the shared pool."""
+    """Yield a psycopg2 DictCursor backed by the shared pool.
+
+    On connection-level errors (server closed conn, broken socket), discard
+    the dead conn instead of returning it to the pool — otherwise the next
+    caller inherits the corpse and the failure cascades.
+    """
+    import psycopg2  # type: ignore
     import psycopg2.extras  # type: ignore
     pool = _pg_pool()
     conn = pool.getconn()
     cur  = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    broken = False
     try:
         yield cur
         conn.commit()
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        broken = True
+        raise
     except Exception:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            broken = True
         raise
     finally:
-        cur.close()
-        pool.putconn(conn)
+        try:
+            cur.close()
+        except Exception:
+            pass
+        try:
+            pool.putconn(conn, close=broken)
+        except Exception:
+            pass
 
 
 def _init_postgres() -> None:

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -151,16 +152,31 @@ def save_snapshots_batch(rows: list[dict]) -> int:
     cols   = ",".join(_COLUMNS)
 
     if _USE_POSTGRES:
+        import psycopg2  # type: ignore
         from db.store import _postgres
         ph = ",".join(["%s"] * len(_COLUMNS))
-        with _postgres() as c:
-            c.executemany(
-                f"INSERT INTO price_snapshots ({cols}) VALUES ({ph}) "
-                f"ON CONFLICT (symbol, timestamp, interval) DO UPDATE SET "
-                + ", ".join(f"{col}=EXCLUDED.{col}" for col in _COLUMNS if col not in ("symbol", "timestamp", "interval")),
-                values,
-            )
-        return len(values)
+        sql = (
+            f"INSERT INTO price_snapshots ({cols}) VALUES ({ph}) "
+            f"ON CONFLICT (symbol, timestamp, interval) DO UPDATE SET "
+            + ", ".join(f"{col}=EXCLUDED.{col}" for col in _COLUMNS
+                        if col not in ("symbol", "timestamp", "interval"))
+        )
+        # Supabase free tier coupe occasionnellement les conn longues. Le pool
+        # remplace les conn mortes, mais on retente quand même : un seul batch
+        # raté = plusieurs minutes de kline-fetch reperdues.
+        for attempt in range(3):
+            try:
+                with _postgres() as c:
+                    c.executemany(sql, values)
+                return len(values)
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                if attempt == 2:
+                    raise
+                wait = 2 ** attempt
+                log.warning("save_snapshots_batch: %s (attempt %d/3) — retry in %ds",
+                            e, attempt + 1, wait)
+                time.sleep(wait)
+        return 0  # unreachable
 
     from db.store import _sqlite
     ph = ",".join(["?"] * len(_COLUMNS))
