@@ -324,7 +324,7 @@ function _buildRecapMarkdown() {
     `- Stop-loss : ${fmtNum(p.stop_loss_pct, 1)}% · Trailing : ${fmtNum(p.trailing_stop_pct, 1)}%`,
     `- Risque : ${p.risk_level ?? '—'}/10`,
     `- Seuil achat ${p.buy_threshold ?? '—'} · top-N ${p.top_n ?? '—'} · confirm-bear ${p.trend_confirm_hours ?? '—'}h · min-hold ${p.min_hold_hours ?? '—'}h · cooldown ${p.rebuy_cooldown_hours ?? 0}h`,
-    ...(p.enable_regime_stance ? [`- Stance régime : DEPLOY → rank-inertia (entrée top-3, garde top-6, reinforce sur rank +2, trailing OFF) · SELECTIVE/PRESERVE → logique classique`] : []),
+    ...(p.enable_regime_stance ? [`- Stance régime : DEPLOY → rank-inertia (entrée top-3, garde top-6 confirmé 36h, reinforce sur rank +2 si position en profit) · SELECTIVE/PRESERVE → logique classique · trailing 10% actif partout`] : []),
     `- Vitesse de simulation : ${p.speed ?? '—'}x`,
     '',
     '## Performance globale',

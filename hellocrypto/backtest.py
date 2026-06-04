@@ -268,8 +268,8 @@ def _check_stops(sym, all_klines, i, holdings, prices, peak_prices,
 
     if hard_loss < -stop_loss:
         return True, "SELL (stop-loss)", entry * (1 - stop_loss)
-    # trail_stop=0 disables trailing entirely (used in DEPLOY rank-inertia mode
-    # where the rank-drop exit replaces price-based trailing).
+    # trail_stop=0 disables trailing entirely (still supported for callers
+    # that explicitly want price-only stops).
     if trail_stop and trail_loss < -trail_stop and peak > entry and cur >= entry:
         return True, "SELL (trailing-stop)", cur
     return False, "", cur
@@ -477,16 +477,15 @@ def run_live(
             if sym in prices:
                 peak_prices[sym] = max(peak_prices.get(sym, prices[sym]), prices[sym])
 
-        # Stop-loss (hard + trailing).
-        # DEPLOY rank-inertia mode suspends trailing — rank-drop exit handles
-        # the trend-break case, trailing would only churn through pullbacks.
-        # The stance is cached in strat_state by the previous decision cycle;
-        # falls back to no-DEPLOY (trailing active) before the first decision.
-        cur_stance   = strat_state.get("stance") if isinstance(strat_state, dict) else None
-        trail_active = trail_stop if cur_stance != "DEPLOY" else 0
+        # Stop-loss (hard + trailing). Trailing reste actif en toutes
+        # stances, y compris DEPLOY rank-inertia : le trailing capture les
+        # peaks locaux (exit sur prix), le rank-drop capture la perte de
+        # leadership relative (exit sur rang). Les deux mécaniques sont
+        # complémentaires et ne se cannibalisent pas — celle qui fire en
+        # premier l'emporte.
         for sym in list(holdings):
             triggered, action_label, sell_price = _check_stops(
-                sym, all_klines, i, holdings, prices, peak_prices, stop_loss, trail_active)
+                sym, all_klines, i, holdings, prices, peak_prices, stop_loss, trail_stop)
             if triggered:
                 qty   = holdings[sym]["qty"]
                 entry = holdings[sym]["avg_price"]
