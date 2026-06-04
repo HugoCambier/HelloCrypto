@@ -54,6 +54,25 @@ DEFAULT_SUITE_FULL = [
     {"name": "holdout_bull_to_correction_7d", "start": "2025-10-06", "days": 7, "note": "BTC ATH $126k → $102k week — bull-to-correction transition"},
 ]
 
+# Historical bear shocks from 2022, used to stress-test bear-protection logic
+# (CASH stance, intraday exits, portfolio DD circuit-breaker).
+#
+# Watchlist availability: AVAX/DOGE/POL launched on Binance USDC pairs later,
+# so they're silently skipped per cycle. The 7 oldest symbols cover these dates.
+#
+# Black-out window: Binance delisted USDC pairs from late Oct 2022 to early
+# March 2023 (BUSD transition post-FTX). Two interesting events fall inside
+# this gap and are *not* buildable from our data:
+#   - FTX collapse (Nov 2022): no USDC data at all during the bank run
+#   - Silvergate/USDC depeg (Mar 2023): pairs re-listed only on 2023-03-12,
+#     after the depeg cascade had already happened
+# If you want to bench those events, you'd need to backfill BTCUSDT separately.
+DEFAULT_SUITE_BEAR_2022 = [
+    {"name": "holdout_luna_crash_7d",   "start": "2022-05-08", "days": 7,  "note": "UST de-peg → LUNA cascade (May 2022)"},
+    {"name": "holdout_3ac_collapse_7d", "start": "2022-06-12", "days": 7,  "note": "Celsius pause + 3AC default (June 2022)"},
+    {"name": "holdout_bear_grind_30d",  "start": "2022-09-15", "days": 30, "note": "Sept-Oct 2022 bear grind (pre-FTX, last clean USDC window)"},
+]
+
 
 # ── Loading from DB ───────────────────────────────────────────────────────────
 
@@ -229,8 +248,8 @@ def _load_watchlist() -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("compact", "full", "both"),
-                        help="Bundled suite to build (compact = 1d / full = 7d / both)")
+    parser.add_argument("--suite", choices=("compact", "full", "bear_2022", "both"),
+                        help="Bundled suite to build (compact=1d / full=7d / bear_2022=historical shocks / both=compact+full)")
     parser.add_argument("--start", help="Start date YYYY-MM-DD (UTC)")
     parser.add_argument("--days",  type=int, default=1)
     parser.add_argument("--name",  help="Output filename stem (no extension)")
@@ -267,6 +286,9 @@ def main() -> int:
     if args.suite in ("full", "both"):
         log.info("Building FULL suite (7d scenarios)…")
         _build_suite(DEFAULT_SUITE_FULL, "full")
+    if args.suite == "bear_2022":
+        log.info("Building BEAR_2022 suite (historical shocks)…")
+        _build_suite(DEFAULT_SUITE_BEAR_2022, "bear_2022")
     if args.suite:
         return 0
 
