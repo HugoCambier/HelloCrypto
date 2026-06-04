@@ -301,13 +301,14 @@ def test_deploy_does_not_exit_on_intraday_alone():
     assert [a for a in result["actions"] if a["type"] == "sell"] == []
 
 
-def test_portfolio_dd_scale_out_fires_at_first_palier():
-    """Quand le portfolio chute de -12% depuis son peak, le palier -10% est
-    franchi → scale-out 1/3 du qty détenu sur chaque position. Mirror exact
-    de la prise de profit, côté drawdown cette fois."""
-    # Peak portfolio = $100, now $88 → DD -12% → franchit le palier -10%.
+def test_portfolio_dd_scale_out_fires_in_PRESERVE():
+    """Quand le portfolio chute de -12% depuis son peak EN STANCE PRESERVE
+    (BTC trend_1d baissier), le palier -10% est franchi → scale-out 1/3 du
+    qty détenu sur chaque position. Gate par stance : actif uniquement en
+    stance défensive (PRESERVE/CASH), pas en DEPLOY/SELECTIVE."""
+    # BTC trend_1d baissier → stance PRESERVE. Peak $100, now $88 → DD -12%.
     market = {
-        "BTCUSDC": {**_sym(trend="haussier"), "price": 88.0},
+        "BTCUSDC": {**_sym(trend="baissier"), "price": 88.0},
     }
     now = 1_000_000.0
     state = {
@@ -318,7 +319,7 @@ def test_portfolio_dd_scale_out_fires_at_first_palier():
         market_raw=market,
         holdings={"BTCUSDC": {"qty": 1.0, "avg_price": 100.0}},
         cash=0.0, cycle=0, now_ts=now, risk_level=7,
-        params={"decide_every_cycles": 1, "enable_regime_stance": False},
+        params={"decide_every_cycles": 1},
         strat_state=state,
     )
     assert result["stance"] == "DE-RISKING"
@@ -329,11 +330,37 @@ def test_portfolio_dd_scale_out_fires_at_first_palier():
     assert 0.10 in new_state["dd_paliers_taken"]
 
 
+def test_portfolio_dd_scale_out_skipped_in_DEPLOY():
+    """En DEPLOY (bull confirmé), un DD -12% ne déclenche PAS le scale-out
+    portfolio. On tient à travers les corrections normales du bull pour
+    matcher BTC dans la montée — le scale-out gain capture déjà l'asymétrie
+    côté upside."""
+    market = {
+        "BTCUSDC": {**_sym(trend="haussier"), "price": 88.0},  # DEPLOY
+    }
+    now = 1_000_000.0
+    state = {
+        "portfolio_peak": 100.0,
+        "entry_ts":       {"BTCUSDC": now - 100 * 3600},
+    }
+    result, new_state = regime_decision(
+        market_raw=market,
+        holdings={"BTCUSDC": {"qty": 1.0, "avg_price": 100.0}},
+        cash=0.0, cycle=0, now_ts=now, risk_level=7,
+        params={"decide_every_cycles": 1},
+        strat_state=state,
+    )
+    # Pas de DE-RISKING — la stance reste DEPLOY (normale ou hors cadence)
+    assert result["stance"] != "DE-RISKING"
+    assert [a for a in result["actions"] if a["type"] == "scale_out"] == []
+    assert new_state.get("dd_paliers_taken", []) == []
+
+
 def test_portfolio_dd_scale_out_does_not_refire_below_next_palier():
     """Une fois le palier -10% pris, un DD qui reste entre -10% et -15% ne
     re-déclenche pas. Anti-whipsaw essentiel sur les oscillations de prix."""
     market = {
-        "BTCUSDC": {**_sym(trend="haussier"), "price": 88.0},  # DD encore -12%
+        "BTCUSDC": {**_sym(trend="baissier"), "price": 88.0},  # PRESERVE, DD -12%
     }
     now = 1_000_000.0
     state = {
@@ -345,7 +372,7 @@ def test_portfolio_dd_scale_out_does_not_refire_below_next_palier():
         market_raw=market,
         holdings={"BTCUSDC": {"qty": 1.0, "avg_price": 100.0}},
         cash=0.0, cycle=0, now_ts=now, risk_level=7,
-        params={"decide_every_cycles": 1, "enable_regime_stance": False},
+        params={"decide_every_cycles": 1},
         strat_state=state,
     )
     assert [a for a in result["actions"] if a["type"] == "scale_out"] == []

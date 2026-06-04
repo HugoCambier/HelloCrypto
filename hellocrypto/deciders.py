@@ -235,11 +235,15 @@ def regime_decision(
             }, st
 
         # Progressive de-risking : avant le seuil dur, on vend 1/3 par palier
-        # franchi (-10% / -15% / -20% par défaut). Miroir exact du scale-out
-        # sur gain, appliqué au portefeuille au lieu d'une position.
+        # franchi (-10% / -15% / -20% par défaut). Gate par stance — actif
+        # uniquement en stance défensive (PRESERVE / CASH). En DEPLOY/SELECTIVE
+        # on tient à travers les corrections normales du bull (le scale-out
+        # gain capture déjà l'asymétrie côté upside). L'asymétrie correcte est
+        # "ride en bull, de-risk en bear" — pas un miroir naïf du gain side.
         dd_paliers      = tuple(p.get("dd_scale_out_paliers") or ())
         dd_scale_frac   = float(p.get("dd_scale_out_frac") or 0.0)
-        if holdings and dd_paliers and dd_scale_frac > 0:
+        if (stance in ("PRESERVE", "CASH")
+                and holdings and dd_paliers and dd_scale_frac > 0):
             unhit_reached = [pal for pal in dd_paliers if pal not in dd_paliers_taken and dd_frac >= pal]
             if unhit_reached:
                 top_pal = max(unhit_reached)
