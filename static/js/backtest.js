@@ -324,7 +324,7 @@ function _buildRecapMarkdown() {
     `- Stop-loss : ${fmtNum(p.stop_loss_pct, 1)}% · Trailing : ${fmtNum(p.trailing_stop_pct, 1)}%`,
     `- Risque : ${p.risk_level ?? '—'}/10`,
     `- Seuil achat ${p.buy_threshold ?? '—'} · top-N ${p.top_n ?? '—'} · confirm-bear ${p.trend_confirm_hours ?? '—'}h · min-hold ${p.min_hold_hours ?? '—'}h · cooldown ${p.rebuy_cooldown_hours ?? 0}h`,
-    `- Décision toutes les ${p.decide_every_n_candles ?? 4} bougie${(p.decide_every_n_candles ?? 4) > 1 ? 's' : ''} (1h chacune)`,
+    ...(p.enable_regime_stance ? [`- Stance régime : DEPLOY → rank-inertia (entrée top-3, garde top-6, reinforce sur rank +2, trailing OFF) · SELECTIVE/PRESERVE → logique classique`] : []),
     `- Vitesse de simulation : ${p.speed ?? '—'}x`,
     '',
     '## Performance globale',

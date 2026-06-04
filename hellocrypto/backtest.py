@@ -268,7 +268,9 @@ def _check_stops(sym, all_klines, i, holdings, prices, peak_prices,
 
     if hard_loss < -stop_loss:
         return True, "SELL (stop-loss)", entry * (1 - stop_loss)
-    if trail_loss < -trail_stop and peak > entry and cur >= entry:
+    # trail_stop=0 disables trailing entirely (used in DEPLOY rank-inertia mode
+    # where the rank-drop exit replaces price-based trailing).
+    if trail_stop and trail_loss < -trail_stop and peak > entry and cur >= entry:
         return True, "SELL (trailing-stop)", cur
     return False, "", cur
 
@@ -475,10 +477,16 @@ def run_live(
             if sym in prices:
                 peak_prices[sym] = max(peak_prices.get(sym, prices[sym]), prices[sym])
 
-        # Stop-loss (hard + trailing)
+        # Stop-loss (hard + trailing).
+        # DEPLOY rank-inertia mode suspends trailing — rank-drop exit handles
+        # the trend-break case, trailing would only churn through pullbacks.
+        # The stance is cached in strat_state by the previous decision cycle;
+        # falls back to no-DEPLOY (trailing active) before the first decision.
+        cur_stance   = strat_state.get("stance") if isinstance(strat_state, dict) else None
+        trail_active = trail_stop if cur_stance != "DEPLOY" else 0
         for sym in list(holdings):
             triggered, action_label, sell_price = _check_stops(
-                sym, all_klines, i, holdings, prices, peak_prices, stop_loss, trail_stop)
+                sym, all_klines, i, holdings, prices, peak_prices, stop_loss, trail_active)
             if triggered:
                 qty   = holdings[sym]["qty"]
                 entry = holdings[sym]["avg_price"]
@@ -653,9 +661,12 @@ def run_live(
                     "reason":    a.get("reason", ""),
                 })
 
-            # Buys: decider already computed risk-aware usdc_amount per action.
+            # Buys + reinforce: decider already computed risk-aware usdc_amount
+            # per action. ``reinforce`` averages into an existing position
+            # (paper_buy handles the cost-basis recomputation).
             for a in actions:
-                if a.get("type") != "buy" or a.get("symbol") not in prices:
+                atype = a.get("type")
+                if atype not in ("buy", "reinforce") or a.get("symbol") not in prices:
                     continue
                 amount = float(a.get("usdc_amount", 0) or 0)
                 if amount < 10 or amount > cash:
@@ -667,11 +678,17 @@ def run_live(
                 br  = paper_buy(sym, amount, cur, holdings)
                 total_fees += br.fee
                 cash       -= amount
-                peak_prices[sym] = cur
+                # On reinforce, keep the existing peak (it may be above current
+                # price) so the trailing logic — once re-enabled — references
+                # the true high-water mark for the position.
+                if atype == "buy":
+                    peak_prices[sym] = cur
+                else:
+                    peak_prices[sym] = max(peak_prices.get(sym, cur), cur)
                 history.append({
                     "cycle":     current_step,
                     "timestamp": dt_str,
-                    "action":    "BUY",
+                    "action":    "REINFORCE" if atype == "reinforce" else "BUY",
                     "symbol":    sym,
                     "amount":    round(amount, 2),
                     "qty":       round(br.qty, 6),

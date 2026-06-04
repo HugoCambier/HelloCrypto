@@ -219,10 +219,14 @@ def test_score_gate_blocks_whipsaw_in_DEPLOY():
     assert [a for a in result["actions"] if a["type"] == "sell"] == []
 
 
-def test_score_gate_allows_exit_in_DEPLOY_when_score_weak():
-    """Same DEPLOY context, but score is now genuinely weak → exit fires."""
+def test_score_gate_allows_exit_in_SELECTIVE_when_score_weak():
+    """SELECTIVE keeps the classic score-gate exit: a held position with
+    confirmed bear trend AND weak score exits past min-hold. DEPLOY uses
+    rank-inertia (covered separately) so this lives in SELECTIVE now."""
+    # BTC haussier + 2 bear alts → bull=1, bear=2 → SELECTIVE (bull < bear).
     market = {
         "BTCUSDC": _sym(trend="haussier"),
+        "BAR0USDC": _sym(trend="baissier"),
         # Weak: 5 -2 (trend_1d) -1 (trend) -1 (MACD) -1 (sma) -3 (RSI>75) = 0
         "FOOUSDC": {"trend_1d": "baissier", "trend": "baissier",
                     "price": 100.0, "macd": {"histogram": -1.0},
@@ -241,7 +245,7 @@ def test_score_gate_allows_exit_in_DEPLOY_when_score_weak():
                 "trend_confirm_hours": 24.0, "min_hold_hours": 12.0},
         strat_state=state,
     )
-    assert result["stance"] == "DEPLOY"
+    assert result["stance"] == "SELECTIVE"
     assert [a["symbol"] for a in result["actions"] if a["type"] == "sell"] == ["FOOUSDC"]
 
 
@@ -299,6 +303,84 @@ def test_deploy_does_not_exit_on_intraday_alone():
     )
     assert result["stance"] == "DEPLOY"
     assert [a for a in result["actions"] if a["type"] == "sell"] == []
+
+
+def test_rank_inertia_holds_through_routine_pullback():
+    """DEPLOY rank-inertia: a held position whose rank stays within
+    top_n_keep is not sold, even if its score weakened (rank 4/7 ≤ 6)."""
+    # 3 strong bull + 1 weakening FOO held + 3 bear (for DEPLOY breadth).
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        "BULL1USDC": _sym(trend="haussier"),
+        "BULL2USDC": _sym(trend="haussier"),
+        "FOOUSDC":  {"trend_1d": "haussier", "trend": "haussier",
+                     "price": 100.0, "macd": {"histogram": -1.0},
+                     "sma7": 100.0, "sma25": 100.0},  # score around 6 → rank 4
+        "BEAR1USDC": _sym(trend="baissier"),
+        "BEAR2USDC": _sym(trend="baissier"),
+        "BEAR3USDC": _sym(trend="baissier"),
+    }
+    now = 1_000_000.0
+    state = {"entry_ts": {"FOOUSDC": now - 100 * 3600}}
+    result, _ = regime_decision(
+        market_raw=market, holdings={"FOOUSDC": {"qty": 1.0, "avg_price": 100.0}},
+        cash=0, cycle=0, now_ts=now,
+        params={"decide_every_cycles": 1, "min_hold_hours": 12.0},
+        strat_state=state,
+    )
+    assert result["stance"] == "DEPLOY"
+    assert [a for a in result["actions"] if a["type"] == "sell"] == []
+
+
+def test_rank_inertia_exits_when_rank_drops_out_of_keep_band():
+    """DEPLOY rank-inertia: a held position whose rank falls below
+    top_n_keep (default 6) is sold, regardless of trend/bear timers."""
+    # 7 strong bull + FOO (worst) → FOO ranks 8 > top_n_keep=6 → exit.
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        **{f"BULL{i}USDC": _sym(trend="haussier") for i in range(6)},
+        "FOOUSDC": {"trend_1d": "baissier", "trend": "baissier",
+                    "price": 100.0, "macd": {"histogram": -1.0},
+                    "sma7": 95.0, "sma25": 100.0, "rsi14": 80.0},
+    }
+    now = 1_000_000.0
+    state = {"entry_ts": {"FOOUSDC": now - 100 * 3600}}
+    result, _ = regime_decision(
+        market_raw=market, holdings={"FOOUSDC": {"qty": 1.0, "avg_price": 100.0}},
+        cash=0, cycle=0, now_ts=now,
+        params={"decide_every_cycles": 1, "min_hold_hours": 12.0},
+        strat_state=state,
+    )
+    assert result["stance"] == "DEPLOY"
+    assert [a["symbol"] for a in result["actions"] if a["type"] == "sell"] == ["FOOUSDC"]
+
+
+def test_rank_inertia_reinforces_on_rank_improvement():
+    """DEPLOY rank-inertia: when a held position's rank improves by at least
+    ``reinforce_rank_delta`` places, a reinforce action fires with reduced size."""
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        "FOOUSDC": _sym(trend="haussier"),  # ranked 2 alphabetically after BTC
+    }
+    now = 1_000_000.0
+    # FOO was rank 5 last cycle, now rank 2 → +3 ≥ reinforce_delta (default 2).
+    state = {
+        "entry_ts":   {"FOOUSDC": now - 100 * 3600},
+        "last_ranks": {"BTCUSDC": 1, "FOOUSDC": 5},
+    }
+    result, new_state = regime_decision(
+        market_raw=market, holdings={"FOOUSDC": {"qty": 1.0, "avg_price": 100.0}},
+        cash=100.0, cycle=0, now_ts=now, risk_level=7,
+        params={"decide_every_cycles": 1, "min_hold_hours": 12.0},
+        strat_state=state,
+    )
+    assert result["stance"] == "DEPLOY"
+    reinforce = [a for a in result["actions"] if a["type"] == "reinforce"]
+    assert len(reinforce) == 1
+    assert reinforce[0]["symbol"] == "FOOUSDC"
+    assert reinforce[0]["usdc_amount"] > 0
+    # last_ranks is updated for the next cycle.
+    assert new_state["last_ranks"]["FOOUSDC"] == 2
 
 
 def test_risk_tier_filter_low_risk_only_blue_chips():
