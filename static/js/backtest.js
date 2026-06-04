@@ -619,8 +619,8 @@ function renderKpis(snap) {
     alphaEl.className   = 'kpi-val ' + pnlClass(snap.alpha);
   }
   if (alphaSubEl) {
-    const alphaPct = (snap.pnl_pct != null && snap.bh_pct != null)
-      ? snap.pnl_pct - snap.bh_pct : null;
+    const alphaPct = (snap.pnl_pct != null && snap.benchmark_pnl_pct != null)
+      ? snap.pnl_pct - snap.benchmark_pnl_pct : null;
     alphaSubEl.textContent = alphaPct != null ? fmtPct(alphaPct) : 'stratégie − hold';
     alphaSubEl.className   = 'kpi-sub ' + (alphaPct != null ? pnlClass(alphaPct) : 'text-slate-500');
   }
