@@ -37,13 +37,6 @@ DEFAULTS = {
     "max_portfolio_dd_pct":  25.0,       # circuit-breaker: liquidate all if portfolio drops this much
     "dd_cooldown_days":      3.0,        # no new entries for N days after the breaker fires
     "size_multiplier":       1.0,        # per-stance allocation multiplier on top of risk-level/tier sizing
-    "trailing_multiplier":   1.0,        # per-stance multiplier applied to the trailing-stop pct (e.g. 1.5 in DEPLOY → 15% from a 10% base)
-    "rank_inertia":          False,      # if True, switch to rank-based hold/swap logic (DEPLOY default)
-    "top_n_keep":            6,          # rank-inertia: a held position is sold when its rank drops below this
-    "swap_score_delta":      3,          # rank-inertia: a new candidate must score this much higher than the worst-held to swap
-    "reinforce_rank_delta":  2,          # rank-inertia: held position is reinforced if its rank improves by this many places
-    "reinforce_size_pct":    0.5,        # rank-inertia: reinforcement uses this fraction of a normal new-entry alloc
-    "rank_drop_confirm_hours": 36.0,     # rank-inertia: a rank > top_n_keep must persist this many hours before triggering exit (anti-whipsaw on bunched-score regimes)
 }
 
 # Per-stance overrides. ``exit_signal`` switches the source of the bearish-trend
@@ -62,19 +55,10 @@ STANCE_PARAMS: dict[str, dict] = {
     #   moderate in PRESERVE (24h) ; fast in CASH (12h: capitulation mode).
     # - ``size_multiplier``: scales per-buy allocation. Asymmetric exposure:
     #   bigger in bull, smaller in defensive stances.
-    # - ``rank_inertia``: DEPLOY only — switches exit/entry logic to a rank-
-    #   based regime. Entry uses ``top_n``; a held position is kept as long as
-    #   its score-rank stays within ``top_n_keep`` (wider band). The trailing
-    #   stop reste actif et co-existe avec le rank-drop : c'est la mécanique
-    #   qui capture les peaks locaux pendant que l'inertie de rang évite les
-    #   sorties prématurées sur rotations relatives.
-    # - ``trailing_multiplier``: élargit le trailing par stance. 1.5 en DEPLOY
-    #   donne 15% (depuis un trailing utilisateur de 10%) pour absorber les
-    #   pullbacks normaux d'un bull confirmé sans churner.
-    "DEPLOY":    {"buy_threshold": 7,  "top_n": 3, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0, "size_multiplier": 1.4, "trailing_multiplier": 1.5, "rank_inertia": True},
-    "SELECTIVE": {"buy_threshold": 8,  "top_n": 3, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0, "size_multiplier": 1.0, "trailing_multiplier": 1.0},
-    "PRESERVE":  {"buy_threshold": 9,  "top_n": 2, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0, "size_multiplier": 0.7, "trailing_multiplier": 1.0},
-    "CASH":      {"buy_threshold": 11, "top_n": 0, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0, "size_multiplier": 0.5, "trailing_multiplier": 1.0},
+    "DEPLOY":    {"buy_threshold": 7,  "top_n": 4, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0, "size_multiplier": 1.4},
+    "SELECTIVE": {"buy_threshold": 8,  "top_n": 3, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0, "size_multiplier": 1.0},
+    "PRESERVE":  {"buy_threshold": 9,  "top_n": 2, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0, "size_multiplier": 0.7},
+    "CASH":      {"buy_threshold": 11, "top_n": 0, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0, "size_multiplier": 0.5},
 }
 
 # CASH triggers — leading signals so we don't lag the lagging trend_1d.
@@ -289,243 +273,92 @@ def regime_decision(
     max_pct    = _max_pct(risk_level)
     cash_after = cash  # mutated as we propose buys
 
-    if p.get("rank_inertia"):
-        # ── Rank-inertia branch (DEPLOY) ───────────────────────────────────
-        # Hold a position as long as its score-rank stays within ``top_n_keep``
-        # (wider than entry top_n). When rank drops out, the exit fires only
-        # after ``rank_drop_confirm_hours`` of *continuous* out-of-band rank —
-        # anti-whipsaw against bunched-score regimes where rank flips on every
-        # decimal of score. Reinforce winners whose rank improved by
-        # ``reinforce_rank_delta`` since the previous cycle.
-        top_n_keep        = int(p.get("top_n_keep", 6))
-        reinforce_delta   = int(p.get("reinforce_rank_delta", 2))
-        reinforce_pct     = float(p.get("reinforce_size_pct", 0.5))
-        rank_confirm_sec  = float(p.get("rank_drop_confirm_hours", 36.0)) * 3600
-
-        # Deterministic ordering: ties broken by symbol name.
-        sorted_syms = sorted(market_raw.keys(), key=lambda s: (-scores.get(s, 0), s))
-        ranks = {sym: idx + 1 for idx, sym in enumerate(sorted_syms)}
-        prev_ranks = dict(st.get("last_ranks") or {})
-        rank_drop_since = dict(st.get("rank_drop_since") or {})
-
-        # Maintain the out-of-band timer per held symbol: arm on first
-        # observation outside top_n_keep, clear as soon as rank recovers.
-        if now_ts is not None:
-            for sym in list(holdings):
-                sym_rank = ranks.get(sym)
-                if sym_rank is None or sym_rank > top_n_keep:
-                    rank_drop_since.setdefault(sym, now_ts)
-                else:
-                    rank_drop_since.pop(sym, None)
-
-        # 1. Rank-drop exit (with confirmation window)
-        for sym in list(holdings):
-            if now_ts is None:
-                continue
-            ent_ts = entry_ts.get(sym, now_ts)
-            if (now_ts - ent_ts) < min_hold_sec:
-                continue
-            sym_rank = ranks.get(sym)
-            drop_ts  = rank_drop_since.get(sym)
-            if (drop_ts is not None
-                    and (sym_rank is None or sym_rank > top_n_keep)
-                    and (now_ts - drop_ts) >= rank_confirm_sec):
-                drop_h = (now_ts - drop_ts) / 3600
-                actions.append({
-                    "type":   "sell",
-                    "symbol": sym,
-                    "qty":    holdings[sym]["qty"],
-                    "reason": (
-                        f"Rank-inertia exit: rank {sym_rank or '∅'} > {top_n_keep} "
-                        f"confirmé {drop_h:.1f}h ≥ {p.get('rank_drop_confirm_hours', 36.0):g}h "
-                        f"(stance {stance})"
-                    ),
-                })
-                selling_now.add(sym)
-                last_sell_ts[sym] = now_ts
-                entry_ts.pop(sym, None)
-                rank_drop_since.pop(sym, None)
-
-        # 2. New entries — fill up to top_n with the highest-scored non-held
-        held_after = len(holdings) - len(selling_now)
-        candidates = [] if in_dd_cooldown else [(s, market_raw[s]) for s in sorted_syms]
-        bought_this_cycle: list[str] = []
-        for sym, d in candidates:
-            if held_after >= p["top_n"]:
-                break
-            if sym in holdings and sym not in selling_now:
-                continue
-            score = scores.get(sym, 0)
-            tier  = coin_tier(sym, at=as_of_date)
-            sym_threshold = _per_coin_threshold(p["buy_threshold"], tier)
-            if score < sym_threshold:
-                continue
-            if d.get("trend_1d") == "baissier":
-                continue
-            if tier > risk_level:
-                blocked_tier.append(sym)
-                continue
-            if cooldown_sec > 0 and now_ts is not None:
-                sold_at = last_sell_ts.get(sym)
-                if sold_at is not None and (now_ts - sold_at) < cooldown_sec:
-                    blocked_cooldown.append(sym)
-                    continue
-            size_factor = _per_coin_size_factor(tier)
-            size_mult   = float(p.get("size_multiplier", 1.0))
-            alloc = cash_after * max_pct * size_factor * size_mult
-            if alloc < 10:
-                break
+    # ── Exits: bear-trend timer + score gate (anti-whipsaw) ─────────────────
+    # Trend-bear timer must elapse AND the holistic score must have fallen
+    # under ``score_exit_threshold`` — anti-whipsaw guard against the 1h
+    # trend kicking us out of positions whose multi-signal score still says
+    # the setup is sound.
+    for sym in list(holdings):
+        if now_ts is None:
+            continue
+        bear_ts = bear_since.get(sym)
+        ent_ts  = entry_ts.get(sym, now_ts)
+        sym_score = scores.get(sym, 5)
+        if (bear_ts is not None
+                and (now_ts - bear_ts) >= confirm_sec
+                and (now_ts - ent_ts) >= min_hold_sec
+                and sym_score < score_exit_thr):
+            bear_h = (now_ts - bear_ts) / 3600
+            hold_h = (now_ts - ent_ts) / 3600
             actions.append({
-                "type":        "buy",
-                "symbol":      sym,
-                "usdc_amount": round(alloc, 2),
+                "type":   "sell",
+                "symbol": sym,
+                "qty":    holdings[sym]["qty"],
                 "reason": (
-                    f"Rank-inertia entry: rank {ranks[sym]}, score {score}/10 ≥ {sym_threshold} "
-                    f"(tier {tier}, stance {stance}), "
-                    f"risk {risk_level} → {max_pct*size_factor*size_mult*100:.0f}% cash"
+                    f"Exit {exit_signal} baissier {bear_h:.1f}h ≥ {p['trend_confirm_hours']:g}h "
+                    f"+ score {sym_score}/10 < {score_exit_thr} "
+                    f"(hold {hold_h:.1f}h ≥ {p['min_hold_hours']:g}h, stance {stance})"
                 ),
             })
-            if now_ts is not None:
-                entry_ts[sym] = now_ts
-            cash_after -= alloc
-            held_after += 1
-            bought_this_cycle.append(sym)
+            selling_now.add(sym)
+            last_sell_ts[sym] = now_ts
+            entry_ts.pop(sym, None)
 
-        # 3. Reinforce held winners whose rank improved meaningfully.
-        # Anti-pyramid-on-loss guard: rank is RELATIVE — a held position can
-        # see its rank improve simply because peers fell harder. In a market
-        # correction this would lead to averaging down on a falling position.
-        # We require the current price to be above the entry avg_price so
-        # reinforce only fires on positions that are genuinely up.
-        for sym in list(holdings):
-            if sym in selling_now or sym in bought_this_cycle:
-                continue
-            if now_ts is None:
-                continue
-            ent_ts = entry_ts.get(sym, now_ts)
-            if (now_ts - ent_ts) < min_hold_sec:
-                continue
-            cur_rank  = ranks.get(sym)
-            prev_rank = prev_ranks.get(sym)
-            if cur_rank is None or prev_rank is None:
-                continue
-            rank_gain = prev_rank - cur_rank  # positive when rank improves
-            if rank_gain < reinforce_delta:
-                continue
-            avg_price = float(holdings[sym].get("avg_price") or 0)
-            cur_price = float((market_raw.get(sym) or {}).get("price") or 0)
-            if avg_price > 0 and cur_price > 0 and cur_price < avg_price:
-                continue  # don't pyramid into a losing position
-            tier = coin_tier(sym, at=as_of_date)
-            size_factor = _per_coin_size_factor(tier)
-            size_mult   = float(p.get("size_multiplier", 1.0))
-            alloc = cash_after * max_pct * size_factor * size_mult * reinforce_pct
-            if alloc < 10:
-                continue
-            actions.append({
-                "type":        "reinforce",
-                "symbol":      sym,
-                "usdc_amount": round(alloc, 2),
-                "reason": (
-                    f"Reinforce: rank {prev_rank} → {cur_rank} (+{rank_gain}), "
-                    f"price ${cur_price:.4f} ≥ avg ${avg_price:.4f}, "
-                    f"size {reinforce_pct*100:.0f}% of normal entry (stance {stance})"
-                ),
-            })
-            cash_after -= alloc
-
-        st["last_ranks"]      = ranks
-        st["rank_drop_since"] = rank_drop_since
+    # ── Entries (ranked by score desc, capped at top_n) ─────────────────────
+    held_after = len(holdings) - len(selling_now)
+    if in_dd_cooldown:
+        candidates = []
     else:
-        # ── Classic branch (non-DEPLOY): bear-trend exit + new entries ─────
-        # Trend-bear timer must elapse AND the holistic score must have fallen
-        # under ``score_exit_threshold`` — anti-whipsaw guard against the 1h
-        # trend kicking us out of positions whose multi-signal score still
-        # says the setup is sound.
-        for sym in list(holdings):
-            if now_ts is None:
+        candidates = sorted(market_raw.items(), key=lambda kv: -scores.get(kv[0], 0))
+    for sym, d in candidates:
+        if held_after >= p["top_n"]:
+            break
+        if sym in holdings and sym not in selling_now:
+            continue
+        score = scores.get(sym, 0)
+        tier = coin_tier(sym, at=as_of_date)
+        sym_threshold = _per_coin_threshold(p["buy_threshold"], tier)
+        if score < sym_threshold:
+            continue
+        if d.get("trend_1d") == "baissier":
+            continue
+        if tier > risk_level:
+            blocked_tier.append(sym)
+            continue
+        if cooldown_sec > 0 and now_ts is not None:
+            sold_at = last_sell_ts.get(sym)
+            if sold_at is not None and (now_ts - sold_at) < cooldown_sec:
+                blocked_cooldown.append(sym)
                 continue
-            bear_ts = bear_since.get(sym)
-            ent_ts  = entry_ts.get(sym, now_ts)
-            sym_score = scores.get(sym, 5)
-            if (bear_ts is not None
-                    and (now_ts - bear_ts) >= confirm_sec
-                    and (now_ts - ent_ts) >= min_hold_sec
-                    and sym_score < score_exit_thr):
-                bear_h = (now_ts - bear_ts) / 3600
-                hold_h = (now_ts - ent_ts) / 3600
-                actions.append({
-                    "type":   "sell",
-                    "symbol": sym,
-                    "qty":    holdings[sym]["qty"],
-                    "reason": (
-                        f"Exit {exit_signal} baissier {bear_h:.1f}h ≥ {p['trend_confirm_hours']:g}h "
-                        f"+ score {sym_score}/10 < {score_exit_thr} "
-                        f"(hold {hold_h:.1f}h ≥ {p['min_hold_hours']:g}h, stance {stance})"
-                    ),
-                })
-                selling_now.add(sym)
-                last_sell_ts[sym] = now_ts
-                entry_ts.pop(sym, None)
-
-        held_after = len(holdings) - len(selling_now)
-        if in_dd_cooldown:
-            candidates = []
-        else:
-            candidates = sorted(market_raw.items(), key=lambda kv: -scores.get(kv[0], 0))
-        for sym, d in candidates:
-            if held_after >= p["top_n"]:
-                break
-            if sym in holdings and sym not in selling_now:
-                continue
-            score = scores.get(sym, 0)
-            tier = coin_tier(sym, at=as_of_date)
-            sym_threshold = _per_coin_threshold(p["buy_threshold"], tier)
-            if score < sym_threshold:
-                continue
-            if d.get("trend_1d") == "baissier":
-                continue
-            if tier > risk_level:
-                blocked_tier.append(sym)
-                continue
-            if cooldown_sec > 0 and now_ts is not None:
-                sold_at = last_sell_ts.get(sym)
-                if sold_at is not None and (now_ts - sold_at) < cooldown_sec:
-                    blocked_cooldown.append(sym)
-                    continue
-            size_factor = _per_coin_size_factor(tier)
-            size_mult   = float(p.get("size_multiplier", 1.0))
-            alloc = cash_after * max_pct * size_factor * size_mult
-            if alloc < 10:
-                break
-            fng_note = ""
-            if fng_adj:
-                sign = "+" if fng_adj > 0 else ""
-                fng_note = f", fng={fng_value} (thr {sign}{fng_adj})"
-            actions.append({
-                "type":        "buy",
-                "symbol":      sym,
-                "usdc_amount": round(alloc, 2),
-                "reason": (
-                    f"Entry score {score}/10 ≥ {sym_threshold} (tier {tier}, stance {stance}{fng_note}), "
-                    f"trend_1d={d.get('trend_1d', '?')}, "
-                    f"risk {risk_level} → {max_pct*size_factor*size_mult*100:.0f}% cash"
-                ),
-            })
-            if now_ts is not None:
-                entry_ts[sym] = now_ts
-            cash_after -= alloc
-            held_after += 1
-        st.pop("last_ranks", None)        # clear when not in rank-inertia mode
-        st.pop("rank_drop_since", None)
+        size_factor = _per_coin_size_factor(tier)
+        size_mult   = float(p.get("size_multiplier", 1.0))
+        alloc = cash_after * max_pct * size_factor * size_mult
+        if alloc < 10:
+            break
+        fng_note = ""
+        if fng_adj:
+            sign = "+" if fng_adj > 0 else ""
+            fng_note = f", fng={fng_value} (thr {sign}{fng_adj})"
+        actions.append({
+            "type":        "buy",
+            "symbol":      sym,
+            "usdc_amount": round(alloc, 2),
+            "reason": (
+                f"Entry score {score}/10 ≥ {sym_threshold} (tier {tier}, stance {stance}{fng_note}), "
+                f"trend_1d={d.get('trend_1d', '?')}, "
+                f"risk {risk_level} → {max_pct*size_factor*size_mult*100:.0f}% cash"
+            ),
+        })
+        if now_ts is not None:
+            entry_ts[sym] = now_ts
+        cash_after -= alloc
+        held_after += 1
 
     st["bear_since_1d"] = bear_since_1d
     st["bear_since_1h"] = bear_since_1h
     st.pop("bear_since", None)  # legacy key, superseded by per-signal trackers
     st["entry_ts"]      = entry_ts
     st["last_sell_ts"]  = last_sell_ts
-    st["stance"]        = stance  # cached for backtest stop-checking
-    st["trailing_multiplier"] = float(p.get("trailing_multiplier", 1.0))
 
     bull_count = sum(1 for d in market_raw.values() if d.get("trend_1d") == "haussier")
     bear_count = sum(1 for d in market_raw.values() if d.get("trend_1d") == "baissier")
