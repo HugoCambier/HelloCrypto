@@ -626,28 +626,40 @@ def run_live(
             actions = decision.get("actions", [])
             scores  = decision.get("scores", {}) or {}
 
-            # Sells first — frees cash for the buys below.
+            # Sells first — frees cash for the buys below. ``scale_out`` is
+            # un sell partiel (qty fraction de la position courante) qui ne
+            # libère pas le peak_prices ni n'arme le rebuy cooldown — la
+            # position reste ouverte avec un reliquat qui continue à courir.
             for a in actions:
-                sym = a.get("symbol")
-                if a.get("type") != "sell" or sym not in holdings or sym not in prices:
+                sym   = a.get("symbol")
+                atype = a.get("type")
+                if atype not in ("sell", "scale_out") or sym not in holdings or sym not in prices:
                     continue
-                cur   = prices[sym]
-                qty   = holdings[sym]["qty"]
+                cur            = prices[sym]
+                requested_qty  = float(a.get("qty") or 0)
+                available_qty  = holdings[sym]["qty"]
+                qty            = (min(requested_qty, available_qty)
+                                  if requested_qty > 0 else available_qty)
+                if qty <= 0:
+                    continue
                 entry = holdings[sym]["avg_price"]
                 sr    = paper_sell(sym, qty, cur, holdings)
                 total_fees += sr.fee
                 cash       += sr.received
-                peak_prices.pop(sym, None)
-                cooldown_map[sym] = i
+                # paper_sell supprime holdings[sym] uniquement quand qty atteint 0.
+                fully_closed = sym not in holdings
+                if fully_closed:
+                    peak_prices.pop(sym, None)
+                    cooldown_map[sym] = i
                 history.append({
                     "cycle":     current_step,
                     "timestamp": dt_str,
-                    "action":    "SELL",
+                    "action":    "SELL (scale-out)" if atype == "scale_out" else "SELL",
                     "symbol":    sym,
-                    "qty":       round(qty, 6),
+                    "qty":       round(sr.qty, 6),
                     "amount":    round(sr.received, 2),
                     "price":     round(cur, 4),
-                    "pnl":       round((cur - entry) * qty - sr.fee, 4),
+                    "pnl":       round((cur - entry) * sr.qty - sr.fee, 4),
                     "fee":       round(sr.fee, 6),
                     "score":     scores.get(sym),
                     "reason":    a.get("reason", ""),

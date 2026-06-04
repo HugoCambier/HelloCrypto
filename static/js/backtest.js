@@ -104,12 +104,13 @@ function _buildRecapMarkdown() {
   // ── Aggregates over trades ────────────────────────────────────────────────
   const buys      = history.filter(t => t.action === 'BUY');
   const sellsAll  = history.filter(t => /SELL/.test(t.action || ''));
-  const sellsHard = sellsAll.filter(t => /stop-loss/i.test(t.action || ''));
-  const sellsTrail= sellsAll.filter(t => /trailing-stop/i.test(t.action || ''));
-  const sellsLiq  = sellsAll.filter(t => /liquidation/i.test(t.action || ''));
-  // Signal-driven exits = anything that is not a stop / trailing / liquidation:
-  // in rule mode that's the "Trend break" exits, in LLM mode the model's SELL.
-  const sellsSig  = sellsAll.filter(t => !/stop-loss|trailing-stop|liquidation/i.test(t.action || ''));
+  const sellsHard  = sellsAll.filter(t => /stop-loss/i.test(t.action || ''));
+  const sellsTrail = sellsAll.filter(t => /trailing-stop/i.test(t.action || ''));
+  const sellsLiq   = sellsAll.filter(t => /liquidation/i.test(t.action || ''));
+  const sellsScale = sellsAll.filter(t => /scale-out/i.test(t.action || ''));
+  // Signal-driven exits = ce qui n'est ni stop / trailing / liquidation / scale-out :
+  // en rule mode c'est la sortie "trend break", en LLM mode le SELL du modèle.
+  const sellsSig   = sellsAll.filter(t => !/stop-loss|trailing-stop|liquidation|scale-out/i.test(t.action || ''));
   const winners   = sellsAll.filter(t => (t.pnl ?? 0) > 0);
   const losers    = sellsAll.filter(t => (t.pnl ?? 0) < 0);
   const grossW    = winners.reduce((s, t) => s + (t.pnl || 0), 0);
@@ -152,7 +153,10 @@ function _buildRecapMarkdown() {
     if (t.action === 'BUY') {
       cycleStack[sym].push(t.cycle);
       scoreStack[sym].push(t.score);
-    } else if (/SELL/.test(t.action || '')) {
+    } else if (/SELL/.test(t.action || '') && !/scale-out/i.test(t.action || '')) {
+      // Scale-out est une vente partielle : la position reste ouverte, on
+      // ne consomme pas l'entrée BUY de la pile FIFO. Hold-time et score
+      // discriminant ne sont mesurés qu'à la fermeture complète.
       if (cycleStack[sym].length) holdHours.push(t.cycle - cycleStack[sym].shift());
       if (scoreStack[sym].length) {
         const s = scoreStack[sym].shift();
@@ -301,6 +305,7 @@ function _buildRecapMarkdown() {
   const exitRows = sellsAll.length ? [
     `- Stop-loss dur : ${sellsHard.length}/${sellsAll.length} (${pctOf(sellsHard.length, sellsAll.length)}, PnL ${fmtDollar(sumPnL(sellsHard))})`,
     `- Trailing-stop : ${sellsTrail.length}/${sellsAll.length} (${pctOf(sellsTrail.length, sellsAll.length)}, PnL ${fmtDollar(sumPnL(sellsTrail))})`,
+    ...(sellsScale.length ? [`- Scale-out (prise de profit) : ${sellsScale.length}/${sellsAll.length} (${pctOf(sellsScale.length, sellsAll.length)}, PnL ${fmtDollar(sumPnL(sellsScale))})`] : []),
     `- Signal (tendance/LLM) : ${sellsSig.length}/${sellsAll.length} (${pctOf(sellsSig.length, sellsAll.length)}, PnL ${fmtDollar(sumPnL(sellsSig))})`,
     `- Liquidation finale : ${sellsLiq.length}/${sellsAll.length} (${pctOf(sellsLiq.length, sellsAll.length)}, PnL ${fmtDollar(sumPnL(sellsLiq))})`,
   ] : ['- Aucune sortie enregistrée'];

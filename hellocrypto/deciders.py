@@ -273,6 +273,50 @@ def regime_decision(
     max_pct    = _max_pct(risk_level)
     cash_after = cash  # mutated as we propose buys
 
+    # ── Prise de profit progressive (scale-out) ─────────────────────────────
+    # Règle math universelle (ne dépend pas du symbole) : à chaque palier de
+    # gain depuis l'avg_price, on vend une fraction du qty restant. Lock-in
+    # incrémental qui complète les stops/trailing/signal exits sans les
+    # remplacer. La position garde un reliquat ("moonbag") qui continue à
+    # capturer l'upside.
+    profit_milestones = tuple(p.get("profit_milestones") or (0.30, 0.60, 1.00))
+    scale_out_frac    = float(p.get("scale_out_frac") or (1.0 / 3.0))
+    milestones_taken  = {
+        sym: list(m)
+        for sym, m in (st.get("milestones_taken") or {}).items()
+        if sym in holdings  # drop entries for closed positions
+    }
+    if now_ts is not None:
+        for sym, h in holdings.items():
+            avg = float(h.get("avg_price") or 0)
+            cur = float((market_raw.get(sym) or {}).get("price") or 0)
+            if avg <= 0 or cur <= 0:
+                continue
+            gain = (cur - avg) / avg
+            already = milestones_taken.get(sym, [])
+            unhit_reached = [m for m in profit_milestones if m not in already and gain >= m]
+            if not unhit_reached:
+                continue
+            top_m       = max(unhit_reached)
+            qty_to_sell = round(float(h.get("qty") or 0) * scale_out_frac, 8)
+            if qty_to_sell <= 0:
+                continue
+            actions.append({
+                "type":   "scale_out",
+                "symbol": sym,
+                "qty":    qty_to_sell,
+                "reason": (
+                    f"Scale-out: gain +{gain*100:.1f}% (palier +{top_m*100:.0f}%), "
+                    f"vente {scale_out_frac*100:.0f}% du qty restant (stance {stance})"
+                ),
+            })
+            # Marque le palier (et les inférieurs s'ils ont été sautés).
+            for m in profit_milestones:
+                if m <= top_m and m not in already:
+                    already.append(m)
+            milestones_taken[sym] = already
+    st["milestones_taken"] = milestones_taken
+
     # ── Exits: bear-trend timer + score gate (anti-whipsaw) ─────────────────
     # Trend-bear timer must elapse AND the holistic score must have fallen
     # under ``score_exit_threshold`` — anti-whipsaw guard against the 1h
