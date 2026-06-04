@@ -301,6 +301,80 @@ def test_deploy_does_not_exit_on_intraday_alone():
     assert [a for a in result["actions"] if a["type"] == "sell"] == []
 
 
+def test_portfolio_dd_scale_out_fires_at_first_palier():
+    """Quand le portfolio chute de -12% depuis son peak, le palier -10% est
+    franchi → scale-out 1/3 du qty détenu sur chaque position. Mirror exact
+    de la prise de profit, côté drawdown cette fois."""
+    # Peak portfolio = $100, now $88 → DD -12% → franchit le palier -10%.
+    market = {
+        "BTCUSDC": {**_sym(trend="haussier"), "price": 88.0},
+    }
+    now = 1_000_000.0
+    state = {
+        "portfolio_peak": 100.0,
+        "entry_ts":       {"BTCUSDC": now - 100 * 3600},
+    }
+    result, new_state = regime_decision(
+        market_raw=market,
+        holdings={"BTCUSDC": {"qty": 1.0, "avg_price": 100.0}},
+        cash=0.0, cycle=0, now_ts=now, risk_level=7,
+        params={"decide_every_cycles": 1, "enable_regime_stance": False},
+        strat_state=state,
+    )
+    assert result["stance"] == "DE-RISKING"
+    scale_actions = [a for a in result["actions"] if a["type"] == "scale_out"]
+    assert len(scale_actions) == 1
+    assert scale_actions[0]["symbol"] == "BTCUSDC"
+    assert abs(scale_actions[0]["qty"] - 1.0 / 3.0) < 1e-6
+    assert 0.10 in new_state["dd_paliers_taken"]
+
+
+def test_portfolio_dd_scale_out_does_not_refire_below_next_palier():
+    """Une fois le palier -10% pris, un DD qui reste entre -10% et -15% ne
+    re-déclenche pas. Anti-whipsaw essentiel sur les oscillations de prix."""
+    market = {
+        "BTCUSDC": {**_sym(trend="haussier"), "price": 88.0},  # DD encore -12%
+    }
+    now = 1_000_000.0
+    state = {
+        "portfolio_peak":    100.0,
+        "dd_paliers_taken":  [0.10],
+        "entry_ts":          {"BTCUSDC": now - 100 * 3600},
+    }
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"BTCUSDC": {"qty": 1.0, "avg_price": 100.0}},
+        cash=0.0, cycle=0, now_ts=now, risk_level=7,
+        params={"decide_every_cycles": 1, "enable_regime_stance": False},
+        strat_state=state,
+    )
+    assert [a for a in result["actions"] if a["type"] == "scale_out"] == []
+
+
+def test_portfolio_dd_paliers_reset_on_new_peak():
+    """Quand le portfolio fait un nouveau peak, les paliers DD pris sont
+    remis à zéro — le drawdown suivant pourra redéclencher de zéro."""
+    market = {
+        "BTCUSDC": {**_sym(trend="haussier"), "price": 150.0},  # nouvelle hauteur
+    }
+    now = 1_000_000.0
+    state = {
+        "portfolio_peak":    100.0,
+        "dd_paliers_taken":  [0.10, 0.15],  # avait pris 2 paliers précédemment
+        "entry_ts":          {"BTCUSDC": now - 100 * 3600},
+    }
+    result, new_state = regime_decision(
+        market_raw=market,
+        holdings={"BTCUSDC": {"qty": 1.0, "avg_price": 100.0}},
+        cash=0.0, cycle=0, now_ts=now, risk_level=7,
+        params={"decide_every_cycles": 1, "enable_regime_stance": False},
+        strat_state=state,
+    )
+    # Portfolio_now = $150 > peak $100 → new peak, paliers reset
+    assert new_state["portfolio_peak"] == 150.0
+    assert new_state["dd_paliers_taken"] == []
+
+
 def test_scale_out_fires_at_first_profit_milestone():
     """Position up +35% from avg_price crosses the +30% milestone → scale_out
     action fires for 1/3 of current qty, milestone marked taken in state."""

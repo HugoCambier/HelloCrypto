@@ -37,6 +37,8 @@ DEFAULTS = {
     "max_portfolio_dd_pct":  25.0,       # circuit-breaker: liquidate all if portfolio drops this much
     "dd_cooldown_days":      3.0,        # no new entries for N days after the breaker fires
     "size_multiplier":       1.0,        # per-stance allocation multiplier on top of risk-level/tier sizing
+    "dd_scale_out_paliers": (0.10, 0.15, 0.20),  # fractions: progressive de-risking thresholds when portfolio drops below peak
+    "dd_scale_out_frac":     1.0 / 3.0,  # fraction du qty détenu vendue à chaque palier DD franchi
 }
 
 # Per-stance overrides. ``exit_signal`` switches the source of the bearish-trend
@@ -194,14 +196,22 @@ def regime_decision(
         for s in holdings
     )
     portfolio_now = cash + holdings_value
-    peak = max(float(st.get("portfolio_peak") or 0.0), portfolio_now)
+    prev_peak     = float(st.get("portfolio_peak") or 0.0)
+    peak          = max(prev_peak, portfolio_now)
     st["portfolio_peak"] = peak
+
+    # Reset DD paliers when on a new high — chaque drawdown a son propre cycle
+    # de paliers, on ne re-déclenche pas en boucle sur des allers-retours.
+    dd_paliers_taken = list(st.get("dd_paliers_taken") or [])
+    if peak > prev_peak:
+        dd_paliers_taken = []
 
     dd_cooldown_until = float(st.get("dd_cooldown_until") or 0.0)
     in_dd_cooldown = (now_ts is not None and now_ts < dd_cooldown_until)
 
     if peak > 0 and not in_dd_cooldown:
-        dd_pct = (peak - portfolio_now) / peak * 100
+        dd_frac = (peak - portfolio_now) / peak  # fraction (0.10 = 10%)
+        dd_pct  = dd_frac * 100
         if dd_pct >= float(p["max_portfolio_dd_pct"]) and holdings:
             actions = [{
                 "type":   "sell",
@@ -213,7 +223,8 @@ def regime_decision(
                 st["dd_cooldown_until"] = now_ts + float(p["dd_cooldown_days"]) * 86400
                 st["last_sell_ts"] = {sym: now_ts for sym in holdings}
             # Reset peak to current value so we don't re-trigger on the new base.
-            st["portfolio_peak"] = portfolio_now
+            st["portfolio_peak"]    = portfolio_now
+            st["dd_paliers_taken"]  = []
             st["last_decision_cycle"] = cycle
             return {
                 "market_sentiment": "circuit-breaker",
@@ -222,6 +233,46 @@ def regime_decision(
                 "scores":           {},
                 "stance":           "FROZEN",
             }, st
+
+        # Progressive de-risking : avant le seuil dur, on vend 1/3 par palier
+        # franchi (-10% / -15% / -20% par défaut). Miroir exact du scale-out
+        # sur gain, appliqué au portefeuille au lieu d'une position.
+        dd_paliers      = tuple(p.get("dd_scale_out_paliers") or ())
+        dd_scale_frac   = float(p.get("dd_scale_out_frac") or 0.0)
+        if holdings and dd_paliers and dd_scale_frac > 0:
+            unhit_reached = [pal for pal in dd_paliers if pal not in dd_paliers_taken and dd_frac >= pal]
+            if unhit_reached:
+                top_pal = max(unhit_reached)
+                dd_actions = []
+                for sym in list(holdings):
+                    qty_to_sell = round((holdings[sym].get("qty") or 0) * dd_scale_frac, 8)
+                    if qty_to_sell <= 0:
+                        continue
+                    dd_actions.append({
+                        "type":   "scale_out",
+                        "symbol": sym,
+                        "qty":    qty_to_sell,
+                        "reason": (
+                            f"Portfolio DD scale-out: -{dd_pct:.1f}% (palier -{top_pal*100:.0f}%), "
+                            f"vente {dd_scale_frac*100:.0f}% du qty (peak ${peak:,.0f})"
+                        ),
+                    })
+                if dd_actions:
+                    # Mark this palier and any lower ones as taken
+                    for pal in dd_paliers:
+                        if pal <= top_pal and pal not in dd_paliers_taken:
+                            dd_paliers_taken.append(pal)
+                    st["dd_paliers_taken"]    = dd_paliers_taken
+                    st["last_decision_cycle"] = cycle
+                    return {
+                        "market_sentiment": "de-risking",
+                        "summary":          f"DD scale-out -{dd_pct:.1f}% (palier -{top_pal*100:.0f}%) → {dd_scale_frac*100:.0f}% sell sur {len(dd_actions)} positions",
+                        "actions":          dd_actions,
+                        "scores":           {},
+                        "stance":           "DE-RISKING",
+                    }, st
+
+    st["dd_paliers_taken"] = dd_paliers_taken
 
     # Cadence gate.
     last = st.get("last_decision_cycle")
