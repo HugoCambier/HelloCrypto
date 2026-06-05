@@ -23,6 +23,10 @@ eval/reports/_progress.json
 # `git add -f eval/reports/bench/<file>.json`. Already-tracked reports stay.
 eval/reports/bench/
 
+# Long-cycle scenarios are too big for git (100MB+). Rebuildable on demand
+# via scripts/build_holdout_scenarios.py --start ... --days ... from price_snapshots.
+eval/scenarios/holdout/long_cycle/
+
 # macOS
 .DS_Store
 
