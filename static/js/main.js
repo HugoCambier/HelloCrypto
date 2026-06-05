@@ -213,8 +213,10 @@ function _runCardHtml(s) {
   const id = s.id;
   const name = s.name || id;
   const trades = s.trade_count ?? 0;
-  const startTs = (s.start_ts || s.created_at || '').replace('T',' ').slice(0,16);
-  const meta = `${trades} trade${trades > 1 ? 's' : ''}${startTs ? ' · ' + startTs : ''}`;
+  // created_at = session launch date (what the user picks runs by).
+  // start_ts = MIN(trade.timestamp) — for a backtest it's a simulated past date.
+  const launchTs = (s.created_at || s.start_ts || '').replace('T',' ').slice(0,16);
+  const meta = `${trades} trade${trades > 1 ? 's' : ''}${launchTs ? ' · ' + launchTs : ''}`;
   const nameJson = JSON.stringify(name).replace(/"/g, '&quot;');
 
   if (s._kind === 'real') {
@@ -279,12 +281,12 @@ function renderRunsList() {
   if (!activeEl || !historyEl) return;
 
   // Merge sim + real sessions then split by running state. Sort each bucket
-  // by start DESC so the most-recently-started run is at the top.
+  // by launch date DESC so the most-recently-started run is at the top.
   const all = [
     ..._runs.map(s => ({ ...s, _kind: 'sim' })),
     ..._realRuns.map(s => ({ ...s, _kind: 'real' })),
   ];
-  const _ts = (s) => s.start_ts || s.created_at || '';
+  const _ts = (s) => s.created_at || s.start_ts || '';
   all.sort((a, b) => _ts(b).localeCompare(_ts(a)));
 
   const renderBucket = (el, items, filters, emptyMsg) => {
@@ -328,7 +330,7 @@ function renderRunsTab() {
   if (!list) return;
 
   const all = _realRuns.slice();
-  // Active session always first, others sorted by start DESC.
+  // Active session always first, others sorted by trade-window start DESC.
   all.sort((a, b) => {
     if (a.id === _activeRealSessionId) return -1;
     if (b.id === _activeRealSessionId) return 1;
