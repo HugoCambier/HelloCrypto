@@ -89,6 +89,13 @@ function renderRunParamsTab() {
   }
 }
 
+// Export the in-memory backtest trade history as CSV.
+function exportBacktestTradesCSV() {
+  const history = (_latestSnap && _latestSnap.history) || [];
+  const ts = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+  downloadTradesCSV(history, `backtest_trades_${ts}.csv`);
+}
+
 // Build a markdown-flavoured recap of the run that the user can copy and
 // paste into a discussion (e.g. to iterate on the deterministic decider).
 // Pulls from the cached launch params + the latest snapshot — no extra

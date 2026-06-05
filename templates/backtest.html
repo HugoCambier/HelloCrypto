@@ -304,7 +304,10 @@
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
           <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
             <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Historique des trades</h3>
-            <div id="trades-filters"></div>
+            <div class="flex items-center gap-3 flex-wrap">
+              <div id="trades-filters"></div>
+              <button onclick="exportBacktestTradesCSV()" class="text-xs text-slate-500 hover:text-blue-300 transition-colors" title="Télécharger l'historique en CSV">↓ CSV</button>
+            </div>
           </div>
           <div id="bt-trades-symbol-filter" class="mb-3"></div>
           <div class="trades-scroll">

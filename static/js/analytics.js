@@ -650,6 +650,52 @@ function _alignToLabels(bench, strat, budget, valueMode) {
   return out;
 }
 
+// ─── CSV download for trade history ─────────────────────────────────────────
+// Flattens one level of nested objects (e.g. btc_ctx → btc_ctx.stance) so
+// the downstream sheet can pivot on those fields directly. Used by the
+// "↓ CSV" button on both the cockpit and the backtest pages.
+function downloadTradesCSV(history, filename = 'trades.csv') {
+  if (!Array.isArray(history) || !history.length) {
+    toast('Aucun trade à exporter', 'warn');
+    return;
+  }
+  const flat = history.map(t => {
+    const out = {};
+    for (const [k, v] of Object.entries(t)) {
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        for (const [kk, vv] of Object.entries(v)) out[`${k}.${kk}`] = vv;
+      } else {
+        out[k] = v;
+      }
+    }
+    return out;
+  });
+  const cols = [...new Set(flat.flatMap(t => Object.keys(t)))];
+  // Stable, readable column order: core fields first, the rest alphabetical.
+  const preferred = ['timestamp', 'cycle', 'action', 'symbol', 'qty', 'price',
+                     'amount', 'fee', 'pnl', 'score', 'reason'];
+  const orderedCols = [
+    ...preferred.filter(c => cols.includes(c)),
+    ...cols.filter(c => !preferred.includes(c)).sort(),
+  ];
+  const esc = v => {
+    if (v == null) return '';
+    const s = String(v);
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const rows = [orderedCols.join(',')];
+  for (const t of flat) rows.push(orderedCols.map(c => esc(t[c])).join(','));
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ─── Market context badges ───────────────────────────────────────────────────
 // Renders the stance / dominance / F&G chips shown above the allocation donut.
 // Shared between the cockpit (main.js) and the backtest page (backtest.js).

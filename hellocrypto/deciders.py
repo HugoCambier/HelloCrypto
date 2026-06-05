@@ -59,7 +59,13 @@ STANCE_PARAMS: dict[str, dict] = {
     #   bigger in bull, smaller in defensive stances.
     "DEPLOY":    {"buy_threshold": 7,  "top_n": 4, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0, "size_multiplier": 1.4},
     "SELECTIVE": {"buy_threshold": 8,  "top_n": 3, "exit_signal": "trend_1d", "score_exit_threshold": 5,  "trend_confirm_hours": 36.0, "size_multiplier": 1.0},
-    "PRESERVE":  {"buy_threshold": 9,  "top_n": 2, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0, "size_multiplier": 0.7},
+    # PRESERVE = BTC trend_1d baissier confirmé. Diagnostic 1000j a montré
+    # un wr de 28% (vs 64% en SELECTIVE, 40% en DEPLOY) — entrer dans cette
+    # stance dilue les gains des autres. On bloque toute nouvelle entrée
+    # (top_n=0) ; les positions existantes restent gérées via exit_signal=trend
+    # (sortie rapide via 1h SMA) et le score_exit_threshold=99 (toujours exit
+    # quand bear timer expire). Identique à CASH côté entrées.
+    "PRESERVE":  {"buy_threshold": 9,  "top_n": 0, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0, "size_multiplier": 0.7},
     "CASH":      {"buy_threshold": 11, "top_n": 0, "exit_signal": "trend",    "score_exit_threshold": 99, "trend_confirm_hours": 24.0, "size_multiplier": 0.5},
 }
 

@@ -1432,6 +1432,19 @@ async function loadCharts() {
   }
 }
 
+// ─── Trades CSV export (current run) ─────────────────────────────────────────
+function exportCurrentRunTradesCSV() {
+  const history = _lastPerf?.history || [];
+  const sessName =
+    _runs.find(r => r.id === _selectedSession)?.name
+    || _realRuns.find(r => r.id === _selectedSession)?.name
+    || _selectedSession
+    || 'run';
+  const safeName = String(sessName).replace(/[^a-z0-9_-]+/gi, '_').slice(0, 40);
+  const ts = new Date().toISOString().slice(0, 10);
+  downloadTradesCSV(history, `trades_${safeName}_${ts}.csv`);
+}
+
 // ─── Logs drawer ─────────────────────────────────────────────────────────────
 let _logsOpen=false, _logFilter='all', _logsSeen=new Set(), _logPollIv=null, _logGen=0;
 
