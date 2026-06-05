@@ -666,6 +666,21 @@ def run_live(
                 })
 
             # Buys: decider already computed risk-aware usdc_amount per action.
+            # Capture BTC context au moment de l'entrée — sert au diagnostic
+            # "qui sont les trades qui sortent en signal-bear avec perte" :
+            # on veut savoir si BTC était déjà fragile (loin sous son SMA25,
+            # stance dégradée) au moment où on a engagé la position.
+            btc_d     = market_raw.get("BTCUSDC") or {}
+            btc_price = btc_d.get("price")
+            btc_sma25 = btc_d.get("sma25")
+            btc_ext   = ((btc_price / btc_sma25 - 1.0) * 100
+                         if btc_price and btc_sma25 else None)
+            entry_btc_ctx = {
+                "stance":       decision.get("stance"),
+                "ext_sma25":    round(btc_ext, 2) if btc_ext is not None else None,
+                "chg_24h":      btc_d.get("change_pct_24h"),
+                "trend_1d":     btc_d.get("trend_1d"),
+            }
             for a in actions:
                 if a.get("type") != "buy" or a.get("symbol") not in prices:
                     continue
@@ -691,6 +706,7 @@ def run_live(
                     "fee":       round(br.fee, 6),
                     "score":     scores.get(sym),
                     "reason":    a.get("reason", ""),
+                    "btc_ctx":   entry_btc_ctx,
                 })
 
         last_snap = _make_snapshot(

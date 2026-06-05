@@ -142,26 +142,35 @@ function _buildRecapMarkdown() {
   // matching needs chronological order, so iterate over a cycle-sorted copy.
   const cycleStack = {};
   const scoreStack = {};
+  const ctxStack   = {};
   const holdHours = [];
   const scoredOutcomes = [];
+  const closedTrades   = [];
   const chronological = history.slice().sort((a, b) => (a.cycle ?? 0) - (b.cycle ?? 0));
   for (const t of chronological) {
     const sym = t.symbol;
     if (!sym) continue;
     cycleStack[sym] = cycleStack[sym] || [];
     scoreStack[sym] = scoreStack[sym] || [];
+    ctxStack[sym]   = ctxStack[sym]   || [];
     if (t.action === 'BUY') {
       cycleStack[sym].push(t.cycle);
       scoreStack[sym].push(t.score);
+      ctxStack[sym].push(t.btc_ctx || null);
     } else if (/SELL/.test(t.action || '') && !/scale-out/i.test(t.action || '')) {
       // Scale-out est une vente partielle : la position reste ouverte, on
       // ne consomme pas l'entrée BUY de la pile FIFO. Hold-time et score
       // discriminant ne sont mesurés qu'à la fermeture complète.
       if (cycleStack[sym].length) holdHours.push(t.cycle - cycleStack[sym].shift());
-      if (scoreStack[sym].length) {
-        const s = scoreStack[sym].shift();
-        if (typeof s === 'number') scoredOutcomes.push({ s, pnl: t.pnl });
-      }
+      const entryScore = scoreStack[sym].length ? scoreStack[sym].shift() : null;
+      const entryCtx   = ctxStack[sym].length   ? ctxStack[sym].shift()   : null;
+      if (typeof entryScore === 'number') scoredOutcomes.push({ s: entryScore, pnl: t.pnl });
+      // Catégorisation de la sortie pour le diagnostic ciblé.
+      let exitKind = 'sig';
+      if      (/stop-loss/i.test(t.action))   exitKind = 'hard';
+      else if (/trailing-stop/i.test(t.action))exitKind = 'trail';
+      else if (/liquidation/i.test(t.action)) exitKind = 'liq';
+      closedTrades.push({ sym, pnl: t.pnl, score: entryScore, ctx: entryCtx, kind: exitKind });
     }
   }
   const sortedH = holdHours.slice().sort((a, b) => a - b);
@@ -318,6 +327,63 @@ function _buildRecapMarkdown() {
     `- Sur trades perdants : ${avgScoreLoss != null ? avgScoreLoss.toFixed(2) + '/10' : '—'} (n=${lossScores.length})`,
   ];
 
+  // ── Diagnostic du contexte BTC à l'entrée par catégorie de sortie ─────────
+  // Question : les trades qui sortent en "signal bear" avec perte entrent-ils
+  // dans un contexte BTC déjà fragile (loin sous SMA25, stance dégradée) ?
+  // Comparer aux gagnants pour voir si un filtre macro à l'entrée a du sens.
+  function _bucketStats(trades) {
+    const exts = trades.map(t => t.ctx?.ext_sma25).filter(v => typeof v === 'number');
+    const chgs = trades.map(t => t.ctx?.chg_24h).filter(v => typeof v === 'number');
+    const stances = {};
+    for (const t of trades) {
+      const s = t.ctx?.stance || '—';
+      stances[s] = (stances[s] || 0) + 1;
+    }
+    const m = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : null;
+    const median = a => {
+      if (!a.length) return null;
+      const sorted = a.slice().sort((x, y) => x - y);
+      return sorted[Math.floor(sorted.length / 2)];
+    };
+    const stanceTotal = Object.values(stances).reduce((s, n) => s + n, 0) || 1;
+    const stanceParts = Object.entries(stances)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => `${k} ${(n / stanceTotal * 100).toFixed(0)}%`)
+      .join(' · ');
+    return {
+      n: trades.length,
+      extMean: m(exts), extMedian: median(exts),
+      chgMean: m(chgs), chgMedian: median(chgs),
+      stances: stanceParts,
+    };
+  }
+  const sigLosers   = closedTrades.filter(t => t.kind === 'sig'   && (t.pnl || 0) < 0);
+  const sigWinners  = closedTrades.filter(t => t.kind === 'sig'   && (t.pnl || 0) > 0);
+  const trailWins   = closedTrades.filter(t => t.kind === 'trail' && (t.pnl || 0) > 0);
+  const hardLosers  = closedTrades.filter(t => t.kind === 'hard'  && (t.pnl || 0) < 0);
+  const fmtCtx = (label, b) => {
+    if (!b.n) return `- ${label} : aucune entrée`;
+    const ext = b.extMean != null
+      ? `dist BTC/SMA25 : moy ${b.extMean >= 0 ? '+' : ''}${b.extMean.toFixed(2)}% · médiane ${b.extMedian >= 0 ? '+' : ''}${b.extMedian.toFixed(2)}%`
+      : 'dist BTC/SMA25 : —';
+    const chg = b.chgMean != null
+      ? `chg24h BTC : moy ${b.chgMean >= 0 ? '+' : ''}${b.chgMean.toFixed(2)}% · médiane ${b.chgMedian >= 0 ? '+' : ''}${b.chgMedian.toFixed(2)}%`
+      : 'chg24h BTC : —';
+    return `- **${label}** (n=${b.n}) — ${ext} · ${chg} · stance @entrée : ${b.stances || '—'}`;
+  };
+  const diagSection = (isLLM || !closedTrades.length) ? [] : [
+    '',
+    "## Diagnostic — contexte BTC à l'entrée par type de sortie",
+    "_Question : les sorties signal perdantes entrent-elles dans un BTC déjà fragile ?_",
+    "",
+    fmtCtx('Signal-exit PERDANTS (les alpha-killers)', _bucketStats(sigLosers)),
+    fmtCtx('Signal-exit gagnants',                     _bucketStats(sigWinners)),
+    fmtCtx('Trailing-stop gagnants',                   _bucketStats(trailWins)),
+    fmtCtx('Stop-loss dur perdants',                   _bucketStats(hardLosers)),
+    '',
+    "_Lecture : si **signal-perdants** ont une dist BTC/SMA25 nettement plus basse que **trailing-gagnants**, un filtre macro 'ne pas entrer si BTC à < X% sous SMA25' est pertinent._",
+  ];
+
   const lines = [
     '# Backtest — récap',
     '',
@@ -350,6 +416,7 @@ function _buildRecapMarkdown() {
     cryptoRows.length ? cryptoRows.join('\n') : '- Aucun trade enregistré',
     ...(noTradeCryptos.length ? [`- _Sans trade :_ ${noTradeCryptos.join(', ')}`] : []),
     ...scoreSection,
+    ...diagSection,
     '',
     '## Points forts (auto-détectés)',
     strengths.length ? strengths.map(s => `- ${s}`).join('\n') : '- _Rien de marquant détecté._',
