@@ -7,8 +7,16 @@ from datetime import UTC, datetime
 
 from flask import Blueprint, jsonify, request
 
-from ..api import compute_scores, get_enriched_market_data, load_config, load_history
+from ..api import (
+    compute_scores,
+    get_btc_dominance,
+    get_enriched_market_data,
+    get_fear_and_greed,
+    load_config,
+    load_history,
+)
 from ..backtest import _fetch_klines
+from ..deciders import _derive_stance
 from .shared import PERIODS
 
 log = logging.getLogger(__name__)
@@ -208,6 +216,156 @@ def api_watchlist_enriched():
     except Exception as exc:
         log.warning("Enriched watchlist error: %s", exc)
         return jsonify({"items": [], "error": str(exc)}), 200
+
+
+def _context_live(watchlist: list[str]) -> dict:
+    """Compute market context from live Binance/CoinGecko data."""
+    market = get_enriched_market_data(watchlist, cycle_seconds=300) if watchlist else {}
+    scores = compute_scores(market) if market else {}
+    try:
+        dom = get_btc_dominance()
+    except Exception:
+        dom = None
+    try:
+        fng = get_fear_and_greed()
+    except Exception:
+        fng = None
+    stance = _derive_stance(market) if market else None
+    return {
+        "live":          True,
+        "as_of_ts":      datetime.utcnow().isoformat() + "Z",
+        "stance":        stance,
+        "btc_dominance": dom,
+        "fng_value":     fng.get("value") if fng else None,
+        "fng_label":     fng.get("label") if fng else None,
+        "symbols": [
+            {
+                "symbol":   sym,
+                "score":    (scores or {}).get(sym),
+                "trend":    market[sym].get("trend"),
+                "trend_1d": market[sym].get("trend_1d"),
+            }
+            for sym in watchlist if sym in market
+        ],
+    }
+
+
+def _context_at(at_ts: str, watchlist: list[str]) -> dict:
+    """Reconstruct context from price_snapshots at *at_ts* (closest snapshot ≤ ts)."""
+    from datetime import timedelta
+
+    from db.snapshots import _USE_POSTGRES
+
+    try:
+        end_dt = datetime.fromisoformat(at_ts.replace("Z", "+00:00"))
+        if end_dt.tzinfo is None:
+            end_dt = end_dt.replace(tzinfo=UTC)
+    except Exception:
+        return {"error": f"Invalid 'at' timestamp: {at_ts}", "symbols": []}
+
+    start_dt = end_dt - timedelta(hours=168)
+    if not watchlist:
+        return {"live": False, "as_of_ts": at_ts, "stance": None,
+                "btc_dominance": None, "fng_value": None, "fng_label": None,
+                "symbols": []}
+
+    ph = "%s" if _USE_POSTGRES else "?"
+    in_clause = ",".join([ph] * len(watchlist))
+    sql = (
+        f"SELECT * FROM price_snapshots "
+        f"WHERE symbol IN ({in_clause}) "
+        f"AND timestamp >= {ph} AND timestamp <= {ph} "
+        f"ORDER BY symbol, timestamp ASC"
+    )
+    params = (*watchlist, start_dt.isoformat(), end_dt.isoformat())
+
+    if _USE_POSTGRES:
+        from db.store import _postgres
+        with _postgres() as c:
+            c.execute(sql, params)
+            rows = [dict(r) for r in c.fetchall()]
+    else:
+        from db.store import _sqlite
+        with _sqlite() as c:
+            rows = [dict(r) for r in c.execute(sql, params).fetchall()]
+
+    by_sym: dict[str, list] = {}
+    for r in rows:
+        by_sym.setdefault(r["symbol"], []).append(r)
+
+    market_raw: dict[str, dict] = {}
+    symbols_out: list[dict] = []
+    fng_value = fng_label = btc_dom = None
+    for sym in watchlist:
+        srows = by_sym.get(sym) or []
+        if not srows:
+            continue
+        last = srows[-1]
+        highs = [r.get("high") for r in srows if r.get("high") is not None]
+        peak  = max(highs) if highs else None
+        close = last.get("close")
+        dd = round((peak - close) / peak * 100, 2) if (peak and close and peak > 0) else None
+        market_raw[sym] = {
+            "trend":           last.get("trend"),
+            "trend_1d":        last.get("trend_1d"),
+            "drawdown_pct_7d": dd,
+        }
+        if sym == "BTCUSDC":
+            fng_value = last.get("fng_value")
+            fng_label = last.get("fng_label")
+            btc_dom   = last.get("btc_dominance")
+        symbols_out.append({
+            "symbol":   sym,
+            "score":    last.get("score"),
+            "trend":    last.get("trend"),
+            "trend_1d": last.get("trend_1d"),
+        })
+
+    stance = _derive_stance(market_raw) if market_raw else None
+    return {
+        "live":          False,
+        "as_of_ts":      at_ts,
+        "stance":        stance,
+        "btc_dominance": btc_dom,
+        "fng_value":     fng_value,
+        "fng_label":     fng_label,
+        "symbols":       symbols_out,
+    }
+
+
+@bp.get("/api/market/context")
+def api_market_context():
+    """Market context (stance + dominance + F&G + per-symbol score/trend).
+
+    ``?at=ISO_TS`` reconstructs the context from ``price_snapshots`` at that
+    timestamp; without it, live data is fetched. ``?session_id=...`` is a
+    convenience: when given, the context is reconstructed at the session's
+    last trade timestamp if the session is past (no live runner).
+    """
+    at = (request.args.get("at") or "").strip()
+    session_id = (request.args.get("session_id") or "").strip()
+    cfg = load_config()
+    watchlist = cfg.get("watchlist", []) or []
+
+    if not at and session_id:
+        # Resolve last trade ts for that session (server doesn't know if the
+        # runner is active — the client passes ?at explicitly for historical).
+        try:
+            from db.store import load_history as _db_load
+            hist = _db_load(mode=request.args.get("mode", "real"), limit=2000)
+            sess_trades = [t for t in hist if t.get("session_id") == session_id]
+            if sess_trades:
+                at = max(t["timestamp"] for t in sess_trades)
+        except Exception:
+            pass
+
+    try:
+        if at:
+            return jsonify(_context_at(at, watchlist))
+        return jsonify(_context_live(watchlist))
+    except Exception as exc:
+        log.warning("Market context error: %s", exc)
+        return jsonify({"error": str(exc), "symbols": []}), 200
 
 
 @bp.get("/api/performance")

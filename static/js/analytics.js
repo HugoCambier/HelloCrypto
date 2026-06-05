@@ -695,14 +695,28 @@ function renderAllocChart(opts) {
   if (opts.chartRef) opts.chartRef.current = chart;
 
   if (legend) {
-    legend.innerHTML = labels.map((l, i) =>
-      `<div class="flex items-center gap-2">
+    const rows = labels.map((l, i) => {
+      const ctx = (opts.symbolContext || {})[l] || {};
+      const trend = ctx.trend ? `<span class="text-[10px] uppercase tracking-wider text-slate-500">${ctx.trend.slice(0,4)}</span>` : '';
+      const score = (ctx.score != null) ? `<span class="text-[10px] text-slate-400">${ctx.score}/10</span>` : '';
+      return `<div class="flex items-center gap-2">
         <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${colors[i]}"></span>
         <span class="text-slate-300">${l}</span>
+        ${score}
+        ${trend}
         <span class="text-slate-400 ml-auto">$${fmt(values[i])}</span>
         <span class="text-slate-600 w-10 text-right">${fmt(values[i]/total*100,1)}%</span>
+      </div>`;
+    });
+    rows.push(
+      `<div class="flex items-center gap-2 pt-1.5 mt-1 border-t border-slate-700/50">
+        <span class="w-2.5 h-2.5 shrink-0"></span>
+        <span class="text-slate-300 font-semibold">Total</span>
+        <span class="text-slate-200 font-semibold ml-auto">$${fmt(total)}</span>
+        <span class="text-slate-600 w-10 text-right">100%</span>
       </div>`
-    ).join('');
+    );
+    legend.innerHTML = rows.join('');
   }
 }
 
