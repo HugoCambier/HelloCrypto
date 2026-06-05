@@ -1408,14 +1408,11 @@ async function loadCharts() {
     }));
   }
 
-  // Context header (stance / dominance / F&G) + per-symbol score+trend map.
-  const ctxHeaderEl = document.getElementById('alloc-context-header');
-  const symbolContext = ctx ? symbolContextFromCtx(ctx) : {};
-  if (ctxHeaderEl) ctxHeaderEl.innerHTML = ctx ? renderContextBadges(ctx) : '';
+  renderMarketContextCard('market-context-card', ctx);
 
   renderAllocChart({
     canvasId: 'alloc-chart', emptyId: 'alloc-empty', legendId: 'alloc-legend',
-    chartRef: _refs.alloc, cash, positions, symbolContext,
+    chartRef: _refs.alloc, cash, positions,
   });
   renderPnlBarsChart({
     canvasId: 'pnl-bars-chart', emptyId: 'pnl-bars-empty',

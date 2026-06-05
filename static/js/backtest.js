@@ -646,34 +646,10 @@ function renderFromSnapshot(snap) {
 
   // Charts tab
   if (!document.getElementById('rtab-charts').classList.contains('hidden')) {
-    // Market context at the backtest's last cycle (last trade timestamp).
-    // Fire-and-forget: the chart renders immediately, context populates when ready.
-    const lastTradeTs = (snap.history || []).slice(-1)[0]?.timestamp;
-    const ctxHeaderEl = document.getElementById('alloc-context-header');
-    let symbolContext = {};
-    if (lastTradeTs) {
-      fetchJson(`/api/market/context?at=${encodeURIComponent(lastTradeTs)}`)
-        .then(ctx => {
-          if (!ctx) return;
-          symbolContext = symbolContextFromCtx(ctx);
-          if (ctxHeaderEl) ctxHeaderEl.innerHTML = renderContextBadges(ctx);
-          // Re-render alloc with per-symbol score+trend now that we have them.
-          renderAllocChart({
-            canvasId: 'alloc-chart', emptyId: 'alloc-empty', legendId: 'alloc-legend',
-            chartRef: _refs.alloc,
-            cash: snap.cash ?? 0, positions: snap.positions || [],
-            symbolContext,
-          });
-        })
-        .catch(() => {});
-    } else if (ctxHeaderEl) {
-      ctxHeaderEl.innerHTML = '';
-    }
     renderAllocChart({
       canvasId: 'alloc-chart', emptyId: 'alloc-empty', legendId: 'alloc-legend',
       chartRef: _refs.alloc,
       cash: snap.cash ?? 0, positions: snap.positions || [],
-      symbolContext,
     });
     renderPnlBarsChart({
       canvasId: 'pnl-bars-chart', emptyId: 'pnl-bars-empty',
@@ -685,7 +661,27 @@ function renderFromSnapshot(snap) {
       chartRef: _refs.volBars,
       history: snap.history || [],
     });
+    _refetchBtContextIfNeeded(snap);
   }
+}
+
+// Refetch the market context whenever the backtest's current cycle timestamp
+// changes (and the Charts tab is visible). Throttled by ts equality, not by
+// time — playback speed varies; we just don't want N requests per real second
+// when the snap polls itself.
+let _btCtxLastTs = null;
+function _refetchBtContextIfNeeded(snap) {
+  // snap.current_ts is "YYYY-MM-DD HH:MM" — convert to ISO for the endpoint.
+  const ts = snap?.current_ts;
+  if (!ts || ts === _btCtxLastTs) return;
+  _btCtxLastTs = ts;
+  const atIso = ts.replace(' ', 'T') + ':00';
+  fetchJson(`/api/market/context?at=${encodeURIComponent(atIso)}`, 0, { force: true })
+    .then(ctx => {
+      if (_btCtxLastTs !== ts) return;  // a newer cycle landed during the fetch
+      renderMarketContextCard('market-context-card', ctx);
+    })
+    .catch(() => {});
 }
 
 function renderKpis(snap) {

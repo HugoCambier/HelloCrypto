@@ -734,6 +734,44 @@ function symbolContextFromCtx(ctx) {
   return out;
 }
 
+// Render the standalone "Contexte marché" card (badges + per-symbol grid).
+// Used on both the cockpit and the backtest page; reflects the run's current
+// playback timestamp when one is supplied, else the latest live snapshot.
+function renderMarketContextCard(containerId, ctx) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!ctx) { el.innerHTML = '<p class="text-xs text-slate-500 italic">Indisponible</p>'; return; }
+
+  const badges = renderContextBadges(ctx);
+  const symbols = ctx.symbols || [];
+  const trendArrow = t => t === 'haussier' ? '↑' : t === 'baissier' ? '↓' : '·';
+  const trendCls   = t => t === 'haussier' ? 'text-emerald-400'
+                       : t === 'baissier' ? 'text-rose-400'
+                       : 'text-slate-500';
+  const rows = symbols.map(s => {
+    const short = shortSym(s.symbol);
+    const score = s.score != null ? `${fmtMax(s.score)}` : '—';
+    const t1d = s.trend_1d || '—';
+    const ti  = s.trend || '—';
+    return `<div class="grid grid-cols-[60px_minmax(40px,1fr)_minmax(60px,auto)_minmax(40px,auto)] gap-1.5 items-center py-0.5 text-[11px]">
+      <span class="text-slate-300 font-mono">${short}</span>
+      <span class="text-slate-200 text-right">${score}<span class="text-slate-600">/10</span></span>
+      <span class="${trendCls(t1d)} text-right" title="trend 1d">${trendArrow(t1d)} ${t1d.slice(0,4)}</span>
+      <span class="${trendCls(ti)} text-right" title="trend 1h">${trendArrow(ti)}</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="flex items-center gap-2 flex-wrap mb-3 text-[11px]">${badges || '<span class="text-slate-500 italic">Pas de contexte</span>'}</div>
+    <div class="space-y-0">
+      <div class="grid grid-cols-[60px_minmax(40px,1fr)_minmax(60px,auto)_minmax(40px,auto)] gap-1.5 text-[10px] text-slate-500 uppercase tracking-wider pb-1.5 border-b border-slate-800">
+        <span>Sym</span><span class="text-right">Score</span><span class="text-right">1d</span><span class="text-right">1h</span>
+      </div>
+      ${rows || '<p class="text-xs text-slate-500 italic mt-2">Aucun symbole</p>'}
+    </div>
+  `;
+}
+
 // ─── Allocation donut ────────────────────────────────────────────────────────
 function renderAllocChart(opts) {
   const canvas = document.getElementById(opts.canvasId);
@@ -782,19 +820,14 @@ function renderAllocChart(opts) {
   if (opts.chartRef) opts.chartRef.current = chart;
 
   if (legend) {
-    const rows = labels.map((l, i) => {
-      const ctx = (opts.symbolContext || {})[l] || {};
-      const trend = ctx.trend ? `<span class="text-[10px] uppercase tracking-wider text-slate-500">${ctx.trend.slice(0,4)}</span>` : '';
-      const score = (ctx.score != null) ? `<span class="text-[10px] text-slate-400">${fmtMax(ctx.score)}/10</span>` : '';
-      return `<div class="flex items-center gap-2">
+    const rows = labels.map((l, i) =>
+      `<div class="flex items-center gap-2">
         <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${colors[i]}"></span>
         <span class="text-slate-300">${l}</span>
-        ${score}
-        ${trend}
         <span class="text-slate-400 ml-auto">$${fmt(values[i])}</span>
         <span class="text-slate-600 w-10 text-right">${fmt(values[i]/total*100,1)}%</span>
-      </div>`;
-    });
+      </div>`
+    );
     rows.push(
       `<div class="flex items-center gap-2 pt-1.5 mt-1 border-t border-slate-700/50">
         <span class="w-2.5 h-2.5 shrink-0"></span>
