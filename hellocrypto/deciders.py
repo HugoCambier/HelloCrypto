@@ -39,6 +39,8 @@ DEFAULTS = {
     "size_multiplier":       1.0,        # per-stance allocation multiplier on top of risk-level/tier sizing
     "dd_scale_out_paliers": (0.10, 0.15, 0.20),  # fractions: progressive de-risking thresholds when portfolio drops below peak
     "dd_scale_out_frac":     1.0 / 3.0,  # fraction du qty détenu vendue à chaque palier DD franchi
+    "early_exit_loss_pct":     5.0,      # loss% from entry needed to consider an early exit
+    "early_exit_score_thr":    4,        # score below which we cut on loss (stricter than score_exit_threshold)
 }
 
 # Per-stance overrides. ``exit_signal`` switches the source of the bearish-trend
@@ -381,23 +383,61 @@ def regime_decision(
             milestones_taken[sym] = already
     st["milestones_taken"] = milestones_taken
 
-    # ── Exits: bear-trend timer + score gate (anti-whipsaw) ─────────────────
-    # Trend-bear timer must elapse AND the holistic score must have fallen
-    # under ``score_exit_threshold`` — anti-whipsaw guard against the 1h
-    # trend kicking us out of positions whose multi-signal score still says
-    # the setup is sound.
+    # ── Exits: early-on-deterioration + bear-trend timer ────────────────────
+    # Two distinct exit paths share this loop:
+    #
+    # 1. Early-exit (NEW): position en perte ≥ ``early_exit_loss_pct`` ET
+    #    score actuel < ``early_exit_score_thr``. Bypasse le bear timer —
+    #    quand le setup est cassé techniquement ET qu'on saigne, attendre
+    #    24-36h de confirmation bear coûte trop cher. Cible les "signal-
+    #    perdants à -$1.5/trade" qui bleed lentement.
+    #
+    # 2. Bear-timer (existant): trend baissier confirmé ``trend_confirm_hours``
+    #    ET score < ``score_exit_threshold``. Anti-whipsaw : on évite de
+    #    sortir d'une position dont le score multi-signal dit encore "ok".
+    #
+    # Both respect ``min_hold_hours`` to avoid panic exits right after entry.
+    early_loss_thr  = float(p.get("early_exit_loss_pct") or 0)
+    early_score_thr = int(p.get("early_exit_score_thr") or 0)
     for sym in list(holdings):
-        if now_ts is None:
+        if now_ts is None or sym in selling_now:
             continue
-        bear_ts = bear_since.get(sym)
-        ent_ts  = entry_ts.get(sym, now_ts)
+        bear_ts   = bear_since.get(sym)
+        ent_ts    = entry_ts.get(sym, now_ts)
         sym_score = scores.get(sym, 5)
+        held_for  = now_ts - ent_ts
+        if held_for < min_hold_sec:
+            continue
+
+        # Path 1: early exit on deterioration (loss + weak score).
+        cur_price = float((market_raw.get(sym) or {}).get("price") or 0)
+        avg_price = float(holdings[sym].get("avg_price") or 0)
+        if (early_loss_thr > 0 and early_score_thr > 0
+                and cur_price > 0 and avg_price > 0):
+            loss_pct = (avg_price - cur_price) / avg_price * 100
+            if loss_pct >= early_loss_thr and sym_score < early_score_thr:
+                actions.append({
+                    "type":      "sell",
+                    "symbol":    sym,
+                    "qty":       holdings[sym]["qty"],
+                    "exit_kind": "early",
+                    "reason": (
+                        f"Exit précoce — perte {loss_pct:.1f}% ≥ {early_loss_thr:g}% "
+                        f"+ score {sym_score:.1f}/10 < {early_score_thr} "
+                        f"(hold {held_for / 3600:.1f}h, stance {stance})"
+                    ),
+                })
+                selling_now.add(sym)
+                last_sell_ts[sym] = now_ts
+                entry_ts.pop(sym, None)
+                continue
+
+        # Path 2: bear-trend confirmed + score gate.
         if (bear_ts is not None
                 and (now_ts - bear_ts) >= confirm_sec
-                and (now_ts - ent_ts) >= min_hold_sec
                 and sym_score < score_exit_thr):
             bear_h = (now_ts - bear_ts) / 3600
-            hold_h = (now_ts - ent_ts) / 3600
+            hold_h = held_for / 3600
             actions.append({
                 "type":   "sell",
                 "symbol": sym,
@@ -430,8 +470,8 @@ def regime_decision(
         score = scores.get(sym, 0)
         tier = coin_tier(sym, at=as_of_date)
         sym_threshold = _per_coin_threshold(p["buy_threshold"], tier)
-        # Stricter on top-ups: only offensive stances, +1 over entry threshold.
-        # PRESERVE/CASH never stack — they're defensive.
+        # Stricter conditions on top-ups: only offensive stances, +1 over the
+        # entry threshold. PRESERVE/CASH never stack — they're defensive.
         if is_topup:
             if stance not in ("DEPLOY", "SELECTIVE"):
                 continue
@@ -473,7 +513,7 @@ def regime_decision(
             ),
         })
         # Preserve entry_ts on top-ups so min_hold / bear_confirm timers stay
-        # anchored on the original entry, not on each refill.
+        # anchored on the *original* entry, not on each refill.
         if not is_topup and now_ts is not None:
             entry_ts[sym] = now_ts
         cash_after -= alloc

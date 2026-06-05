@@ -773,6 +773,124 @@ def test_legacy_bear_since_migrated():
     assert "FOOUSDC" in st["bear_since_1d"]
 
 
+# ── Early exit on deterioration ──────────────────────────────────────────────
+
+def test_early_exit_fires_on_loss_plus_weak_score():
+    """Position en perte >= 5% + score < 4 → exit immédiat sans bear timer.
+
+    Setup : BTC haussier (stance DEPLOY). FOO entré à $100, prix courant $92
+    (-8% de perte). Score FOO faible (techniques cassées). Pas de bear timer
+    enregistré pour FOO. L'exit précoce doit fire malgré l'absence de bear
+    trend confirmé.
+    """
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        # Weak: 5 -2 (trend_1d=baissier) -1 (trend=baissier) -1 (MACD) -1 (sma) -3 (RSI>75) = -3 → 0
+        "FOOUSDC": {"trend_1d": "baissier", "trend": "baissier",
+                    "price": 92.0, "macd": {"histogram": -1.0},
+                    "sma7": 95.0, "sma25": 100.0, "rsi14": 80.0},
+    }
+    now = 1_000_000.0
+    state = {
+        # Pas de bear timer pour FOO — la sortie bear-trend ne devrait PAS être éligible.
+        "bear_since_1d": {},
+        "bear_since_1h": {},
+        "entry_ts":      {"FOOUSDC": now - 24 * 3600},  # 24h de hold > min 12h
+    }
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"FOOUSDC": {"qty": 1.0, "avg_price": 100.0}},
+        cash=0, cycle=0, now_ts=now,
+        params={"decide_every_cycles": 1,
+                "trend_confirm_hours": 24.0, "min_hold_hours": 12.0},
+        strat_state=state,
+    )
+    sells = [a for a in result["actions"] if a["type"] == "sell"]
+    assert len(sells) == 1
+    assert sells[0]["symbol"] == "FOOUSDC"
+    assert sells[0].get("exit_kind") == "early"
+    assert "Exit précoce" in sells[0]["reason"]
+
+
+def test_early_exit_blocked_by_min_hold():
+    """min_hold_hours empêche l'early exit même quand loss+score weak."""
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        "FOOUSDC": {"trend_1d": "baissier", "trend": "baissier",
+                    "price": 92.0, "macd": {"histogram": -1.0},
+                    "sma7": 95.0, "sma25": 100.0, "rsi14": 80.0},
+    }
+    now = 1_000_000.0
+    state = {
+        "bear_since_1d": {},
+        "bear_since_1h": {},
+        "entry_ts":      {"FOOUSDC": now - 4 * 3600},  # juste 4h, sous min 12h
+    }
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"FOOUSDC": {"qty": 1.0, "avg_price": 100.0}},
+        cash=0, cycle=0, now_ts=now,
+        params={"decide_every_cycles": 1,
+                "trend_confirm_hours": 24.0, "min_hold_hours": 12.0},
+        strat_state=state,
+    )
+    assert [a for a in result["actions"] if a["type"] == "sell"] == []
+
+
+def test_early_exit_does_not_fire_on_profitable_position():
+    """Score faible mais position en gain → on ne touche pas (laisser courir)."""
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        # Score weak comme dans le test précédent
+        "FOOUSDC": {"trend_1d": "baissier", "trend": "baissier",
+                    "price": 110.0,  # +10% vs entry, position en gain
+                    "macd": {"histogram": -1.0},
+                    "sma7": 95.0, "sma25": 100.0, "rsi14": 80.0},
+    }
+    now = 1_000_000.0
+    state = {
+        "bear_since_1d": {},
+        "bear_since_1h": {},
+        "entry_ts":      {"FOOUSDC": now - 24 * 3600},
+    }
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"FOOUSDC": {"qty": 1.0, "avg_price": 100.0}},
+        cash=0, cycle=0, now_ts=now,
+        params={"decide_every_cycles": 1,
+                "trend_confirm_hours": 24.0, "min_hold_hours": 12.0},
+        strat_state=state,
+    )
+    # Pas d'early-exit (pas en perte). Pas de bear-timer non plus (pas configuré).
+    assert [a for a in result["actions"] if a["type"] == "sell"] == []
+
+
+def test_early_exit_disabled_when_threshold_zero():
+    """early_exit_loss_pct=0 désactive complètement le mécanisme."""
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        "FOOUSDC": {"trend_1d": "baissier", "trend": "baissier",
+                    "price": 92.0, "macd": {"histogram": -1.0},
+                    "sma7": 95.0, "sma25": 100.0, "rsi14": 80.0},
+    }
+    now = 1_000_000.0
+    state = {
+        "bear_since_1d": {},
+        "bear_since_1h": {},
+        "entry_ts":      {"FOOUSDC": now - 24 * 3600},
+    }
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"FOOUSDC": {"qty": 1.0, "avg_price": 100.0}},
+        cash=0, cycle=0, now_ts=now,
+        params={"decide_every_cycles": 1,
+                "trend_confirm_hours": 24.0, "min_hold_hours": 12.0,
+                "early_exit_loss_pct": 0},  # disabled
+        strat_state=state,
+    )
+    assert [a for a in result["actions"] if a["type"] == "sell"] == []
+
+
 # ── Top-up: stack onto an existing position with a stricter threshold ───────
 
 
@@ -794,11 +912,12 @@ def test_topup_fires_in_DEPLOY_with_high_score():
 
 def test_topup_skipped_when_score_equals_base_threshold():
     """Score = buy_threshold (not +1) blocks top-ups even in DEPLOY."""
+    # Build a market where BTC scores exactly 8: trend_1d haussier (+2),
+    # trend haussier (+1) — no MACD, no SMA cross extras.
     market = _market(btc_trend="haussier", n_bull=6, n_bear=4)
-    # Score BTC at exactly 8: trend_1d haussier (+2), trend haussier (+1), no
-    # MACD, no SMA cross extras → 5 + 2 + 1 = 8.
     market["BTCUSDC"] = {
         "trend_1d": "haussier", "trend": "haussier", "price": 100.0,
+        # no macd / no sma → score = 5 + 2 + 1 = 8
     }
     assert _derive_stance(market) == "DEPLOY"
     result, _ = regime_decision(
@@ -813,8 +932,10 @@ def test_topup_skipped_when_score_equals_base_threshold():
 
 
 def test_topup_blocked_in_PRESERVE():
-    """PRESERVE stance must block top-ups regardless of score."""
+    """Held BTC + score=10 but BTC trend_1d baissier → PRESERVE, no top-up."""
     market = _market(btc_trend="baissier", n_bull=4, n_bear=6)
+    # Score the held BTC high anyway (using trend 1h haussier even though 1d
+    # is baissier and stance is PRESERVE).
     assert _derive_stance(market) == "PRESERVE"
     result, _ = regime_decision(
         market_raw=market,
@@ -843,6 +964,7 @@ def test_topup_preserves_entry_ts():
         params={"buy_threshold": 8, "decide_every_cycles": 1},
         strat_state=state,
     )
+    # entry_ts must remain anchored on the first buy, not bumped by the top-up
     assert st["entry_ts"].get("BTCUSDC") == original_entry
 
 

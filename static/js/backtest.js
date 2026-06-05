@@ -115,9 +115,10 @@ function _buildRecapMarkdown() {
   const sellsTrail = sellsAll.filter(t => /trailing-stop/i.test(t.action || ''));
   const sellsLiq   = sellsAll.filter(t => /liquidation/i.test(t.action || ''));
   const sellsScale = sellsAll.filter(t => /scale-out/i.test(t.action || ''));
-  // Signal-driven exits = ce qui n'est ni stop / trailing / liquidation / scale-out :
+  const sellsEarly = sellsAll.filter(t => /early-exit/i.test(t.action || ''));
+  // Signal-driven exits = ce qui n'est ni stop / trailing / liquidation / scale-out / early-exit :
   // en rule mode c'est la sortie "trend break", en LLM mode le SELL du modèle.
-  const sellsSig   = sellsAll.filter(t => !/stop-loss|trailing-stop|liquidation|scale-out/i.test(t.action || ''));
+  const sellsSig   = sellsAll.filter(t => !/stop-loss|trailing-stop|liquidation|scale-out|early-exit/i.test(t.action || ''));
   const winners   = sellsAll.filter(t => (t.pnl ?? 0) > 0);
   const losers    = sellsAll.filter(t => (t.pnl ?? 0) < 0);
   const grossW    = winners.reduce((s, t) => s + (t.pnl || 0), 0);
@@ -174,9 +175,10 @@ function _buildRecapMarkdown() {
       if (typeof entryScore === 'number') scoredOutcomes.push({ s: entryScore, pnl: t.pnl });
       // Catégorisation de la sortie pour le diagnostic ciblé.
       let exitKind = 'sig';
-      if      (/stop-loss/i.test(t.action))   exitKind = 'hard';
+      if      (/stop-loss/i.test(t.action))    exitKind = 'hard';
       else if (/trailing-stop/i.test(t.action))exitKind = 'trail';
-      else if (/liquidation/i.test(t.action)) exitKind = 'liq';
+      else if (/early-exit/i.test(t.action))   exitKind = 'early';
+      else if (/liquidation/i.test(t.action))  exitKind = 'liq';
       closedTrades.push({ sym, pnl: t.pnl, score: entryScore, ctx: entryCtx, kind: exitKind });
     }
   }
@@ -322,6 +324,7 @@ function _buildRecapMarkdown() {
     `- Stop-loss dur : ${sellsHard.length}/${sellsAll.length} (${pctOf(sellsHard.length, sellsAll.length)}, PnL ${fmtDollar(sumPnL(sellsHard))})`,
     `- Trailing-stop : ${sellsTrail.length}/${sellsAll.length} (${pctOf(sellsTrail.length, sellsAll.length)}, PnL ${fmtDollar(sumPnL(sellsTrail))})`,
     ...(sellsScale.length ? [`- Scale-out (prise de profit) : ${sellsScale.length}/${sellsAll.length} (${pctOf(sellsScale.length, sellsAll.length)}, PnL ${fmtDollar(sumPnL(sellsScale))})`] : []),
+    ...(sellsEarly.length ? [`- Exit précoce (perte+score weak) : ${sellsEarly.length}/${sellsAll.length} (${pctOf(sellsEarly.length, sellsAll.length)}, PnL ${fmtDollar(sumPnL(sellsEarly))})`] : []),
     `- Signal (tendance/LLM) : ${sellsSig.length}/${sellsAll.length} (${pctOf(sellsSig.length, sellsAll.length)}, PnL ${fmtDollar(sumPnL(sellsSig))})`,
     `- Liquidation finale : ${sellsLiq.length}/${sellsAll.length} (${pctOf(sellsLiq.length, sellsAll.length)}, PnL ${fmtDollar(sumPnL(sellsLiq))})`,
   ] : ['- Aucune sortie enregistrée'];

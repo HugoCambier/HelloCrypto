@@ -651,10 +651,16 @@ def run_live(
                 if fully_closed:
                     peak_prices.pop(sym, None)
                     cooldown_map[sym] = i
+                if atype == "scale_out":
+                    action_label = "SELL (scale-out)"
+                elif a.get("exit_kind") == "early":
+                    action_label = "SELL (early-exit)"
+                else:
+                    action_label = "SELL"
                 history.append({
                     "cycle":     current_step,
                     "timestamp": dt_str,
-                    "action":    "SELL (scale-out)" if atype == "scale_out" else "SELL",
+                    "action":    action_label,
                     "symbol":    sym,
                     "qty":       round(sr.qty, 6),
                     "amount":    round(sr.received, 2),
