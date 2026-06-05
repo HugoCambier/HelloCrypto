@@ -900,7 +900,7 @@ def test_topup_fires_in_DEPLOY_with_high_score():
     assert _derive_stance(market) == "DEPLOY"
     result, _ = regime_decision(
         market_raw=market,
-        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 50000.0}},
+        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 100.0}},
         cash=500.0, cycle=1, now_ts=1_000_000.0, risk_level=7,
         params={"buy_threshold": 8, "decide_every_cycles": 1},
     )
@@ -922,7 +922,7 @@ def test_topup_skipped_when_score_equals_base_threshold():
     assert _derive_stance(market) == "DEPLOY"
     result, _ = regime_decision(
         market_raw=market,
-        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 50000.0}},
+        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 100.0}},
         cash=500.0, cycle=1, now_ts=1_000_000.0, risk_level=7,
         params={"buy_threshold": 8, "decide_every_cycles": 1},
     )
@@ -939,7 +939,7 @@ def test_topup_blocked_in_PRESERVE():
     assert _derive_stance(market) == "PRESERVE"
     result, _ = regime_decision(
         market_raw=market,
-        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 50000.0}},
+        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 100.0}},
         cash=500.0, cycle=1, now_ts=1_000_000.0, risk_level=7,
         params={"buy_threshold": 8, "decide_every_cycles": 1},
     )
@@ -959,7 +959,7 @@ def test_topup_preserves_entry_ts():
     }
     _, st = regime_decision(
         market_raw=market,
-        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 50000.0}},
+        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 100.0}},
         cash=500.0, cycle=1, now_ts=1_000_000.0, risk_level=7,
         params={"buy_threshold": 8, "decide_every_cycles": 1},
         strat_state=state,
@@ -973,7 +973,7 @@ def test_topup_does_not_consume_top_n_slot():
     market = _market(btc_trend="haussier", n_bull=6, n_bear=4)
     result, _ = regime_decision(
         market_raw=market,
-        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 50000.0}},
+        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 100.0}},
         cash=500.0, cycle=1, now_ts=1_000_000.0, risk_level=7,
         # top_n=2 → 1 already held, room for 1 fresh entry. Top-up on BTC
         # must not count against that quota.
@@ -984,3 +984,60 @@ def test_topup_does_not_consume_top_n_slot():
     other   = [a for a in buys if a["symbol"] != "BTCUSDC"]
     assert btc_top, "Top-up on BTC should fire"
     assert other,   "Fresh entry on another bull symbol should still fit in top_n"
+
+
+def test_topup_blocked_when_position_underwater():
+    """Position en perte > 2% vs avg_price → top-up bloqué même si stance/score OK.
+
+    Évite d'arroser les bagholders : si le marché a fait mentir la thèse
+    initiale (entry au mauvais moment), on n'empile pas avant que la
+    position remonte au-dessus du buffer (-2%).
+    """
+    market = _market(btc_trend="haussier", n_bull=6, n_bear=4)
+    assert _derive_stance(market) == "DEPLOY"
+    # avg_price 100, prix courant 95 (-5%) → au-delà du buffer -2%.
+    market["BTCUSDC"]["price"] = 95.0
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 100.0}},
+        cash=500.0, cycle=1, now_ts=1_000_000.0, risk_level=7,
+        params={"buy_threshold": 8, "decide_every_cycles": 1},
+    )
+    btc_buys = [a for a in result["actions"]
+                if a["type"] == "buy" and a["symbol"] == "BTCUSDC"]
+    assert not btc_buys, "Top-up doit être bloqué quand position en perte > 2%"
+
+
+def test_topup_allowed_within_noise_buffer():
+    """Position juste sous l'avg_price (dans le tampon -2%) → top-up autorisé."""
+    market = _market(btc_trend="haussier", n_bull=6, n_bear=4)
+    assert _derive_stance(market) == "DEPLOY"
+    # avg_price 100, prix courant 99 (-1%) → dans le tampon de noise
+    market["BTCUSDC"]["price"] = 99.0
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 100.0}},
+        cash=500.0, cycle=1, now_ts=1_000_000.0, risk_level=7,
+        params={"buy_threshold": 8, "decide_every_cycles": 1},
+    )
+    btc_buys = [a for a in result["actions"]
+                if a["type"] == "buy" and a["symbol"] == "BTCUSDC"]
+    assert btc_buys, "Top-up doit fire dans le tampon de noise (-1%)"
+    assert "Top-up" in btc_buys[0]["reason"]
+
+
+def test_topup_disabled_with_threshold_zero():
+    """topup_max_loss_pct=0 désactive le garde-fou (fallback legacy)."""
+    market = _market(btc_trend="haussier", n_bull=6, n_bear=4)
+    market["BTCUSDC"]["price"] = 90.0  # -10% from avg, hors tampon
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 100.0}},
+        cash=500.0, cycle=1, now_ts=1_000_000.0, risk_level=7,
+        params={"buy_threshold": 8, "decide_every_cycles": 1,
+                "topup_max_loss_pct": 0},
+    )
+    btc_buys = [a for a in result["actions"]
+                if a["type"] == "buy" and a["symbol"] == "BTCUSDC"]
+    assert btc_buys, "Avec topup_max_loss_pct=0, top-up doit fire même en grosse perte"
+
