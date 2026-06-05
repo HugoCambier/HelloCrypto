@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from hellocrypto.api import compute_score_rules
 from hellocrypto.deciders import _derive_stance, regime_decision
 
 
@@ -709,6 +710,45 @@ def test_per_coin_size_factor_smaller_for_risky_coins():
     assert abs(_per_coin_size_factor(9) - 0.6) < 1e-9
     # Floor at 0.5
     assert _per_coin_size_factor(15) == 0.5
+
+
+def test_score_rules_momentum_24h_adds_continuous_signal():
+    """chg_24h linéaire ±2 sur ±10% : ajoute une discrimination float au-dessus
+    des composants binaires existants (trend/MACD/SMA cross)."""
+    # Baseline neutre : 5. chg_24h = +10% → +2.0. chg_24h = -10% → -2.0.
+    neutral = {"trend": "neutre", "macd": {"histogram": 0},
+               "sma7": 100.0, "sma25": 100.0, "price": 100.0}
+    base = compute_score_rules(neutral)  # 5.0
+    plus_mom = compute_score_rules({**neutral, "change_pct_24h": 10.0})
+    neg_mom  = compute_score_rules({**neutral, "change_pct_24h": -10.0})
+    # ±2.0 vs baseline (clampé en haut/bas si nécessaire)
+    assert abs((plus_mom - base) - 2.0) < 1e-6
+    assert abs((neg_mom  - base) + 2.0) < 1e-6
+
+
+def test_score_rules_overextension_penalty():
+    """Price >> SMA25 → pénalité graduée pour over-extension late-cycle.
+    On part d'une base 7 (non clampée) pour observer le -2 pur."""
+    # Base minimale non-saturée : trend_1d haussier +2, rien d'autre → 7.
+    base = {"trend_1d": "haussier", "trend": "neutre",
+            "macd": {"histogram": 0}, "price": 100.0,
+            "sma7": 100.0, "sma25": 100.0}
+    parked_at_ma = compute_score_rules(base)  # 7
+    far_above    = compute_score_rules({**base, "price": 135.0})  # +35% over → -2
+    assert abs((far_above - parked_at_ma) + 2.0) < 1e-6
+
+
+def test_score_rules_pullback_bonus_in_confirmed_bull():
+    """Léger pullback dans un bull confirmé (price entre -5% et 0% sous SMA25)
+    → bonus +1. Hors bull confirmé : 0. On utilise une base non-saturée."""
+    in_bull = {"trend_1d": "haussier", "trend": "neutre",
+               "macd": {"histogram": 0}, "price": 98.0,
+               "sma7": 100.0, "sma25": 100.0}  # price 2% sous sma25
+    no_trend = {**in_bull, "trend_1d": "neutre"}
+    bull_score    = compute_score_rules(in_bull)     # 5 + 2 (trend_1d) + 1 (pullback) = 8
+    notrend_score = compute_score_rules(no_trend)    # 5 + 0 + 0 = 5
+    # Différence = trend_1d +2 + pullback bonus +1 = +3
+    assert abs((bull_score - notrend_score) - 3.0) < 1e-6
 
 
 def test_legacy_bear_since_migrated():

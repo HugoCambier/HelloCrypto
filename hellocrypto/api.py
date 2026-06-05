@@ -269,15 +269,17 @@ def compute_scores(data: dict) -> dict:
     return {sym: compute_score(d) for sym, d in data.items()}
 
 
-def compute_score_rules(d: dict) -> int:
+def compute_score_rules(d: dict) -> float:
     """Enriched 0-10 score for the *deterministic* decider only (not the LLM).
 
-    Extends ``compute_score`` (RSI + trends + volatility) with MACD histogram,
-    SMA7/25 cross and Bollinger position, so the rule-based strategy can read
-    momentum/mean-reversion signals the LLM otherwise judges from raw data.
-    Base 5, additive, clamped 0-10. ``compute_score`` stays the LLM-facing one.
+    Float-valued pour permettre la discrimination fine entre setups dans la
+    zone de seuil (avant : tous les setups acceptables clusteraient à 8-10
+    en int, sans discrimination → 8.10 score moyen pour winners ET losers).
+    Composants discrets (trend/MACD/SMA cross) inchangés, composants continus
+    (chg_24h, sma_strength, sma25_distance) en float pour la granularité.
+    Base 5, additive, clamped 0-10.
     """
-    score = 5  # neutral base
+    score = 5.0  # neutral base
     # RSI sub-score (dominant mean-reversion signal)
     rsi = d.get("rsi14")
     if rsi is not None:
@@ -302,22 +304,25 @@ def compute_score_rules(d: dict) -> int:
     if hist is not None:
         if hist > 0:   score += 1
         elif hist < 0: score -= 1
-    # SMA7 vs SMA25 cross — trend confirmation (redundant with ``trend``
-    # signal-wise but the +1 is structurally important for bullish setups
-    # to clear the buy threshold; removing it shifted bench scores -0.26pp).
+    # SMA7 vs SMA25 — gradué continu plutôt que binaire ±1. Une force de
+    # tendance ±2 sur ±5% d'écart entre SMA7 et SMA25 → discrimine les
+    # tendances fortes des micro-flips.
     sma7, sma25 = d.get("sma7"), d.get("sma25")
     if sma7 is not None and sma25 is not None and sma25 > 0:
-        if sma7 > sma25:   score += 1
-        elif sma7 < sma25: score -= 1
+        sma_gap = (sma7 - sma25) / sma25
+        score += max(-2.0, min(2.0, sma_gap * 40.0))  # ±2 à ±5%
     # Volume-direction signal — flow confirmation on top of price action.
-    # Asymmetric: reward high-volume green hours (real buying); high-volume
-    # red can be shake-out, so no symmetric penalty. Final score still
-    # clamped 0-10, so the extra +1 only matters at the lower bands where
-    # it can tip a setup over the buy threshold.
+    # Asymétrique : reward high-volume green hours (real buying); high-volume
+    # red peut être shake-out, pas de pénalité symétrique.
     vol_ratio = d.get("volume_ratio_1h")
     change_1h = d.get("change_pct_1h", 0)
     if vol_ratio is not None and vol_ratio > 1.5 and change_1h > 0:
         score += 1
+    # Momentum 24h — gradué continu, comble le gap entre RSI (14h) et
+    # trend_1d (SMA cross daily). ±2 à ±10% de variation 24h, linéaire.
+    chg_24h = d.get("change_pct_24h")
+    if chg_24h is not None:
+        score += max(-2.0, min(2.0, chg_24h / 5.0))
     # Bollinger position — overbought/oversold relative to the bands
     bb = d.get("bollinger") or {}
     lower, upper = bb.get("lower"), bb.get("upper")
@@ -326,7 +331,15 @@ def compute_score_rules(d: dict) -> int:
         bb_pos = (price - lower) / (upper - lower)
         if bb_pos < 0.2:   score += 1  # near lower band → oversold
         elif bb_pos > 0.8: score -= 1  # near upper band → overbought
-    return max(0, min(10, score))
+    # Distance price ↔ SMA25 : pénalité continue pour over-extension late-cycle.
+    # On préfère acheter sur léger pullback que sur parabolic blow-off top.
+    if sma25 is not None and sma25 > 0 and price is not None:
+        ext = price / sma25 - 1.0
+        if   ext > 0.30: score -= 2.0   # très over-extended
+        elif ext > 0.15: score -= 1.0   # over-extended
+        elif -0.05 <= ext < 0.00 and trend_1d == "haussier":
+            score += 1.0                # pullback en bull confirmé → opportunité
+    return max(0.0, min(10.0, score))
 
 
 def compute_scores_rules(data: dict) -> dict:
