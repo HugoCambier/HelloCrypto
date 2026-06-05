@@ -771,3 +771,94 @@ def test_legacy_bear_since_migrated():
     # Legacy key gone, value migrated into the daily tracker.
     assert "bear_since" not in st
     assert "FOOUSDC" in st["bear_since_1d"]
+
+
+# ── Top-up: stack onto an existing position with a stricter threshold ───────
+
+
+def test_topup_fires_in_DEPLOY_with_high_score():
+    """Held BTC, DEPLOY, score=10 ≥ buy_threshold+1 → top-up buy emitted."""
+    market = _market(btc_trend="haussier", n_bull=6, n_bear=4)
+    assert _derive_stance(market) == "DEPLOY"
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 50000.0}},
+        cash=500.0, cycle=1, now_ts=1_000_000.0, risk_level=7,
+        params={"buy_threshold": 8, "decide_every_cycles": 1},
+    )
+    buys = [a for a in result["actions"] if a["type"] == "buy"]
+    btc_buys = [a for a in buys if a["symbol"] == "BTCUSDC"]
+    assert btc_buys, "DEPLOY + score=10 ≥ 9 must produce a top-up on held BTC"
+    assert "Top-up" in btc_buys[0]["reason"]
+
+
+def test_topup_skipped_when_score_equals_base_threshold():
+    """Score = buy_threshold (not +1) blocks top-ups even in DEPLOY."""
+    market = _market(btc_trend="haussier", n_bull=6, n_bear=4)
+    # Score BTC at exactly 8: trend_1d haussier (+2), trend haussier (+1), no
+    # MACD, no SMA cross extras → 5 + 2 + 1 = 8.
+    market["BTCUSDC"] = {
+        "trend_1d": "haussier", "trend": "haussier", "price": 100.0,
+    }
+    assert _derive_stance(market) == "DEPLOY"
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 50000.0}},
+        cash=500.0, cycle=1, now_ts=1_000_000.0, risk_level=7,
+        params={"buy_threshold": 8, "decide_every_cycles": 1},
+    )
+    btc_buys = [a for a in result["actions"]
+                if a["type"] == "buy" and a["symbol"] == "BTCUSDC"]
+    assert not btc_buys, "Score == threshold must not top-up (needs threshold+1)"
+
+
+def test_topup_blocked_in_PRESERVE():
+    """PRESERVE stance must block top-ups regardless of score."""
+    market = _market(btc_trend="baissier", n_bull=4, n_bear=6)
+    assert _derive_stance(market) == "PRESERVE"
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 50000.0}},
+        cash=500.0, cycle=1, now_ts=1_000_000.0, risk_level=7,
+        params={"buy_threshold": 8, "decide_every_cycles": 1},
+    )
+    btc_buys = [a for a in result["actions"]
+                if a["type"] == "buy" and a["symbol"] == "BTCUSDC"]
+    assert not btc_buys, "PRESERVE must block top-ups regardless of score"
+
+
+def test_topup_preserves_entry_ts():
+    """Top-up must NOT reset entry_ts — bear/min-hold timers reference the original entry."""
+    market = _market(btc_trend="haussier", n_bull=6, n_bear=4)
+    original_entry = 900_000.0
+    state = {
+        "bear_since_1d": {},
+        "bear_since_1h": {},
+        "entry_ts":      {"BTCUSDC": original_entry},
+    }
+    _, st = regime_decision(
+        market_raw=market,
+        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 50000.0}},
+        cash=500.0, cycle=1, now_ts=1_000_000.0, risk_level=7,
+        params={"buy_threshold": 8, "decide_every_cycles": 1},
+        strat_state=state,
+    )
+    assert st["entry_ts"].get("BTCUSDC") == original_entry
+
+
+def test_topup_does_not_consume_top_n_slot():
+    """Top-up on held coin must not block fresh entries on other slots."""
+    market = _market(btc_trend="haussier", n_bull=6, n_bear=4)
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"BTCUSDC": {"qty": 0.1, "avg_price": 50000.0}},
+        cash=500.0, cycle=1, now_ts=1_000_000.0, risk_level=7,
+        # top_n=2 → 1 already held, room for 1 fresh entry. Top-up on BTC
+        # must not count against that quota.
+        params={"buy_threshold": 8, "top_n": 2, "decide_every_cycles": 1},
+    )
+    buys = [a for a in result["actions"] if a["type"] == "buy"]
+    btc_top = [a for a in buys if a["symbol"] == "BTCUSDC"]
+    other   = [a for a in buys if a["symbol"] != "BTCUSDC"]
+    assert btc_top, "Top-up on BTC should fire"
+    assert other,   "Fresh entry on another bull symbol should still fit in top_n"

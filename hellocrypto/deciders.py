@@ -419,24 +419,38 @@ def regime_decision(
     else:
         candidates = sorted(market_raw.items(), key=lambda kv: -scores.get(kv[0], 0))
     for sym, d in candidates:
-        if held_after >= p["top_n"]:
+        # Top-up = the symbol is already a current holding (not being sold this
+        # cycle). Adding to it doesn't count against top_n, and uses a stricter
+        # threshold so we only stack on high-conviction signals. This is what
+        # lets a 1-coin watchlist reach ~100% invested instead of capping at
+        # one initial buy (~46% in DEPLOY).
+        is_topup = sym in holdings and sym not in selling_now
+        if not is_topup and held_after >= p["top_n"]:
             break
-        if sym in holdings and sym not in selling_now:
-            continue
         score = scores.get(sym, 0)
         tier = coin_tier(sym, at=as_of_date)
         sym_threshold = _per_coin_threshold(p["buy_threshold"], tier)
-        if score < sym_threshold:
+        # Stricter on top-ups: only offensive stances, +1 over entry threshold.
+        # PRESERVE/CASH never stack — they're defensive.
+        if is_topup:
+            if stance not in ("DEPLOY", "SELECTIVE"):
+                continue
+            effective_threshold = sym_threshold + 1
+        else:
+            effective_threshold = sym_threshold
+        if score < effective_threshold:
             continue
         if d.get("trend_1d") == "baissier":
             continue
         if tier > risk_level:
-            blocked_tier.append(sym)
+            if not is_topup:
+                blocked_tier.append(sym)
             continue
         if cooldown_sec > 0 and now_ts is not None:
             sold_at = last_sell_ts.get(sym)
             if sold_at is not None and (now_ts - sold_at) < cooldown_sec:
-                blocked_cooldown.append(sym)
+                if not is_topup:
+                    blocked_cooldown.append(sym)
                 continue
         size_factor = _per_coin_size_factor(tier)
         size_mult   = float(p.get("size_multiplier", 1.0))
@@ -447,20 +461,24 @@ def regime_decision(
         if fng_adj:
             sign = "+" if fng_adj > 0 else ""
             fng_note = f", fng={fng_value} (thr {sign}{fng_adj})"
+        label = "Top-up" if is_topup else "Entry"
         actions.append({
             "type":        "buy",
             "symbol":      sym,
             "usdc_amount": round(alloc, 2),
             "reason": (
-                f"Entry score {score}/10 ≥ {sym_threshold} (tier {tier}, stance {stance}{fng_note}), "
+                f"{label} score {score}/10 ≥ {effective_threshold} (tier {tier}, stance {stance}{fng_note}), "
                 f"trend_1d={d.get('trend_1d', '?')}, "
                 f"risk {risk_level} → {max_pct*size_factor*size_mult*100:.0f}% cash"
             ),
         })
-        if now_ts is not None:
+        # Preserve entry_ts on top-ups so min_hold / bear_confirm timers stay
+        # anchored on the original entry, not on each refill.
+        if not is_topup and now_ts is not None:
             entry_ts[sym] = now_ts
         cash_after -= alloc
-        held_after += 1
+        if not is_topup:
+            held_after += 1
 
     st["bear_since_1d"] = bear_since_1d
     st["bear_since_1h"] = bear_since_1h
