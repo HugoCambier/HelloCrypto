@@ -1038,6 +1038,61 @@ function _slicePageFromHistory(history, ctx) {
   };
 }
 
+// ─── Floating tooltip for the truncated "Raison" column ─────────────────────
+// Native `title=` is slow (~1s delay) and unstyled. We render a single global
+// tooltip pinned with position:fixed so it isn't clipped by .trades-scroll.
+let _reasonTipEl = null;
+function _ensureReasonTip() {
+  if (_reasonTipEl) return _reasonTipEl;
+  _reasonTipEl = document.createElement('div');
+  _reasonTipEl.id = 'reason-tooltip';
+  _reasonTipEl.style.cssText = [
+    'position:fixed','z-index:60','max-width:420px',
+    'background:#0f172a','border:1px solid #334155','border-radius:8px',
+    'padding:8px 10px','font-size:12px','color:#cbd5e1','line-height:1.45',
+    'white-space:pre-wrap','word-break:break-word',
+    'box-shadow:0 10px 28px rgba(0,0,0,.5)',
+    'opacity:0','pointer-events:none','transition:opacity .12s',
+  ].join(';');
+  document.body.appendChild(_reasonTipEl);
+  return _reasonTipEl;
+}
+function _attachReasonTip(list) {
+  if (list._reasonTipBound) return;
+  list._reasonTipBound = true;
+  const hide = () => { if (_reasonTipEl) _reasonTipEl.style.opacity = '0'; };
+  list.addEventListener('mouseover', (e) => {
+    const cell = e.target.closest('.trade-reason-cell');
+    if (!cell || !list.contains(cell)) return;
+    const text = cell.dataset.reason || '';
+    if (!text || text === '—') { hide(); return; }
+    // Show only if actually truncated (avoid noise on short reasons).
+    if (cell.scrollWidth <= cell.clientWidth + 1) { hide(); return; }
+    const tip = _ensureReasonTip();
+    tip.textContent = text;
+    const r = cell.getBoundingClientRect();
+    // Reset to measure natural size, then position above or below the cell.
+    tip.style.opacity = '0';
+    tip.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 440)) + 'px';
+    tip.style.top  = '0px';
+    tip.style.transform = 'none';
+    const h = tip.offsetHeight;
+    if (r.top - h - 10 > 8) {
+      tip.style.top = (r.top - h - 8) + 'px';
+    } else {
+      tip.style.top = (r.bottom + 8) + 'px';
+    }
+    tip.style.opacity = '1';
+  });
+  list.addEventListener('mouseout', (e) => {
+    if (!e.target.closest('.trade-reason-cell')) return;
+    hide();
+  });
+  const scroll = list.closest('.trades-scroll');
+  if (scroll) scroll.addEventListener('scroll', hide, { passive: true });
+  window.addEventListener('scroll', hide, { passive: true });
+}
+
 // ─── Trade history with period + symbol filter + pagination ──────────────────
 // Two modes (mutually exclusive):
 //   - opts.fetcher  → async ({page, pageSize, period, symbols}) → server result
@@ -1142,9 +1197,10 @@ async function renderTradesTable(opts) {
         <span class="text-slate-400 text-right">${fmtQty(t.qty)}</span>
         <span class="text-slate-400 text-right">${t.amount != null ? '$' + fmt(t.amount) : '—'}</span>
         <span class="${pnlCls} text-right">${pnlStr}</span>
-        <span class="text-slate-400 truncate" title="${escHtml(reason)}">${escHtml(reason)}</span>
+        <span class="text-slate-400 truncate trade-reason-cell" data-reason="${escHtml(reason)}">${escHtml(reason)}</span>
       </div>`;
     }).join('');
+    _attachReasonTip(list);
   }
 
   if (paginationEl) {
