@@ -639,10 +639,34 @@ function renderFromSnapshot(snap) {
 
   // Charts tab
   if (!document.getElementById('rtab-charts').classList.contains('hidden')) {
+    // Market context at the backtest's last cycle (last trade timestamp).
+    // Fire-and-forget: the chart renders immediately, context populates when ready.
+    const lastTradeTs = (snap.history || []).slice(-1)[0]?.timestamp;
+    const ctxHeaderEl = document.getElementById('alloc-context-header');
+    let symbolContext = {};
+    if (lastTradeTs) {
+      fetchJson(`/api/market/context?at=${encodeURIComponent(lastTradeTs)}`)
+        .then(ctx => {
+          if (!ctx) return;
+          symbolContext = symbolContextFromCtx(ctx);
+          if (ctxHeaderEl) ctxHeaderEl.innerHTML = renderContextBadges(ctx);
+          // Re-render alloc with per-symbol score+trend now that we have them.
+          renderAllocChart({
+            canvasId: 'alloc-chart', emptyId: 'alloc-empty', legendId: 'alloc-legend',
+            chartRef: _refs.alloc,
+            cash: snap.cash ?? 0, positions: snap.positions || [],
+            symbolContext,
+          });
+        })
+        .catch(() => {});
+    } else if (ctxHeaderEl) {
+      ctxHeaderEl.innerHTML = '';
+    }
     renderAllocChart({
       canvasId: 'alloc-chart', emptyId: 'alloc-empty', legendId: 'alloc-legend',
       chartRef: _refs.alloc,
       cash: snap.cash ?? 0, positions: snap.positions || [],
+      symbolContext,
     });
     renderPnlBarsChart({
       canvasId: 'pnl-bars-chart', emptyId: 'pnl-bars-empty',

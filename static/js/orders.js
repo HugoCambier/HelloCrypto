@@ -156,7 +156,7 @@ function _orderCardHtml(item, pos, cash, context) {
   const techBits = [];
   if (rsi != null)   techBits.push(`RSI ${rsi}`);
   if (trend)         techBits.push(`Tendance ${trend}`);
-  if (score != null) techBits.push(`Score ${score}/10`);
+  if (score != null) techBits.push(`Score ${fmtMax(score)}/10`);
   const techRow = techBits.length
     ? `<div class="order-tech">${techBits.map(t => `<span class="tag">${escHtml(t)}</span>`).join('')}</div>`
     : '';

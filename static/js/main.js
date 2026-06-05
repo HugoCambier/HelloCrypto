@@ -1343,34 +1343,7 @@ function renderSimComparisons(snap) {
 
 // ─── Charts tab ──────────────────────────────────────────────────────────────
 let _chartsFetchToken = 0;
-
-const _STANCE_COLORS = {
-  DEPLOY:    'bg-emerald-900/40 text-emerald-300 border-emerald-800',
-  SELECTIVE: 'bg-sky-900/40 text-sky-300 border-sky-800',
-  PRESERVE:  'bg-amber-900/40 text-amber-300 border-amber-800',
-  CASH:      'bg-rose-900/40 text-rose-300 border-rose-800',
-};
-
-function _renderContextBadges(ctx) {
-  const parts = [];
-  const stance = ctx?.stance;
-  if (stance) {
-    const cls = _STANCE_COLORS[stance] || 'bg-slate-800 text-slate-300 border-slate-700';
-    parts.push(`<span class="px-2 py-0.5 rounded border ${cls} font-semibold tracking-wide">${stance}</span>`);
-  }
-  if (ctx?.btc_dominance != null) {
-    parts.push(`<span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">BTC.D ${ctx.btc_dominance}%</span>`);
-  }
-  if (ctx?.fng_value != null) {
-    parts.push(`<span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">F&amp;G ${ctx.fng_value}${ctx.fng_label ? ` · ${ctx.fng_label}` : ''}</span>`);
-  }
-  if (ctx?.live === false && ctx?.as_of_ts) {
-    parts.push(`<span class="text-slate-500 ml-1">@ ${ctx.as_of_ts.replace('T',' ').slice(0,16)}</span>`);
-  } else if (ctx?.live) {
-    parts.push(`<span class="text-emerald-500 ml-1">● live</span>`);
-  }
-  return parts.join('');
-}
+// renderContextBadges / symbolContextFromCtx are shared helpers in analytics.js.
 
 function _chartsTabVisible() {
   return !document.getElementById('rtab-charts')?.classList.contains('hidden');
@@ -1435,17 +1408,10 @@ async function loadCharts() {
     }));
   }
 
-  // Context header (stance / dominance / F&G) + per-symbol score+trend map
-  // keyed by short symbol (the alloc legend renders shortSym labels).
+  // Context header (stance / dominance / F&G) + per-symbol score+trend map.
   const ctxHeaderEl = document.getElementById('alloc-context-header');
-  const symbolContext = {};
-  if (ctx && Array.isArray(ctx.symbols)) {
-    for (const s of ctx.symbols) {
-      const k = (s.symbol || '').replace(/USDC$|USDT$/, '');
-      if (k) symbolContext[k] = { score: s.score, trend: s.trend, trend_1d: s.trend_1d };
-    }
-  }
-  if (ctxHeaderEl) ctxHeaderEl.innerHTML = ctx ? _renderContextBadges(ctx) : '';
+  const symbolContext = ctx ? symbolContextFromCtx(ctx) : {};
+  if (ctxHeaderEl) ctxHeaderEl.innerHTML = ctx ? renderContextBadges(ctx) : '';
 
   renderAllocChart({
     canvasId: 'alloc-chart', emptyId: 'alloc-empty', legendId: 'alloc-legend',

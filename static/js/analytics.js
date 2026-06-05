@@ -48,6 +48,9 @@ function invalidateCache(prefix = '') {
 
 // ─── Utils ───────────────────────────────────────────────────────────────────
 function fmt(n, d=2) { return n == null || isNaN(n) ? '—' : Number(n).toLocaleString('fr-FR', {minimumFractionDigits:d,maximumFractionDigits:d}); }
+// Like fmt() but caps the decimal count without forcing trailing zeros — useful
+// for score (0–10 float) and chart-axis tick labels where many digits are noise.
+function fmtMax(n, max=3) { return n == null || isNaN(n) ? '—' : Number(n).toLocaleString('fr-FR', {minimumFractionDigits:0, maximumFractionDigits:max}); }
 function fmtPct(n)   { return n == null ? '—' : `${n>=0?'+':''}${fmt(n)}%`; }
 function fmtPnl(n)   { if (n == null) return '—'; const sign = n >= 0 ? '+' : '-'; return `${sign}$${fmt(Math.abs(n))}`; }
 function fmtQty(n)   { return n == null || isNaN(n) ? '—' : Number(n).toLocaleString('fr-FR', {minimumFractionDigits:0, maximumFractionDigits:6}); }
@@ -550,7 +553,7 @@ function renderPnlChart(opts) {
       },
       scales: {
         x: { ticks: { color: '#475569', maxTicksLimit: 8, font:{size:10} }, grid: { color: '#1e293b' } },
-        y: { ticks: { color: '#475569', font:{size:10}, callback: v => `$${v}` }, grid: { color: '#1e293b' } },
+        y: { ticks: { color: '#475569', font:{size:10}, callback: v => `$${fmtMax(v)}` }, grid: { color: '#1e293b' } },
       },
     },
   });
@@ -623,7 +626,7 @@ function renderDrawdownChart(opts) {
       },
       scales: {
         x: { ticks: { color: '#475569', maxTicksLimit: 8, font:{size:10} }, grid: { color: '#1e293b' } },
-        y: { ticks: { color: '#475569', font:{size:10}, callback: v => `$${v}` }, grid: { color: '#1e293b' }, max: 0 },
+        y: { ticks: { color: '#475569', font:{size:10}, callback: v => `$${fmtMax(v)}` }, grid: { color: '#1e293b' }, max: 0 },
       },
     },
   });
@@ -643,6 +646,44 @@ function _alignToLabels(bench, strat, budget, valueMode) {
     while (j + 1 < bench.length && bench[j + 1].ts <= p.ts) j++;
     const v = bench[j].v;
     out.push(valueMode === 'absolute' ? v - budget : v);
+  }
+  return out;
+}
+
+// ─── Market context badges ───────────────────────────────────────────────────
+// Renders the stance / dominance / F&G chips shown above the allocation donut.
+// Shared between the cockpit (main.js) and the backtest page (backtest.js).
+const HC_STANCE_COLORS = {
+  DEPLOY:    'bg-emerald-900/40 text-emerald-300 border-emerald-800',
+  SELECTIVE: 'bg-sky-900/40 text-sky-300 border-sky-800',
+  PRESERVE:  'bg-amber-900/40 text-amber-300 border-amber-800',
+  CASH:      'bg-rose-900/40 text-rose-300 border-rose-800',
+};
+function renderContextBadges(ctx) {
+  const parts = [];
+  const stance = ctx?.stance;
+  if (stance) {
+    const cls = HC_STANCE_COLORS[stance] || 'bg-slate-800 text-slate-300 border-slate-700';
+    parts.push(`<span class="px-2 py-0.5 rounded border ${cls} font-semibold tracking-wide">${stance}</span>`);
+  }
+  if (ctx?.btc_dominance != null) {
+    parts.push(`<span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">BTC.D ${ctx.btc_dominance}%</span>`);
+  }
+  if (ctx?.fng_value != null) {
+    parts.push(`<span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">F&amp;G ${ctx.fng_value}${ctx.fng_label ? ` · ${ctx.fng_label}` : ''}</span>`);
+  }
+  if (ctx?.live === false && ctx?.as_of_ts) {
+    parts.push(`<span class="text-slate-500 ml-1">@ ${ctx.as_of_ts.replace('T',' ').slice(0,16)}</span>`);
+  } else if (ctx?.live) {
+    parts.push(`<span class="text-emerald-500 ml-1">● live</span>`);
+  }
+  return parts.join('');
+}
+function symbolContextFromCtx(ctx) {
+  const out = {};
+  for (const s of (ctx?.symbols || [])) {
+    const k = (s.symbol || '').replace(/USDC$|USDT$/, '');
+    if (k) out[k] = { score: s.score, trend: s.trend, trend_1d: s.trend_1d };
   }
   return out;
 }
@@ -698,7 +739,7 @@ function renderAllocChart(opts) {
     const rows = labels.map((l, i) => {
       const ctx = (opts.symbolContext || {})[l] || {};
       const trend = ctx.trend ? `<span class="text-[10px] uppercase tracking-wider text-slate-500">${ctx.trend.slice(0,4)}</span>` : '';
-      const score = (ctx.score != null) ? `<span class="text-[10px] text-slate-400">${ctx.score}/10</span>` : '';
+      const score = (ctx.score != null) ? `<span class="text-[10px] text-slate-400">${fmtMax(ctx.score)}/10</span>` : '';
       return `<div class="flex items-center gap-2">
         <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background:${colors[i]}"></span>
         <span class="text-slate-300">${l}</span>
@@ -786,7 +827,7 @@ function renderPnlBarsChart(opts) {
       },
       scales: {
         x: { ticks: { color: '#475569', font: { size: 10 } }, grid: { color: '#1e293b' } },
-        y: { ticks: { color: '#475569', font: { size: 10 }, callback: v => `$${v}` }, grid: { color: '#1e293b' } },
+        y: { ticks: { color: '#475569', font: { size: 10 }, callback: v => `$${fmtMax(v)}` }, grid: { color: '#1e293b' } },
       },
     },
   });
@@ -850,7 +891,7 @@ function renderVolBarsChart(opts) {
       },
       scales: {
         x: { ticks: { color: '#475569', font: { size: 10 } }, grid: { color: '#1e293b' } },
-        y: { ticks: { color: '#475569', font: { size: 10 }, callback: v => `$${v}` }, grid: { color: '#1e293b' } },
+        y: { ticks: { color: '#475569', font: { size: 10 }, callback: v => `$${fmtMax(v)}` }, grid: { color: '#1e293b' } },
       },
     },
   });
