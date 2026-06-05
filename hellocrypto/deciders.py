@@ -41,7 +41,6 @@ DEFAULTS = {
     "dd_scale_out_frac":     1.0 / 3.0,  # fraction du qty détenu vendue à chaque palier DD franchi
     "early_exit_loss_pct":     5.0,      # loss% from entry needed to consider an early exit
     "early_exit_score_thr":    4,        # score below which we cut on loss (stricter than score_exit_threshold)
-    "topup_max_loss_pct":      2.0,      # block top-up if position is below entry by more than this % (prevents averaging down into bagholders)
 }
 
 # Per-stance overrides. ``exit_signal`` switches the source of the bearish-trend
@@ -473,24 +472,9 @@ def regime_decision(
         sym_threshold = _per_coin_threshold(p["buy_threshold"], tier)
         # Stricter conditions on top-ups: only offensive stances, +1 over the
         # entry threshold. PRESERVE/CASH never stack — they're defensive.
-        # ALSO: don't double down on a losing position. Even with great
-        # technicals (high score), if cur_price < entry by more than the
-        # tampon, the market is telling us our timing was off — adding fuel
-        # to a bleeding position is what builds bagholders (ETH/SOL/POL on
-        # the 1000d run). Creates a neutral zone with early-exit: between
-        # -topup_max_loss_pct% and -early_exit_loss_pct% we neither add nor
-        # cut, we just wait.
         if is_topup:
             if stance not in ("DEPLOY", "SELECTIVE"):
                 continue
-            topup_max_loss = float(p.get("topup_max_loss_pct") or 0)
-            if topup_max_loss > 0:
-                avg_price = float(holdings[sym].get("avg_price") or 0)
-                cur_price = float(d.get("price") or 0)
-                if avg_price > 0 and cur_price > 0:
-                    loss_pct = (avg_price - cur_price) / avg_price * 100
-                    if loss_pct > topup_max_loss:
-                        continue
             effective_threshold = sym_threshold + 1
         else:
             effective_threshold = sym_threshold
