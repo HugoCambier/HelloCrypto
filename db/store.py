@@ -533,7 +533,14 @@ def load_logs(
     mode: str | None = None,
     session_id: str | None = None,
     limit: int = 200,
+    since: str | None = None,
 ) -> list[dict]:
+    """Load logs ordered by timestamp DESC.
+
+    ``since`` (ISO timestamp) restricts to rows strictly newer than that point —
+    used by the dashboard's incremental poll to avoid re-fetching the backlog
+    every 8s (was the dominant Supabase egress source).
+    """
     if _USE_FIRESTORE:
         from google.cloud import firestore as _firestore  # type: ignore
         q = _fs().collection("logs").order_by(
@@ -546,6 +553,8 @@ def load_logs(
             docs = [d for d in docs if d.get("mode") == mode]
         if session_id:
             docs = [d for d in docs if d.get("session_id") == session_id]
+        if since:
+            docs = [d for d in docs if (d.get("timestamp") or "") > since]
         return docs[:limit]
     elif _USE_POSTGRES:
         conditions, params = [], []
@@ -558,6 +567,9 @@ def load_logs(
         if session_id:
             conditions.append("session_id=%s")
             params.append(session_id)
+        if since:
+            conditions.append("timestamp>%s")
+            params.append(since)
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         params.append(limit)
         with _postgres() as c:
@@ -575,6 +587,9 @@ def load_logs(
             if session_id:
                 conditions.append("session_id=?")
                 params.append(session_id)
+            if since:
+                conditions.append("timestamp>?")
+                params.append(since)
             where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
             params.append(limit)
             rows = c.execute(

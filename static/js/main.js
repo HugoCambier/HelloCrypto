@@ -1444,6 +1444,9 @@ function exportCurrentRunTradesCSV() {
 
 // ─── Logs drawer ─────────────────────────────────────────────────────────────
 let _logsOpen=false, _logFilter='all', _logsSeen=new Set(), _logPollIv=null, _logGen=0;
+// Newest log timestamp seen by the current view; sent as ?since=… on each poll
+// so the backend only returns deltas. Reset whenever filter/session changes.
+let _logsSince=null;
 
 function toggleLogs() {
   _logsOpen = !_logsOpen;
@@ -1455,12 +1458,13 @@ function toggleLogs() {
 function setLogFilter(cat, btn) {
   _logFilter = cat; _logGen++;
   document.querySelectorAll('#logs-drawer .log-filter-btn').forEach(b=>b.classList.toggle('active',b===btn));
-  _logsSeen.clear(); document.getElementById('log-container').innerHTML='';
+  _logsSeen.clear(); _logsSince = null; document.getElementById('log-container').innerHTML='';
   pollLogs();
 }
 
 function clearLogsDisplay() {
-  _logsSeen.clear(); document.getElementById('log-container').innerHTML='';
+  _logsSeen.clear(); _logsSince = null;
+  document.getElementById('log-container').innerHTML='';
   document.getElementById('log-count').textContent='0';
 }
 
@@ -1487,11 +1491,17 @@ async function pollLogs() {
     } else if (_selectedMode === 'real') {
       params.set('mode', 'real');
     }
+    // Incremental fetch: after the initial backlog (no _logsSince), each poll
+    // only asks for rows strictly newer than the latest one already rendered.
+    // Cuts /api/logs egress by ~50× when the dashboard sits idle.
+    if (_logsSince) params.set('since', _logsSince);
     const logs = await fetch(`/api/logs?${params}`).then(r=>r.json());
     if (_logGen !== gen) return;
     const container = document.getElementById('log-container');
+    let newestTs = _logsSince;
     for (const e of [...logs].reverse()) {
       const key = e.timestamp+e.message;
+      if (e.timestamp && (!newestTs || e.timestamp > newestTs)) newestTs = e.timestamp;
       if (_logsSeen.has(key)) continue;
       _logsSeen.add(key);
       const div = document.createElement('div');
@@ -1500,6 +1510,7 @@ async function pollLogs() {
       div.innerHTML = ts + escHtml(e.message);
       container.prepend(div);
     }
+    _logsSince = newestTs;
     document.getElementById('log-count').textContent = _logsSeen.size;
   } catch {}
 }
@@ -1545,8 +1556,47 @@ async function boot() {
   }
 
   startLogPolling();
-  setInterval(() => { if (_selectedMode !== null) loadPerformance(); }, 30000);
-  setInterval(loadRunsList, 30000);
+  _startDashboardPolling();
+  _wireVisibilityPause();
+}
+
+// ─── Dashboard-wide polling (perf + runs list) ───────────────────────────────
+// Captured into named refs so _wireVisibilityPause can suspend them when the
+// tab is hidden — otherwise a forgotten browser tab keeps burning Supabase
+// egress 24/7 (the dominant cause of our quota overshoot).
+let _perfPollIv = null;
+let _runsPollIv = null;
+function _startDashboardPolling() {
+  if (!_perfPollIv) {
+    _perfPollIv = setInterval(() => { if (_selectedMode !== null) loadPerformance(); }, 30000);
+  }
+  if (!_runsPollIv) {
+    _runsPollIv = setInterval(loadRunsList, 30000);
+  }
+}
+function _stopDashboardPolling() {
+  if (_perfPollIv) { clearInterval(_perfPollIv); _perfPollIv = null; }
+  if (_runsPollIv) { clearInterval(_runsPollIv); _runsPollIv = null; }
+}
+
+function _wireVisibilityPause() {
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      // Tab backgrounded: drop every recurring fetch. The DOM keeps its
+      // last-rendered state; the next visible flip refreshes everything.
+      _stopDashboardPolling();
+      if (_logPollIv) { clearInterval(_logPollIv); _logPollIv = null; }
+      _stopSimPoll();
+    } else {
+      // Tab visible again: refetch once immediately, then restart the
+      // intervals (only re-arm sim polling if there's an active sim).
+      _startDashboardPolling();
+      if (_selectedMode !== null) loadPerformance();
+      loadRunsList();
+      if (_logsOpen) startLogPolling();
+      if (_simRunning) _startSimPoll();
+    }
+  });
 }
 
 boot();
