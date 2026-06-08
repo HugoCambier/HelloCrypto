@@ -721,7 +721,8 @@ function renderContextBadges(ctx) {
   if (ctx?.live === false && ctx?.as_of_ts) {
     parts.push(`<span class="text-slate-500 ml-1">@ ${ctx.as_of_ts.replace('T',' ').slice(0,16)}</span>`);
   } else if (ctx?.live) {
-    parts.push(`<span class="text-emerald-500 ml-1">● live</span>`);
+    const stamp = ctx?.as_of_ts ? ` · ${ctx.as_of_ts.replace('T',' ').slice(0,16)}` : '';
+    parts.push(`<span class="text-emerald-500 ml-1">● live${stamp}</span>`);
   }
   return parts.join('');
 }

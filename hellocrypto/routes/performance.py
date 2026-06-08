@@ -218,6 +218,40 @@ def api_watchlist_enriched():
         return jsonify({"items": [], "error": str(exc)}), 200
 
 
+def _latest_snapshot_ts() -> str | None:
+    """Return the most recent ``price_snapshots`` timestamp (5m preferred, 1h fallback).
+
+    Reflects the last time the live capture cycle refreshed indicators, which is
+    what the cockpit shows next to the ``● live`` badge.
+    """
+    from db.snapshots import _USE_FIRESTORE, _USE_POSTGRES
+    if _USE_FIRESTORE:
+        return None
+    ph = "%s" if _USE_POSTGRES else "?"
+    sql = f"SELECT MAX(timestamp) AS ts FROM price_snapshots WHERE interval={ph}"
+    try:
+        if _USE_POSTGRES:
+            from db.store import _postgres
+            with _postgres() as c:
+                for interval in ("5m", "1h"):
+                    c.execute(sql, (interval,))
+                    row = c.fetchone()
+                    ts = (dict(row).get("ts") if row else None)
+                    if ts:
+                        return ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+            return None
+        from db.store import _sqlite
+        with _sqlite() as c:
+            for interval in ("5m", "1h"):
+                row = c.execute(sql, (interval,)).fetchone()
+                ts = (dict(row).get("ts") if row else None)
+                if ts:
+                    return str(ts)
+        return None
+    except Exception:
+        return None
+
+
 def _context_live(watchlist: list[str]) -> dict:
     """Compute market context from live Binance/CoinGecko data."""
     market = get_enriched_market_data(watchlist, cycle_seconds=300) if watchlist else {}
@@ -231,9 +265,10 @@ def _context_live(watchlist: list[str]) -> dict:
     except Exception:
         fng = None
     stance = _derive_stance(market) if market else None
+    as_of = _latest_snapshot_ts() or (datetime.utcnow().isoformat() + "Z")
     return {
         "live":          True,
-        "as_of_ts":      datetime.utcnow().isoformat() + "Z",
+        "as_of_ts":      as_of,
         "stance":        stance,
         "btc_dominance": dom,
         "fng_value":     fng.get("value") if fng else None,
