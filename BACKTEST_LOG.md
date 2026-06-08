@@ -18,6 +18,7 @@ deux runs séparés de moins de ±$15.
 | 2026-06-08 | `261d2ca` | + top-up DEPLOY/SELECTIVE | +$79.4 | -39% | top-up → +$11 |
 | 2026-06-08 | `48b5b2a` (HEAD) | + early-exit | +$73.6 | -37% | early-exit → -$6 (régression sur PnL, DD ~stable) |
 | 2026-06-08 | `b0274f2` | + **garde-fou top-up** (no DCA on losing) | **+$81.4** | **-30.1%** | 🏆 **best PnL ET DD** — le revert `fbd0e50` était une erreur |
+| 2026-06-08 | `583f597` (revert via `cc0d2bb`) | + early-exit zombie 100h/-3% | +$164.7 | **-37.1%** | ❌ DD régresse, early-exit -$148.5 sur 48 trades — porte fermée |
 
 ## Découverte clé : le garde-fou top-up
 
@@ -48,11 +49,12 @@ Tentatives session 2026-06-08, non commitées :
 | Scoring relatif (penalty-only) | cohort ranking soustrait du score absolu | $162 | scoring reste inversé (gagnants < perdants) |
 | Profit-lock cliquet | peak ≥+5% → floor breakeven, peak ≥+15% → +5% | $131 | cascade re-entry : exits forcés → fresh setups dégradés |
 | Trailing adaptatif | trail tighten à 7%/5%/4% selon peak | $143 | même cascade re-entry, plus discrète |
+| Early-exit zombie (commité+revert) | hold ≥100h → seuil perte -5% → -3% | $164.7 | DD -37% (vs -30% baseline), early-exit -$148.5 sur 48 trades. CSV : 28 "shallow zombies" (100-200h) font -$70 de coupes marginales. Pire : zombie cut libère du cash qui se re-déploie en SL/circuit-breaker (ex BTC fév 2025 : zombie -$10.4 → top-ups → -$5 circuit-breaker). Pattern cascade re-entry confirmé pour la 4e fois. |
 
 ## Leçons consolidées
 
 1. **Variance start-time** : ±$10-30 sur 1000j juste en changeant l'heure de démarrage.
-2. **Cascade re-entry** : toute mécanique qui ajoute des exits libère du capital qui se redéploie souvent au mauvais moment → -$ net même si la mécanique elle-même fait gagner.
+2. **Cascade re-entry** : toute mécanique qui ajoute des exits libère du capital qui se redéploie souvent au mauvais moment → -$ net même si la mécanique elle-même fait gagner. **Confirmé 4× : profit-lock, trailing adaptatif, scoring relatif, early-exit zombie.** Règle empirique : ne pas chercher à améliorer les exits — chercher à filtrer les entrées (filtre macro, OR-gate CASH, etc.).
 3. **Top-up DEPLOY/SELECTIVE** : +$11 mesuré.
 4. **PRESERVE top_n=0** : +$21 mesuré (vs top_n=2).
 5. **Early-exit** : -$6 marginal mais coupe quelques gros bleeds. À garder ou pas selon priorité PnL vs DD.
