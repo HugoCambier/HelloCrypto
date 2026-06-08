@@ -499,17 +499,18 @@ def test_scale_out_does_not_fire_below_first_milestone():
 
 
 def test_risk_tier_filter_low_risk_only_blue_chips():
-    """risk_level=3 → only BTC (tier 3) passes; ETH (tier 4) skipped."""
-    # BTC + ETH both score 10 ; risk filter must exclude ETH (tier > 3).
+    """risk_level=2 → only BTC (baseline tier 2) passes; ETH (tier 3) skipped."""
+    from datetime import date
     market = {
         "BTCUSDC": _sym(trend="haussier"),
         "ETHUSDC": _sym(trend="haussier"),
     }
     result, _ = regime_decision(
         market_raw=market, holdings={}, cash=1000.0, cycle=0,
-        now_ts=1_000_000.0, risk_level=3,
+        now_ts=1_000_000.0, risk_level=2,
         params={"decide_every_cycles": 1, "enable_regime_stance": False,
                 "buy_threshold": 8},
+        as_of_date=date(1970, 1, 12),
     )
     buys = [a["symbol"] for a in result["actions"] if a["type"] == "buy"]
     assert buys == ["BTCUSDC"]
@@ -517,6 +518,7 @@ def test_risk_tier_filter_low_risk_only_blue_chips():
 
 def test_risk_tier_filter_max_risk_allows_all():
     """risk_level=10 → no tier exclusion."""
+    from datetime import date
     market = {
         "BTCUSDC": _sym(trend="haussier"),
         "POLUSDC": _sym(trend="haussier"),
@@ -526,6 +528,7 @@ def test_risk_tier_filter_max_risk_allows_all():
         now_ts=1_000_000.0, risk_level=10,
         params={"decide_every_cycles": 1, "enable_regime_stance": False,
                 "buy_threshold": 8, "top_n": 5},
+        as_of_date=date(1970, 1, 12),
     )
     buys = {a["symbol"] for a in result["actions"] if a["type"] == "buy"}
     assert buys == {"BTCUSDC", "POLUSDC"}
