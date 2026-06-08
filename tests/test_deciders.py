@@ -894,6 +894,87 @@ def test_early_exit_disabled_when_threshold_zero():
     assert [a for a in result["actions"] if a["type"] == "sell"] == []
 
 
+def test_zombie_exit_fires_at_lower_loss_after_zombie_hours():
+    """Hold > zombie_hours → seuil de perte durci (3% suffit, vs 5% normal)."""
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        # Score faible, perte 3.5% — sous le seuil normal 5% mais ≥ seuil zombie 3%
+        "FOOUSDC": {"trend_1d": "baissier", "trend": "baissier",
+                    "price": 96.5, "macd": {"histogram": -1.0},
+                    "sma7": 95.0, "sma25": 100.0, "rsi14": 80.0},
+    }
+    now = 1_000_000.0
+    state = {
+        "bear_since_1d": {},
+        "bear_since_1h": {},
+        "entry_ts":      {"FOOUSDC": now - 110 * 3600},  # 110h > 100h zombie
+    }
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"FOOUSDC": {"qty": 1.0, "avg_price": 100.0}},
+        cash=0, cycle=0, now_ts=now,
+        params={"decide_every_cycles": 1,
+                "trend_confirm_hours": 24.0, "min_hold_hours": 12.0},
+        strat_state=state,
+    )
+    sells = [a for a in result["actions"] if a["type"] == "sell"]
+    assert len(sells) == 1
+    assert sells[0]["symbol"] == "FOOUSDC"
+    assert sells[0].get("exit_kind") == "early"
+    assert "Exit zombie" in sells[0]["reason"]
+
+
+def test_zombie_exit_not_triggered_below_zombie_hours():
+    """Hold < zombie_hours → seuil normal s'applique (3.5% ne suffit pas)."""
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        "FOOUSDC": {"trend_1d": "baissier", "trend": "baissier",
+                    "price": 96.5, "macd": {"histogram": -1.0},
+                    "sma7": 95.0, "sma25": 100.0, "rsi14": 80.0},
+    }
+    now = 1_000_000.0
+    state = {
+        "bear_since_1d": {},
+        "bear_since_1h": {},
+        "entry_ts":      {"FOOUSDC": now - 50 * 3600},  # 50h < 100h zombie
+    }
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"FOOUSDC": {"qty": 1.0, "avg_price": 100.0}},
+        cash=0, cycle=0, now_ts=now,
+        params={"decide_every_cycles": 1,
+                "trend_confirm_hours": 24.0, "min_hold_hours": 12.0},
+        strat_state=state,
+    )
+    assert [a for a in result["actions"] if a["type"] == "sell"] == []
+
+
+def test_zombie_exit_does_not_fire_when_loss_too_small():
+    """Hold > zombie_hours mais perte < zombie threshold → on tient."""
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        # Perte 2% < zombie 3%
+        "FOOUSDC": {"trend_1d": "baissier", "trend": "baissier",
+                    "price": 98.0, "macd": {"histogram": -1.0},
+                    "sma7": 95.0, "sma25": 100.0, "rsi14": 80.0},
+    }
+    now = 1_000_000.0
+    state = {
+        "bear_since_1d": {},
+        "bear_since_1h": {},
+        "entry_ts":      {"FOOUSDC": now - 200 * 3600},  # bien dans la zone zombie
+    }
+    result, _ = regime_decision(
+        market_raw=market,
+        holdings={"FOOUSDC": {"qty": 1.0, "avg_price": 100.0}},
+        cash=0, cycle=0, now_ts=now,
+        params={"decide_every_cycles": 1,
+                "trend_confirm_hours": 24.0, "min_hold_hours": 12.0},
+        strat_state=state,
+    )
+    assert [a for a in result["actions"] if a["type"] == "sell"] == []
+
+
 # ── Top-up: stack onto an existing position with a stricter threshold ───────
 
 
