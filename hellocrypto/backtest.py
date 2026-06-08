@@ -296,6 +296,7 @@ def run_live(
     on_step=None,
     stop_event=None,
     speed_ref: dict | None = None,
+    start_hour_offset: int = 0,
 ) -> dict:
     """Replay historical candles with speed control.
 
@@ -322,6 +323,8 @@ def run_live(
 
     end_ms   = int(datetime.now(UTC).timestamp() * 1000)
     start_ms = _start_ms_from(start_date, days)
+    # Offset by N hours — used by bench_start_variance to measure path-dependence.
+    start_ms += int(start_hour_offset) * HOUR_MS
     # Align start_ms / end_ms to UTC hourly boundaries so lookup keys match
     # exactly the open-time timestamps Binance returns for 1h klines.
     start_ms = ((start_ms + HOUR_MS - 1) // HOUR_MS) * HOUR_MS

@@ -140,6 +140,16 @@ Le bouton **Logs** (barre de navigation) ouvre un tiroir latéral avec le flux S
 - Mode **rule-based** (RSI/SMA/volatilité) ou **LLM-driven**
 - **Grid search** : balayage cartésien de (risk_level × stop_loss × trailing_stop), résultats triés par P&L
 - Vitesse de simulation réglable en temps réel (1×–500×)
+- **Bench start-variance** (`scripts/bench_start_variance.py`) : lance N runs au même
+  start-date mais à des heures décalées pour mesurer la path-dependence. Sortie :
+  médiane + spread + stdev de PnL/DD/win-rate. À utiliser avant de juger qu'un
+  changement de stratégie est signal ou bruit — un run unique ne suffit pas, la
+  variance start-time peut atteindre $100+ sur 1000j × 10 coins.
+  ```bash
+  # 6 starts × 1000j, ~15-20 min
+  poetry run python -m scripts.bench_start_variance --days 1000 \
+      --offsets 0,4,8,12,16,20 --csv data/bench.csv
+  ```
 
 ### Providers LLM supportés
 | Provider | Modèles |
