@@ -153,6 +153,7 @@ def save_snapshots_batch(rows: list[dict]) -> int:
 
     if _USE_POSTGRES:
         import psycopg2  # type: ignore
+
         from db.store import _postgres
         ph = ",".join(["%s"] * len(_COLUMNS))
         sql = (
