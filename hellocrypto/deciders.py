@@ -41,8 +41,6 @@ DEFAULTS = {
     "dd_scale_out_frac":     1.0 / 3.0,  # fraction du qty détenu vendue à chaque palier DD franchi
     "early_exit_loss_pct":     5.0,      # loss% from entry needed to consider an early exit
     "early_exit_score_thr":    4,        # score below which we cut on loss (stricter than score_exit_threshold)
-    "early_exit_zombie_hours": 100.0,    # above this hold time, switch to the stricter zombie loss threshold
-    "early_exit_loss_pct_zombie": 3.0,   # zombie loss threshold (positions stagnant past zombie_hours)
     "topup_max_loss_pct":      2.0,      # block top-up if position is below entry by more than this % (prevents averaging down into bagholders)
 }
 
@@ -394,10 +392,6 @@ def regime_decision(
     #    quand le setup est cassé techniquement ET qu'on saigne, attendre
     #    24-36h de confirmation bear coûte trop cher. Cible les "signal-
     #    perdants à -$1.5/trade" qui bleed lentement.
-    #    Au-delà de ``early_exit_zombie_hours`` (position stagnante), seuil
-    #    durci à ``early_exit_loss_pct_zombie`` — une perte plus modeste
-    #    suffit à confirmer le bleed lent quand la position n'a pas trouvé
-    #    son catalyseur depuis ~4 jours.
     #
     # 2. Bear-timer (existant): trend baissier confirmé ``trend_confirm_hours``
     #    ET score < ``score_exit_threshold``. Anti-whipsaw : on évite de
@@ -406,8 +400,6 @@ def regime_decision(
     # Both respect ``min_hold_hours`` to avoid panic exits right after entry.
     early_loss_thr  = float(p.get("early_exit_loss_pct") or 0)
     early_score_thr = int(p.get("early_exit_score_thr") or 0)
-    zombie_hours    = float(p.get("early_exit_zombie_hours") or 0)
-    zombie_loss_thr = float(p.get("early_exit_loss_pct_zombie") or 0)
     for sym in list(holdings):
         if now_ts is None or sym in selling_now:
             continue
@@ -419,26 +411,19 @@ def regime_decision(
             continue
 
         # Path 1: early exit on deterioration (loss + weak score).
-        # Le seuil de perte se durcit après ``zombie_hours`` heures de hold:
-        # une position qui n'a pas dégagé son setup en ~4 jours est probablement
-        # en bleed lent — on accepte de couper plus tôt.
         cur_price = float((market_raw.get(sym) or {}).get("price") or 0)
         avg_price = float(holdings[sym].get("avg_price") or 0)
         if (early_loss_thr > 0 and early_score_thr > 0
                 and cur_price > 0 and avg_price > 0):
             loss_pct = (avg_price - cur_price) / avg_price * 100
-            is_zombie = (zombie_hours > 0 and zombie_loss_thr > 0
-                         and held_for >= zombie_hours * 3600)
-            effective_loss_thr = zombie_loss_thr if is_zombie else early_loss_thr
-            if loss_pct >= effective_loss_thr and sym_score < early_score_thr:
-                kind_label = "zombie" if is_zombie else "précoce"
+            if loss_pct >= early_loss_thr and sym_score < early_score_thr:
                 actions.append({
                     "type":      "sell",
                     "symbol":    sym,
                     "qty":       holdings[sym]["qty"],
                     "exit_kind": "early",
                     "reason": (
-                        f"Exit {kind_label} — perte {loss_pct:.1f}% ≥ {effective_loss_thr:g}% "
+                        f"Exit précoce — perte {loss_pct:.1f}% ≥ {early_loss_thr:g}% "
                         f"+ score {sym_score:.1f}/10 < {early_score_thr} "
                         f"(hold {held_for / 3600:.1f}h, stance {stance})"
                     ),
