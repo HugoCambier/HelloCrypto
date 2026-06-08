@@ -17,12 +17,29 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import statistics
 import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from hellocrypto.api import load_config
-from hellocrypto.backtest import run_live
+# Enable the disk-cache layer in _fetch_klines BEFORE importing run_live.
+# Without it, each offset re-fetches the full 240k-bar × 10-symbol history
+# from Binance — turns a 5 min run into 15-20 min.
+os.environ.setdefault("HELLOCRYPTO_KLINES_CACHE", "1")
+
+from hellocrypto.api import load_config  # noqa: E402
+from hellocrypto.backtest import run_live  # noqa: E402
+
+
+def _resolve_start_date(start: str | None, days: int) -> str:
+    """Always return a midnight-UTC start_date so cache keys are stable across
+    offsets. Without this, ``_start_ms_from(None, N)`` returns a non-midnight
+    timestamp and offsets +12h can cross day boundaries → cache misses."""
+    if start:
+        return start
+    midnight_n_days_ago = (datetime.now(UTC) - timedelta(days=days)).date()
+    return midnight_n_days_ago.isoformat()
 
 
 def _max_drawdown_pct(timeseries: list[dict]) -> float | None:
@@ -59,6 +76,10 @@ def _run_one(symbols: list[str], offset: int, args: argparse.Namespace) -> dict:
         min_hold_hours       = args.min_hold_hours,
         rebuy_cooldown_hours = args.rebuy_cooldown_hours,
         start_hour_offset    = offset,
+        # Bypass the dashboard's per-candle sleep (defaults to 10 candles/s →
+        # 40 min of pure sleep on 1000d × 10 symbols). The bench has no UI to
+        # animate.
+        speed_ref            = {"value": 1e9},
     )
     elapsed = time.time() - started
     if "error" in snap:
@@ -158,9 +179,10 @@ def main() -> None:
 
     symbols = [s.strip().upper() for s in args.symbols.split(",")]
     offsets = [int(x) for x in args.offsets.split(",")]
+    args.start = _resolve_start_date(args.start, args.days)
     print(f"Bench {len(offsets)} starts × {args.days}d on {len(symbols)} symbols "
           f"(risk={args.risk}, top_n={args.top_n}, buy_thr={args.buy_thr})")
-    print(f"Offsets: {offsets}")
+    print(f"Start={args.start} (midnight UTC) — Offsets: {offsets}")
 
     t0 = time.time()
     rows: list[dict] = []

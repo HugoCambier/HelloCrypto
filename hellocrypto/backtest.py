@@ -13,8 +13,10 @@ Usage:
 """
 
 import argparse
+import gzip
 import json
 import logging
+import os
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -48,7 +50,12 @@ RESULT_FILE = Path("data/backtest_result.json")
 
 # ── Kline fetcher ─────────────────────────────────────────────────────────────
 
-def _fetch_klines(symbol: str, interval: str, start_ms: int, end_ms: int) -> list:
+DAY_MS = 86_400_000
+KLINES_CACHE_DIR = Path("data/klines_cache")
+KLINES_CACHE_TTL_S = 24 * 3600  # cache files older than this are re-fetched
+
+
+def _fetch_klines_raw(symbol: str, interval: str, start_ms: int, end_ms: int) -> list:
     """Fetch all klines for symbol between start_ms and end_ms (paginated)."""
     candles = []
     while start_ms < end_ms:
@@ -68,6 +75,38 @@ def _fetch_klines(symbol: str, interval: str, start_ms: int, end_ms: int) -> lis
             break
         time.sleep(0.1)
     return candles
+
+
+def _fetch_klines(symbol: str, interval: str, start_ms: int, end_ms: int) -> list:
+    """Fetch klines with optional disk cache (opt-in via env var).
+
+    Set ``HELLOCRYPTO_KLINES_CACHE=1`` to enable. Used by
+    ``scripts/bench_start_variance`` to avoid re-fetching the same 240k-bar
+    1000d × 10-symbol history across N start-hour offsets — saves ~10 min/run.
+
+    The cache key bins start/end to day boundaries so runs that differ only by
+    hour-of-start share the same cached file. Stale cache (>TTL) is re-fetched.
+    Production code paths (cron, dashboard, single backtest) leave the env var
+    unset and hit Binance fresh, so live data is never served stale.
+    """
+    if os.environ.get("HELLOCRYPTO_KLINES_CACHE") != "1":
+        return _fetch_klines_raw(symbol, interval, start_ms, end_ms)
+
+    start_day = (start_ms // DAY_MS) * DAY_MS
+    end_day = ((end_ms + DAY_MS - 1) // DAY_MS) * DAY_MS
+    cache_file = KLINES_CACHE_DIR / f"{symbol}_{interval}_{start_day}_{end_day}.json.gz"
+
+    if (cache_file.exists()
+            and (time.time() - cache_file.stat().st_mtime) < KLINES_CACHE_TTL_S):
+        with gzip.open(cache_file, "rt") as f:
+            candles = json.load(f)
+    else:
+        candles = _fetch_klines_raw(symbol, interval, start_day, end_day)
+        KLINES_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        with gzip.open(cache_file, "wt") as f:
+            json.dump(candles, f)
+
+    return [k for k in candles if start_ms <= int(k[0]) < end_ms]
 
 
 def _start_ms_from(start_date: str | None, days: int) -> int:
