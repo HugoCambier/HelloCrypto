@@ -4,18 +4,46 @@ Track des runs 1000j (budget $100, watchlist 10 coins, risk_level 7,
 stop-loss 21%, trailing 10%) pour garder une trace des directions explorées
 et fermées.
 
-**Variance start-time** : ~~un même commit lancé à des heures de démarrage
-différentes (08h/10h/12h…) donne $10-30 d'écart de PnL.~~ **MESURÉ FAUX**
-(2026-06-08, voir bench `scripts/bench_start_variance.py`) : 7 runs au
-même commit avec offsets 0/8/16/24/48/72h → PnL strictement identique
-($73.79, σ=$0).
+**Variance start-time — réalité mod-4** (mesuré 2026-06-09 sur 10 coins) :
 
-**Vraie source de la variance** : `_fetch_klines` plantait silencieusement
-sur les timeouts Binance → coins exclus sans warning → runs comparés sur
-des univers différents. Fixé dans `006f303` (retry + fail-loud).
+Sur `decide_every_n_candles=4` (décideur toutes les 4h), le start_ms
+détermine le **calendrier des décisions**. Deux runs avec des starts
+distants d'un multiple de 4h voient les mêmes klines aux mêmes positions
+relatives → PnL strictement identique. Deux runs avec un décalage de 1h,
+2h ou 3h voient des klines différentes → trajectoires différentes.
 
-Conséquence : les comparaisons single-run SONT fiables si pas d'erreur
-fetch. Plus besoin du caveat ±$15.
+Il y a donc **4 trajectoires distinctes** selon `(start_ms // 1h) mod 4`.
+Bench `--start 2023-09-13 --offsets 0,1,2,3 --days 1000` :
+
+| offset (mod 4) | PnL | Trades | DD |
+|---|---|---|---|
+| +0h (mod 0) | $44.52 | 377 | -40% |
+| **+1h (mod 1)** | **$110.03** | 444 | -38% |
+| +2h (mod 2) | $81.37 | 370 | -31% |
+| +3h (mod 3) | $67.90 | 376 | -38% |
+
+Médiane $74.64, spread $65.51, σ $27.35. **Tout run isolé du dashboard
+est donc une trajectoire parmi 4** ; comparer deux versions du code via
+un seul run par version est du bruit pur.
+
+**Protocole de mesure** :
+
+| Type d'itération | Outil | Mesure quoi |
+|---|---|---|
+| Rapide (tweak local) | `make bench-path` (~15 min) | Path-dependence sur 1000j réels, médiane des 4 cellules mod-4 |
+| Structurante (logique de décision) | `make bench` (~15 min, LLM) | A/B système d'apprentissage sur scenarios held-out |
+| Smoke-test logique | `make bench-fast` (~1 min) | Rules-only sur scenarios courts |
+
+- Toute comparaison single-run dashboard = **bruit** (cellule choisie au hasard par l'heure de lancement).
+- Comparer baseline vs variante = **médiane des 4 cellules** (pas le best).
+- Le précédent claim ($73.79 strictement identique sur 7 runs) était
+  vrai mais trompeur : tous les offsets testés (0/8/16/24/48/72h) étaient
+  ≡ 0 mod 4 → même cellule unique.
+
+**Source de variance résiduelle (single-cell)** : `_fetch_klines` plantait
+silencieusement sur les timeouts Binance → coins exclus sans warning.
+Fixé dans `006f303` (retry + fail-loud). Plus besoin du caveat ±$15
+*au sein d'une même cellule mod-4*.
 
 ## Runs mesurés
 
@@ -28,6 +56,33 @@ fetch. Plus besoin du caveat ±$15.
 | 2026-06-08 | `48b5b2a` (HEAD) | + early-exit | +$73.6 | -37% | early-exit → -$6 (régression sur PnL, DD ~stable) |
 | 2026-06-08 | `b0274f2` | + **garde-fou top-up** (no DCA on losing) | **+$81.4** | **-30.1%** | 🏆 **best PnL ET DD** — le revert `fbd0e50` était une erreur |
 | 2026-06-08 | `583f597` (revert via `cc0d2bb`) | + early-exit zombie 100h/-3% | +$164.7 | **-37.1%** | ❌ DD régresse, early-exit -$148.5 sur 48 trades — porte fermée |
+| 2026-06-09 | HEAD + FNG live (bug) | bench-path médiane sur 10 coins | +$74.6 | -37% | ⚠️ artificiellement gonflé par FNG=10 live appliqué aux 1000j |
+| 2026-06-09 | HEAD + FNG historique (fix) | bench-path médiane (nouveau baseline) | **+$64.7** | **-45%** | 🎯 baseline honnête — toute optim future à comparer contre ça |
+
+## Baseline honnête post-fix FNG (2026-06-09)
+
+Avant le fix, `fear_greed` était fetché LIVE au démarrage du backtest et
+appliqué uniformément aux 1000 jours simulés. Avec FNG=10 (extreme fear)
+au moment des runs récents, ça plaquait un `-1 buy_threshold` artificiel
+sur toute la fenêtre → entries plus permissives, PnL gonflé, faux signaux
+d'optimisation. Fix : `get_fear_and_greed_history()` indexé par date,
+chaque cycle voit la valeur réelle du jour simulé.
+
+Effet du fix sur les 4 cellules mod-4 (start=2023-09-13, 1000j) :
+
+| offset | PnL avant | PnL après | Δ |
+|---|---|---|---|
+| +0h | $44.52 | $59.98 | +$15 |
+| +1h | $110.03 | $79.38 | **−$31** |
+| +2h | $81.37 | $54.97 | −$26 |
+| +3h | $67.90 | $69.34 | +$1 |
+| **médiane** | **$74.64** | **$64.66** | **−$10** |
+| spread | $65.51 | **$24.41** | **−63%** |
+| DD médiane | −37% | **−45%** | aggravé |
+
+Variance inter-cellule chute de 63% (cohérence retrouvée). Le DD plus
+profond révèle le vrai risque masqué par le bug. **Le $110 d'avant
+n'existait pas — c'était un artefact mesure.**
 
 ## Découverte clé : le garde-fou top-up
 

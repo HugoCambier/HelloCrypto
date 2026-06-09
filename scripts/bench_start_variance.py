@@ -23,6 +23,16 @@ import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load .env BEFORE importing run_live so DATABASE_URL is set when
+# coin_tiers reaches for the Postgres tier history. Without this, the bench
+# silently falls back to ``COIN_RISK_TIERS_BASELINE`` and runs on a
+# different (usually narrower) coin universe than the dashboard — a single
+# missing tier flip from 8 → 4 changes 3 symbols' eligibility at risk=7,
+# which can swing PnL by $30-40 on 1000d runs.
+load_dotenv()
+
 # Enable the disk-cache layer in _fetch_klines BEFORE importing run_live.
 # Without it, each offset re-fetches the full 240k-bar × 10-symbol history
 # from Binance — turns a 5 min run into 15-20 min.
