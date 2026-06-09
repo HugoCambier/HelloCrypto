@@ -553,10 +553,24 @@ async function onSpeedChange(val) {
   } catch {}
 }
 
+// Polling cadence : 3s pendant un run. Avant : 1s → ~80 KB/s sur
+// /api/backtest/status × Vercel cold-starts qui retombent dans _load_last_backtest
+// = principal poste d'egress des journées avec un backtest. 3s suffit pour
+// l'UX (progression visible, countdown smooth).
+const _BT_POLL_MS = 3000;
+
 function startPolling() {
   if (_btPollIv) clearInterval(_btPollIv);
   pollStatus();
-  _btPollIv = setInterval(pollStatus, 1000);
+  _btPollIv = setInterval(pollStatus, _BT_POLL_MS);
+}
+
+function _stopBtPolling() {
+  if (_btPollIv) { clearInterval(_btPollIv); _btPollIv = null; }
+  const startBtn = document.getElementById('bt-start-btn');
+  const stopBtn  = document.getElementById('bt-stop-btn');
+  if (startBtn) startBtn.disabled = false;
+  if (stopBtn)  stopBtn.disabled  = true;
 }
 
 async function pollStatus() {
@@ -571,13 +585,27 @@ async function pollStatus() {
       renderRunParamsTab();
     }
     renderStatus(d);
-    if (!d.running && d.snapshot && _btPollIv) {
-      clearInterval(_btPollIv); _btPollIv = null;
-      document.getElementById('bt-start-btn').disabled = false;
-      document.getElementById('bt-stop-btn').disabled  = true;
-    }
+    // Stop polling as soon as the backend reports !running, regardless of
+    // whether a snapshot is attached — a snapshot-less terminated state
+    // (error, manual stop before first cycle) used to keep polling forever.
+    if (!d.running && _btPollIv) _stopBtPolling();
   } catch {}
 }
+
+// Pause polling when the tab is hidden (matches main.js for the home page).
+// A forgotten /backtest tab in the background was the dominant egress source
+// on days with a long backtest.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (_btPollIv) { clearInterval(_btPollIv); _btPollIv = null; }
+  } else if (!_btPollIv) {
+    // Only re-arm if a run is still in progress on the server side.
+    fetch('/api/backtest/status').then(r => r.json()).then(d => {
+      if (d.running) startPolling();
+      else if (d.snapshot) renderStatus(d);  // refresh once and stay quiet
+    }).catch(() => {});
+  }
+});
 
 // ── Rendering ────────────────────────────────────────────────────────────────
 function renderStatus(d) {

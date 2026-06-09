@@ -25,29 +25,48 @@ _bt_speed: dict = {"value": 10.0}
 # is reloaded from the agent_state table when in-memory _bt_state is empty.
 _LAST_BACKTEST_KEY = "last_backtest_state"
 
+# In-process cache for the persisted snapshot so a tab left open on /backtest
+# after a run finishes doesn't fetch a multi-hundred-KB JSON blob from
+# agent_state on every poll. Invalidated whenever a new run completes.
+_last_backtest_cache: dict | None = None
+
 
 def _persist_last_backtest(snapshot: dict, params: dict | None) -> None:
     """Save the final backtest snapshot to the DB so a page reload after a
     Vercel cold-start still shows the previous run's results."""
+    global _last_backtest_cache
     try:
         from db.store import set_state
-        set_state(_LAST_BACKTEST_KEY, json.dumps({
+        payload = {
             "snapshot":     snapshot,
             "params":       params,
             "completed_at": datetime.utcnow().isoformat(),
-        }))
+        }
+        set_state(_LAST_BACKTEST_KEY, json.dumps(payload))
+        _last_backtest_cache = payload
     except Exception:
         log.warning("Could not persist last backtest snapshot", exc_info=True)
 
 
 def _load_last_backtest() -> dict | None:
-    """Inverse of _persist_last_backtest; returns None on miss."""
+    """Inverse of _persist_last_backtest; returns None on miss.
+
+    First call after a cold start hits agent_state (the persisted snapshot can
+    be ~100-500 KB); subsequent calls hit the in-process cache. Without this,
+    a backtest page left open on a finished run was burning Supabase egress
+    every time the polling raced past the in-memory state.
+    """
+    global _last_backtest_cache
+    if _last_backtest_cache is not None:
+        return _last_backtest_cache
     try:
         from db.store import get_state
         raw = get_state(_LAST_BACKTEST_KEY)
         if not raw:
             return None
-        return json.loads(raw) if isinstance(raw, str) else raw
+        parsed = json.loads(raw) if isinstance(raw, str) else raw
+        _last_backtest_cache = parsed
+        return parsed
     except Exception:
         return None
 
