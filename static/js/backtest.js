@@ -32,6 +32,12 @@ function switchRTab(name, btn) {
   if (name === 'params')      renderRunParamsTab();
   else if (name === 'recap')  renderRecapTab();
   else if (_latestSnap)       renderFromSnapshot(_latestSnap);
+  else if (name === 'performance' || name === 'charts') {
+    // Tab needs the heavy snapshot but we don't have it yet (split status/
+    // snapshot endpoints — status is now snapshot-less). Pull it once on
+    // demand instead of polling.
+    loadSnapshot();
+  }
 }
 
 // Render the cached params of the currently/last-running backtest. The cache
@@ -646,11 +652,33 @@ async function pollStatus() {
       _btRunParams = d.params;
       renderRunParamsTab();
     }
-    renderStatus(d);
-    // Stop polling as soon as the backend reports !running, regardless of
-    // whether a snapshot is attached — a snapshot-less terminated state
-    // (error, manual stop before first cycle) used to keep polling forever.
-    if (!d.running && _btPollIv) _stopBtPolling();
+    renderProgress(d);
+    // Transition running → finished : pull the full snapshot once to lock
+    // in the final state (history, timeseries, positions, KPIs).
+    if (!d.running && _btPollIv) {
+      _stopBtPolling();
+      loadSnapshot();
+    }
+  } catch {}
+}
+
+// Pull the heavy /api/backtest/snapshot once (history + timeseries + positions).
+// Called: on page boot, on run completion, on Charts tab activation, and on
+// tab-visibility return when no run is in progress. NOT polled during a run —
+// the snapshot grows trade by trade, and re-streaming it every 3s was the
+// dominant /backtest egress source pre-split.
+async function loadSnapshot() {
+  try {
+    const r = await fetch('/api/backtest/snapshot');
+    const d = await r.json();
+    if (d.params && !_btRunParams) {
+      _btRunParams = d.params;
+      renderRunParamsTab();
+    }
+    if (d.snapshot) {
+      _latestSnap = d.snapshot;
+      renderFromSnapshot(d.snapshot);
+    }
   } catch {}
 }
 
@@ -664,40 +692,41 @@ document.addEventListener('visibilitychange', () => {
     // Only re-arm if a run is still in progress on the server side.
     fetch('/api/backtest/status').then(r => r.json()).then(d => {
       if (d.running) startPolling();
-      else if (d.snapshot) renderStatus(d);  // refresh once and stay quiet
+      else loadSnapshot();
     }).catch(() => {});
   }
 });
 
 // ── Rendering ────────────────────────────────────────────────────────────────
-function renderStatus(d) {
-  const snap = d.snapshot || {};
-  _latestSnap = snap;
-
+// renderProgress is the cheap path called on every poll : status bar, step
+// counter, skipped-symbols banner. NEVER touches the heavy snapshot body —
+// that's loadSnapshot's job, fired only on transitions and explicit refresh.
+function renderProgress(d) {
+  const p = d.progress || {};
   let statusText;
-  if (d.loading)       statusText = snap.message || 'Chargement des données Binance…';
+  if (d.loading)       statusText = p.message || 'Chargement des données Binance…';
   else if (d.running)  statusText = 'En cours…';
-  else if (snap.error) statusText = 'Erreur : ' + snap.error;
-  else if (snap.current_step) statusText = 'Terminé';
+  else if (p.error)    statusText = 'Erreur : ' + p.error;
+  else if (p.current_step) statusText = 'Terminé';
   else                 statusText = 'En attente…';
   document.getElementById('bt-status').textContent = statusText;
 
-  const cur = snap.current_step ?? snap.cycle ?? 0;
-  const tot = snap.total_steps ?? 0;
+  const cur = p.current_step ?? p.cycle ?? 0;
+  const tot = p.total_steps ?? 0;
   const pct = tot > 0 ? Math.round(100 * cur / tot) : 0;
   document.getElementById('bt-progress').style.width = pct + '%';
   document.getElementById('bt-step').textContent = tot > 0 ? `${cur} / ${tot} (${pct}%)` : '—';
 
-  document.getElementById('bt-start-ts').textContent = snap.start_ts || '—';
-  document.getElementById('bt-end-ts').textContent   = snap.current_ts || '—';
+  document.getElementById('bt-start-ts').textContent = p.start_ts || '—';
+  document.getElementById('bt-end-ts').textContent   = p.current_ts || '—';
 
   const skippedEl = document.getElementById('bt-skipped');
   const msgs = [];
-  if (Array.isArray(snap.skipped_symbols) && snap.skipped_symbols.length) {
-    msgs.push(`Exclu(s) (données insuffisantes) : ${snap.skipped_symbols.map(shortSym).join(', ')}`);
+  if (Array.isArray(p.skipped_symbols) && p.skipped_symbols.length) {
+    msgs.push(`Exclu(s) (données insuffisantes) : ${p.skipped_symbols.map(shortSym).join(', ')}`);
   }
-  if (snap.tail_truncated_hours && Array.isArray(snap.tail_bottleneck) && snap.tail_bottleneck.length) {
-    msgs.push(`Période tronquée de ${snap.tail_truncated_hours}h en fin de run (bridé par ${snap.tail_bottleneck.map(shortSym).join(', ')})`);
+  if (p.tail_truncated_hours && Array.isArray(p.tail_bottleneck) && p.tail_bottleneck.length) {
+    msgs.push(`Période tronquée de ${p.tail_truncated_hours}h en fin de run (bridé par ${p.tail_bottleneck.map(shortSym).join(', ')})`);
   }
   if (msgs.length) {
     skippedEl.textContent = msgs.join(' • ');
@@ -705,8 +734,6 @@ function renderStatus(d) {
   } else {
     skippedEl.classList.add('hidden');
   }
-
-  renderFromSnapshot(snap);
 }
 
 function renderFromSnapshot(snap) {
@@ -869,8 +896,11 @@ function renderKpis(snap) {
       document.getElementById('bt-start-btn').disabled = true;
       document.getElementById('bt-stop-btn').disabled  = false;
       startPolling();
-    } else if (d.snapshot) {
-      renderStatus(d);
+    } else if (d.progress?.current_step || d.completed_at) {
+      // A previous (or freshly persisted) run exists — render progress text
+      // immediately and pull the heavy snapshot once to fill charts/trades.
+      renderProgress(d);
+      loadSnapshot();
     }
   } catch {}
 })();

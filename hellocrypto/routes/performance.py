@@ -25,7 +25,10 @@ bp = Blueprint("performance", __name__)
 
 _FEE_RATE = 0.001  # 0.1% per trade
 _BENCH_CACHE: dict = {}
-_BENCH_TTL  = 600  # seconds (benchmarks change slowly; aggressive cache)
+_BENCH_TTL  = 3600  # seconds — bumped from 600s: BH/BTC benchmarks shift on
+# the hourly grid, so refreshing once an hour is enough; previous 10-min TTL
+# meant ~6 unnecessary recomputes per hour, each triggering a multi-symbol
+# scan on price_snapshots.
 
 
 def _load_close_series(symbol: str, start_iso: str, end_iso: str,

@@ -17,6 +17,7 @@ google-auth-oauthlib = ">=1.0"
 google-cloud-firestore = { version = ">=2.13", optional = true }
 psycopg2-binary        = { version = ">=2.9", optional = true }
 gunicorn = ">=22.0.0"
+flask-compress = "^1.24"
 
 [tool.poetry.extras]
 gemini    = ["google-genai", "google-api-core"]

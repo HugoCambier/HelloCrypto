@@ -23,6 +23,17 @@ def create_app() -> Flask:
         static_url_path="/static",
     )
 
+    # Gzip/Brotli all responses with Content-Type application/json (default
+    # mime list also covers text/html, text/css, application/javascript).
+    # @vercel/python doesn't auto-compress dynamic responses — without this,
+    # 100 KB JSON payloads ship as 100 KB; with it, they ship as ~15-25 KB
+    # over the wire, which is what counts toward the Supabase/Vercel egress.
+    try:
+        from flask_compress import Compress
+        Compress(app)
+    except ImportError:
+        log.warning("flask-compress not installed — responses won't be gzipped")
+
     from .routes import (
         bp_analysis,
         bp_backtest,

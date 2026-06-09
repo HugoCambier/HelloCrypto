@@ -71,26 +71,73 @@ def _load_last_backtest() -> dict | None:
         return None
 
 
-@bp.get("/api/backtest/status")
-def bt_status():
+def _resolve_bt_state() -> tuple[dict, dict | None]:
+    """Return (state, persisted) where state is the live in-memory _bt_state
+    and persisted is the agent_state fallback (None if not needed)."""
     with _bt_lock:
         state = dict(_bt_state)
-    # If there's something live (running, or in-memory snapshot from this
-    # process), return that. Otherwise, hydrate from the persisted last
-    # completed backtest so the user keeps seeing their previous results
-    # even across Vercel instance recycles.
     if state.get("running") or state.get("snapshot"):
-        return jsonify(state)
+        return state, None
     persisted = _load_last_backtest()
+    return state, persisted
+
+
+@bp.get("/api/backtest/status")
+def bt_status():
+    """Lightweight status — progress, params, error. NO snapshot body.
+
+    The snapshot (history, timeseries, positions) can be 100-500 KB and the
+    front polls this endpoint every 3s. Returning the snapshot on every poll
+    wasted ~80 KB/poll once the run accumulated trades. The full snapshot is
+    now served by ``/api/backtest/snapshot`` (called once at run end + on
+    explicit refresh).
+    """
+    state, persisted = _resolve_bt_state()
+    snap = state.get("snapshot") or (persisted.get("snapshot") if persisted else None) or {}
+    return jsonify({
+        "running":      state.get("running", False),
+        "loading":      state.get("loading", False),
+        "params":       state.get("params") or (persisted.get("params") if persisted else None),
+        "completed_at": (persisted.get("completed_at") if persisted else None),
+        # Just the fields needed to drive the progress bar + status text.
+        "progress": {
+            "current_step": snap.get("current_step"),
+            "total_steps":  snap.get("total_steps"),
+            "cycle":        snap.get("cycle"),
+            "current_ts":   snap.get("current_ts"),
+            "start_ts":     snap.get("start_ts"),
+            "message":      snap.get("message"),
+            "error":        snap.get("error"),
+            "skipped_symbols":      snap.get("skipped_symbols"),
+            "tail_truncated_hours": snap.get("tail_truncated_hours"),
+            "tail_bottleneck":      snap.get("tail_bottleneck"),
+        },
+    })
+
+
+@bp.get("/api/backtest/snapshot")
+def bt_snapshot():
+    """Full backtest snapshot (history + timeseries + positions + KPIs).
+
+    Heavy endpoint, called only when the run finishes or the user explicitly
+    refreshes. Replaces the snapshot body that used to ship in every
+    /api/backtest/status poll.
+    """
+    state, persisted = _resolve_bt_state()
+    if state.get("running") or state.get("snapshot"):
+        return jsonify({
+            "running":  state.get("running", False),
+            "snapshot": state.get("snapshot"),
+            "params":   state.get("params"),
+        })
     if persisted and persisted.get("snapshot"):
         return jsonify({
             "running":      False,
-            "loading":      False,
             "snapshot":     persisted.get("snapshot"),
             "params":       persisted.get("params"),
             "completed_at": persisted.get("completed_at"),
         })
-    return jsonify(state)
+    return jsonify({"running": False, "snapshot": None, "params": None})
 
 
 @bp.post("/api/backtest/start")

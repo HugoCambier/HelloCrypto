@@ -874,7 +874,7 @@ let _simPollIv = null;
 function _startSimPoll() {
   if (_simPollIv) return;
   _pollSimStatus();
-  _simPollIv = setInterval(_pollSimStatus, 3000);
+  _simPollIv = setInterval(_pollSimStatus, 5000);
 }
 function _stopSimPoll() { clearInterval(_simPollIv); _simPollIv = null; }
 
@@ -1568,10 +1568,16 @@ let _perfPollIv = null;
 let _runsPollIv = null;
 function _startDashboardPolling() {
   if (!_perfPollIv) {
-    _perfPollIv = setInterval(() => { if (_selectedMode !== null) loadPerformance(); }, 30000);
+    // /api/performance bouge à chaque trade : 60s capte les nouveaux trades
+    // sans saturer (avant : 30s = 2× plus d'appels backend → 2× plus de
+    // load_history + _compute_benchmarks dans certains cas).
+    _perfPollIv = setInterval(() => { if (_selectedMode !== null) loadPerformance(); }, 60000);
   }
   if (!_runsPollIv) {
-    _runsPollIv = setInterval(loadRunsList, 30000);
+    // La liste des sessions ne change que sur création/rename/delete (et ces
+    // actions appellent loadRunsList directement). 5 min suffit largement
+    // pour rattraper une éventuelle dérive d'état après un cron tick.
+    _runsPollIv = setInterval(loadRunsList, 300000);
   }
 }
 function _stopDashboardPolling() {
