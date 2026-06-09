@@ -663,11 +663,16 @@ async function pollStatus() {
 }
 
 // Pull the heavy /api/backtest/snapshot once (history + timeseries + positions).
-// Called: on page boot, on run completion, on Charts tab activation, and on
-// tab-visibility return when no run is in progress. NOT polled during a run —
-// the snapshot grows trade by trade, and re-streaming it every 3s was the
-// dominant /backtest egress source pre-split.
+// Called: on page boot, on run completion, on Charts tab activation, on
+// tab-visibility return when no run is in progress, and on user click of the
+// ↻ Rafraîchir button. NOT polled during a run — the snapshot grows trade by
+// trade, and re-streaming it every 3s was the dominant /backtest egress
+// source pre-split.
 async function loadSnapshot() {
+  const icon = document.getElementById('bt-refresh-icon');
+  const btn  = document.getElementById('bt-refresh-btn');
+  if (icon) icon.classList.add('animate-spin', 'inline-block');
+  if (btn)  btn.disabled = true;
   try {
     const r = await fetch('/api/backtest/snapshot');
     const d = await r.json();
@@ -680,6 +685,10 @@ async function loadSnapshot() {
       renderFromSnapshot(d.snapshot);
     }
   } catch {}
+  finally {
+    if (icon) icon.classList.remove('animate-spin', 'inline-block');
+    if (btn)  btn.disabled = false;
+  }
 }
 
 // Pause polling when the tab is hidden (matches main.js for the home page).

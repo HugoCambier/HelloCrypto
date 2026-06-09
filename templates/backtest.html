@@ -252,11 +252,16 @@
     <main class="flex-1 overflow-y-auto flex flex-col">
 
       <!-- Right-panel tabs -->
-      <div class="bg-slate-900 border-b border-slate-800 px-4 flex gap-0 shrink-0">
+      <div class="bg-slate-900 border-b border-slate-800 px-4 flex gap-0 shrink-0 items-center">
         <button class="rtab active" data-rtab="performance" onclick="switchRTab('performance',this)">Performance</button>
         <button class="rtab" data-rtab="charts" onclick="switchRTab('charts',this)">Graphiques</button>
         <button class="rtab" data-rtab="params" onclick="switchRTab('params',this)">Paramètres</button>
         <button class="rtab" data-rtab="recap" onclick="switchRTab('recap',this)">Récap</button>
+        <button id="bt-refresh-btn" type="button" onclick="loadSnapshot()"
+                class="ml-auto mr-2 px-2.5 py-1 rounded-md text-xs text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
+                title="Rafraîchir le snapshot du backtest (charts + trades + KPIs)">
+          <span id="bt-refresh-icon">↻</span> <span class="hidden md:inline">Rafraîchir</span>
+        </button>
       </div>
 
       <!-- Tab: Performance -->
