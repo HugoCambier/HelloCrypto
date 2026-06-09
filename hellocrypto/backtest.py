@@ -56,17 +56,34 @@ KLINES_CACHE_TTL_S = 24 * 3600  # cache files older than this are re-fetched
 
 
 def _fetch_klines_raw(symbol: str, interval: str, start_ms: int, end_ms: int) -> list:
-    """Fetch all klines for symbol between start_ms and end_ms (paginated)."""
+    """Fetch all klines for symbol between start_ms and end_ms (paginated).
+
+    Each page is retried up to 3× with exponential backoff (1s, 2s, 4s) on
+    network errors. Without this, a single transient Binance timeout silently
+    excludes the symbol from the run (via the caller's try/except), which
+    causes hard-to-debug non-determinism between backtest runs.
+    """
     candles = []
     while start_ms < end_ms:
-        r = requests.get(
-            f"{BASE_URL}/api/v3/klines",
-            params={"symbol": symbol, "interval": interval,
-                    "startTime": start_ms, "endTime": end_ms, "limit": 1000},
-            timeout=15,
-        )
-        r.raise_for_status()
-        batch = r.json()
+        last_exc: Exception | None = None
+        for attempt in range(3):
+            try:
+                r = requests.get(
+                    f"{BASE_URL}/api/v3/klines",
+                    params={"symbol": symbol, "interval": interval,
+                            "startTime": start_ms, "endTime": end_ms, "limit": 1000},
+                    timeout=15,
+                )
+                r.raise_for_status()
+                batch = r.json()
+                last_exc = None
+                break
+            except (requests.RequestException, ConnectionError) as exc:
+                last_exc = exc
+                if attempt < 2:
+                    time.sleep(2 ** attempt)  # 1s, 2s
+        if last_exc is not None:
+            raise last_exc
         if not batch:
             break
         candles.extend(batch)

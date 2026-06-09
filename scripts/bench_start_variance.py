@@ -84,6 +84,13 @@ def _run_one(symbols: list[str], offset: int, args: argparse.Namespace) -> dict:
     elapsed = time.time() - started
     if "error" in snap:
         return {"offset": offset, "error": snap["error"], "elapsed_s": round(elapsed, 1)}
+    # Fail loud when Binance fetch failures silently drop coins. Bench
+    # comparisons across runs only make sense on the same universe; partial
+    # universes are non-comparable and shouldn't be reported as a clean PnL.
+    skipped = snap.get("skipped_symbols") or []
+    if skipped:
+        return {"offset": offset, "elapsed_s": round(elapsed, 1),
+                "error": f"fetch failures excluded symbols: {','.join(skipped)}"}
     return {
         "offset":     offset,
         "pnl":        snap.get("pnl"),
