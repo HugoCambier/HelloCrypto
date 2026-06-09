@@ -43,8 +43,11 @@ def _load_close_series(symbol: str, start_iso: str, end_iso: str,
     """
     from db.snapshots import load_snapshots
 
+    # Project only the three columns this function actually reads — drops
+    # per-row egress from ~600 B (full snapshot) to ~60 B.
     rows = load_snapshots(symbol=symbol, start_ts=start_iso,
-                          end_ts=end_iso, limit=20000)
+                          end_ts=end_iso, limit=20000,
+                          columns=["timestamp", "close", "interval"])
     if rows and len(rows) >= 2:
         by_ts: dict[str, dict] = {}
         for r in rows:
@@ -306,8 +309,12 @@ def _context_at(at_ts: str, watchlist: list[str]) -> dict:
 
     ph = "%s" if _USE_POSTGRES else "?"
     in_clause = ",".join([ph] * len(watchlist))
+    # Only the columns _context_at actually reads — drops payload from ~600 B
+    # to ~110 B per row (8 syms × 168h ≈ 800 KB → ~140 KB per call).
     sql = (
-        f"SELECT * FROM price_snapshots "
+        f"SELECT symbol, timestamp, high, close, trend, trend_1d, score, "
+        f"fng_value, fng_label, btc_dominance "
+        f"FROM price_snapshots "
         f"WHERE symbol IN ({in_clause}) "
         f"AND timestamp >= {ph} AND timestamp <= {ph} "
         f"ORDER BY symbol, timestamp ASC"

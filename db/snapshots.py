@@ -280,8 +280,14 @@ def load_snapshots(
     start_ts: str | None = None,
     end_ts: str | None = None,
     limit: int = 5000,
+    columns: list[str] | None = None,
 ) -> list[dict]:
-    """Load snapshots ordered by timestamp ASC. Useful for journal computation."""
+    """Load snapshots ordered by timestamp ASC.
+
+    ``columns`` projects the SELECT list (whitelisted against ``_COLUMNS``) so
+    callers that only need a handful of fields don't pay the egress cost of
+    pulling all 30 columns. Defaults to ``SELECT *`` for backwards compat.
+    """
     if _USE_FIRESTORE:
         return []
     conditions: list[str] = []
@@ -301,7 +307,15 @@ def load_snapshots(
         params.append(end_ts)
     where  = ("WHERE " + " AND ".join(conditions)) if conditions else ""
     params.append(limit)
-    sql = f"SELECT * FROM price_snapshots {where} ORDER BY timestamp ASC LIMIT {ph}"
+    if columns:
+        allowed = set(_COLUMNS)
+        bad = [c for c in columns if c not in allowed]
+        if bad:
+            raise ValueError(f"load_snapshots: unknown columns {bad}")
+        select_list = ", ".join(columns)
+    else:
+        select_list = "*"
+    sql = f"SELECT {select_list} FROM price_snapshots {where} ORDER BY timestamp ASC LIMIT {ph}"
     if _USE_POSTGRES:
         from db.store import _postgres
         with _postgres() as c:
