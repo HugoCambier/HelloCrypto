@@ -4,9 +4,18 @@ Track des runs 1000j (budget $100, watchlist 10 coins, risk_level 7,
 stop-loss 21%, trailing 10%) pour garder une trace des directions explorées
 et fermées.
 
-**Variance start-time** : un même commit lancé à des heures de démarrage
-différentes (08h/10h/12h…) donne $10-30 d'écart de PnL. Ne pas comparer
-deux runs séparés de moins de ±$15.
+**Variance start-time** : ~~un même commit lancé à des heures de démarrage
+différentes (08h/10h/12h…) donne $10-30 d'écart de PnL.~~ **MESURÉ FAUX**
+(2026-06-08, voir bench `scripts/bench_start_variance.py`) : 7 runs au
+même commit avec offsets 0/8/16/24/48/72h → PnL strictement identique
+($73.79, σ=$0).
+
+**Vraie source de la variance** : `_fetch_klines` plantait silencieusement
+sur les timeouts Binance → coins exclus sans warning → runs comparés sur
+des univers différents. Fixé dans `006f303` (retry + fail-loud).
+
+Conséquence : les comparaisons single-run SONT fiables si pas d'erreur
+fetch. Plus besoin du caveat ±$15.
 
 ## Runs mesurés
 
