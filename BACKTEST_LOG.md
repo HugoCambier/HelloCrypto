@@ -59,6 +59,7 @@ Tentatives session 2026-06-08, non commitées :
 | Profit-lock cliquet | peak ≥+5% → floor breakeven, peak ≥+15% → +5% | $131 | cascade re-entry : exits forcés → fresh setups dégradés |
 | Trailing adaptatif | trail tighten à 7%/5%/4% selon peak | $143 | même cascade re-entry, plus discrète |
 | Early-exit zombie (commité+revert) | hold ≥100h → seuil perte -5% → -3% | $164.7 | DD -37% (vs -30% baseline), early-exit -$148.5 sur 48 trades. CSV : 28 "shallow zombies" (100-200h) font -$70 de coupes marginales. Pire : zombie cut libère du cash qui se re-déploie en SL/circuit-breaker (ex BTC fév 2025 : zombie -$10.4 → top-ups → -$5 circuit-breaker). Pattern cascade re-entry confirmé pour la 4e fois. |
+| CASH OR-gate (locale, revert) | `_derive_stance` : drawdown ≥7% **OR** breadth ≥70% au lieu de **AND** | $9.20 | -$65 PnL, +4 pts DD, **+447 trades** (425→872, +105%). Le AND-gate du code original avait raison : OR sur-déclenche CASH pendant les pullbacks normaux → exits forcés → re-deploy à pire prix. **5e confirmation du pattern cascade re-entry**. |
 
 ## Leçons consolidées
 

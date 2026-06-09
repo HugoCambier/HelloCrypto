@@ -335,13 +335,15 @@ def test_portfolio_dd_scale_out_fires_in_CASH():
 
 def test_portfolio_dd_scale_out_skipped_in_PRESERVE():
     """En PRESERVE (BTC daily baissier mais pas de capitulation confirmée),
-    un DD -12% NE déclenche PAS le scale-out portfolio. Le gate strict CASH
-    évite les fausses crystallisations sur les corrections modérées qui
-    rebondissent — observé empiriquement en backtest 1000j."""
+    un DD -12% NE déclenche PAS le scale-out portfolio. Le gate CASH évite
+    les fausses crystallisations sur les corrections modérées qui rebondissent
+    — observé empiriquement en backtest 1000j."""
     market = {
-        # BTC daily baissier mais drawdown_pct_7d non set → pas de CASH,
-        # juste PRESERVE.
+        # BTC daily baissier ; drawdown_pct_7d non set + breadth intraday
+        # diluée (≤ 70% baissier) → pas de CASH, juste PRESERVE.
         "BTCUSDC": {**_sym(trend="baissier"), "price": 88.0},
+        "BULLFAUSDC": _sym(trend="haussier"),
+        "BULLGUSDC":  _sym(trend="haussier"),
     }
     now = 1_000_000.0
     state = {
