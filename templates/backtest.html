@@ -107,7 +107,7 @@
       .sidebar { width:280px; }
       .sidebar.collapsed { width:32px; }
       nav.shrink-0 { overflow-x:auto; }
-      #rtab-cockpit, #rtab-charts { padding:1rem !important; }
+      #rtab-performance, #rtab-charts { padding:1rem !important; }
       .progress-strip { padding:8px 12px; flex-wrap:wrap; gap:8px; }
     }
   </style>
@@ -116,7 +116,10 @@
 
   <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0 gap-3">
     <span class="text-lg font-bold text-blue-400 tracking-tight truncate">HelloCrypto</span>
-    <a href="/logout" class="text-xs text-slate-500 hover:text-red-400 transition-colors shrink-0">Déconnexion</a>
+    <div class="flex items-center gap-3 shrink-0">
+      <span id="header-utc" class="text-xs text-slate-500 font-mono tabular-nums" title="UTC clock">—</span>
+      <a href="/logout" class="text-xs text-slate-500 hover:text-red-400 transition-colors">Déconnexion</a>
+    </div>
   </header>
   <nav class="bg-slate-900 border-b border-slate-700 px-6 flex gap-1 shrink-0">
     <a href="/" class="rtab">Home</a>
@@ -229,14 +232,14 @@
 
       <!-- Right-panel tabs -->
       <div class="bg-slate-900 border-b border-slate-800 px-4 flex gap-0 shrink-0">
-        <button class="rtab active" data-rtab="cockpit" onclick="switchRTab('cockpit',this)">Cockpit</button>
+        <button class="rtab active" data-rtab="performance" onclick="switchRTab('performance',this)">Performance</button>
         <button class="rtab" data-rtab="charts" onclick="switchRTab('charts',this)">Graphiques</button>
         <button class="rtab" data-rtab="params" onclick="switchRTab('params',this)">Paramètres</button>
         <button class="rtab" data-rtab="recap" onclick="switchRTab('recap',this)">Récap</button>
       </div>
 
-      <!-- Tab: Cockpit -->
-      <div id="rtab-cockpit" class="flex-1 overflow-y-auto p-5 space-y-4">
+      <!-- Tab: Performance -->
+      <div id="rtab-performance" class="flex-1 overflow-y-auto p-5 space-y-4">
 
         <!-- Performance KPIs -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">

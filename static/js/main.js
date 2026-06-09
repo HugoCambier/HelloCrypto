@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// HelloCrypto Cockpit — main.js (run management; analytics in analytics.js)
+// HelloCrypto — main.js (run management; analytics in analytics.js)
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Watchlist injected server-side from config.json (see dashboard.py
@@ -39,7 +39,7 @@ const _refs = {
 
 // ─── Right-panel tabs ────────────────────────────────────────────────────────
 function switchRTab(name, btn) {
-  ['cockpit','charts','params','runs','orders'].forEach(t => {
+  ['performance','charts','params','runs','orders'].forEach(t => {
     document.getElementById('rtab-'+t)?.classList.toggle('hidden', t !== name);
   });
   document.querySelectorAll('.rtab[data-rtab]').forEach(b => {
@@ -69,13 +69,13 @@ function _updateOrdersTabVisibility() {
   document.getElementById('rtab-orders-btn')?.classList.toggle('hidden', !ordersVisible);
   document.getElementById('rtab-runs-btn')?.classList.toggle('hidden', !runsVisible);
 
-  // If the user was on a now-hidden tab, switch back to Cockpit so they
+  // If the user was on a now-hidden tab, switch back to Performance so they
   // don't see a stale view.
   const ordersOpen = !document.getElementById('rtab-orders')?.classList.contains('hidden');
   const runsOpen   = !document.getElementById('rtab-runs')?.classList.contains('hidden');
   if ((ordersOpen && !ordersVisible) || (runsOpen && !runsVisible)) {
-    const cockpitBtn = document.querySelector('.rtab[data-rtab="cockpit"]');
-    if (cockpitBtn) switchRTab('cockpit', cockpitBtn);
+    const perfBtn = document.querySelector('.rtab[data-rtab="performance"]');
+    if (perfBtn) switchRTab('performance', perfBtn);
   }
 }
 
@@ -968,16 +968,16 @@ function _setLoaders(ids, on) { ids.forEach(id => _setLoading(id, on)); }
 
 // ─── Empty state toggling ────────────────────────────────────────────────────
 function _showEmptyState() {
-  document.getElementById('cockpit-empty')?.classList.remove('hidden');
-  document.getElementById('cockpit-content')?.classList.add('hidden');
+  document.getElementById('performance-empty')?.classList.remove('hidden');
+  document.getElementById('performance-content')?.classList.add('hidden');
   document.getElementById('charts-empty-state')?.classList.remove('hidden');
   document.getElementById('charts-content')?.classList.add('hidden');
   document.getElementById('params-empty-state')?.classList.remove('hidden');
   document.getElementById('params-content')?.classList.add('hidden');
 }
 function _showContentState() {
-  document.getElementById('cockpit-empty')?.classList.add('hidden');
-  document.getElementById('cockpit-content')?.classList.remove('hidden');
+  document.getElementById('performance-empty')?.classList.add('hidden');
+  document.getElementById('performance-content')?.classList.remove('hidden');
   document.getElementById('charts-empty-state')?.classList.add('hidden');
   document.getElementById('charts-content')?.classList.remove('hidden');
   document.getElementById('params-empty-state')?.classList.add('hidden');

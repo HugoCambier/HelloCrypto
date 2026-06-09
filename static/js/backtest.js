@@ -23,7 +23,7 @@ const _refs = {
 
 // ── Right-panel tabs ─────────────────────────────────────────────────────────
 function switchRTab(name, btn) {
-  ['cockpit','charts','params','recap'].forEach(t => {
+  ['performance','charts','params','recap'].forEach(t => {
     document.getElementById('rtab-'+t)?.classList.toggle('hidden', t !== name);
   });
   document.querySelectorAll('.rtab[data-rtab]').forEach(b => {

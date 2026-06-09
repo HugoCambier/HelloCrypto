@@ -4,6 +4,28 @@
 
 const HC_CHART_COLORS = ['#60a5fa','#34d399','#f59e0b','#a78bfa','#f87171','#38bdf8','#fb923c','#818cf8','#4ade80','#e879f9'];
 
+// ─── UTC header clock ────────────────────────────────────────────────────────
+// Auto-init: if a `#header-utc` element exists, refresh it every second with the
+// current UTC date+time. Used to anchor the user to "what time the server uses"
+// since strategy timestamps, snapshot ts, etc. are all UTC.
+(function _initHeaderUtcClock() {
+  const start = () => {
+    const el = document.getElementById('header-utc');
+    if (!el) return;
+    const tick = () => {
+      const d = new Date();
+      el.textContent = d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+    };
+    tick();
+    setInterval(tick, 1000);
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start);
+  } else {
+    start();
+  }
+})();
+
 // ─── HTTP fetch with TTL cache + in-flight dedup ─────────────────────────────
 // Multiple concurrent callers asking for the same URL share a single network
 // request. Subsequent calls within `ttlMs` reuse the cached response.
@@ -653,7 +675,7 @@ function _alignToLabels(bench, strat, budget, valueMode) {
 // ─── CSV download for trade history ─────────────────────────────────────────
 // Flattens one level of nested objects (e.g. btc_ctx → btc_ctx.stance) so
 // the downstream sheet can pivot on those fields directly. Used by the
-// "↓ CSV" button on both the cockpit and the backtest pages.
+// "↓ CSV" button on both the Home (Performance tab) and the Backtest pages.
 function downloadTradesCSV(history, filename = 'trades.csv') {
   if (!Array.isArray(history) || !history.length) {
     toast('Aucun trade à exporter', 'warn');
@@ -698,7 +720,7 @@ function downloadTradesCSV(history, filename = 'trades.csv') {
 
 // ─── Market context badges ───────────────────────────────────────────────────
 // Renders the stance / dominance / F&G chips shown above the allocation donut.
-// Shared between the cockpit (main.js) and the backtest page (backtest.js).
+// Shared between the Home page (main.js) and the backtest page (backtest.js).
 const HC_STANCE_COLORS = {
   DEPLOY:    'bg-emerald-900/40 text-emerald-300 border-emerald-800',
   SELECTIVE: 'bg-sky-900/40 text-sky-300 border-sky-800',
@@ -736,7 +758,7 @@ function symbolContextFromCtx(ctx) {
 }
 
 // Render the standalone "Contexte marché" card (badges + per-symbol grid).
-// Used on both the cockpit and the backtest page; reflects the run's current
+// Used on both the Home and the backtest pages; reflects the run's current
 // playback timestamp when one is supplied, else the latest live snapshot.
 function renderMarketContextCard(containerId, ctx) {
   const el = document.getElementById(containerId);
