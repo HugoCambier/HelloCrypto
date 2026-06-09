@@ -18,6 +18,13 @@
     .fld:focus { outline: none; border-color: #3b82f6; }
     .lbl { font-size: 11px; color: #94a3b8; margin-bottom: 4px; display: block; letter-spacing: .3px; text-transform: uppercase; }
 
+    .spinbox { display: flex; flex-direction: column; align-items: stretch; width: 44px; border: 1px solid #334155; border-radius: 6px; overflow: hidden; background: #0f172a; user-select: none; }
+    .spin-btn { padding: 1px 0; background: #1e293b; color: #94a3b8; font-size: 11px; line-height: 14px; border: 0; cursor: pointer; font-weight: 700; }
+    .spin-btn:hover { background: #334155; color: #e2e8f0; }
+    .spin-val { padding: 5px 0; background: #0f172a; color: #e2e8f0; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; border: 0; width: 100%; }
+    .spin-val:focus { outline: none; background: #1e293b; }
+    .spin-sep { color: #64748b; font-size: 18px; font-weight: 700; padding: 0 2px; line-height: 1; }
+
     .rtab { padding:8px 14px; font-size:12px; font-weight:600; border-bottom:2px solid transparent; color:#64748b; transition:all .15s; letter-spacing:.3px; text-transform:uppercase; display:inline-block; }
     .rtab.active { color:#60a5fa; border-bottom-color:#3b82f6; }
     .rtab:hover:not(.active) { color:#94a3b8; }
@@ -208,8 +215,22 @@
       </div>
 
       <div>
-        <label class="lbl">Date de début (optionnelle)</label>
-        <input class="fld" type="date" id="bt-start">
+        <label class="lbl">Date &amp; heure de début (UTC)</label>
+        <div class="flex items-center gap-2">
+          <input class="fld flex-1 cursor-pointer" type="date" id="bt-start"
+                 onclick="this.showPicker && this.showPicker()">
+          <div class="spinbox">
+            <button type="button" class="spin-btn" onclick="btAdjustSpin('bt-start-hour', 1, 0, 23)">▲</button>
+            <input class="spin-val" type="text" inputmode="numeric" maxlength="2" id="bt-start-hour" value="00">
+            <button type="button" class="spin-btn" onclick="btAdjustSpin('bt-start-hour', -1, 0, 23)">▼</button>
+          </div>
+          <span class="spin-sep">:</span>
+          <div class="spinbox">
+            <button type="button" class="spin-btn" onclick="btAdjustSpin('bt-start-min', 1, 0, 59)">▲</button>
+            <input class="spin-val" type="text" inputmode="numeric" maxlength="2" id="bt-start-min" value="00">
+            <button type="button" class="spin-btn" onclick="btAdjustSpin('bt-start-min', -1, 0, 59)">▼</button>
+          </div>
+        </div>
       </div>
 
       <div>

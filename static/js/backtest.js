@@ -56,7 +56,7 @@ function renderRunParamsTab() {
   const fmtVal = (v) => (v === null || v === undefined || v === '') ? '—' : v;
   const items = [
     ['Période',        p.days ? `${p.days} jour${p.days > 1 ? 's' : ''}` : '—'],
-    ['Date de début',  p.start_date || 'auto'],
+    ['Date de début',  (p.start_date || 'auto').replace('T', ' ')],
     ['Budget',         p.budget != null ? `$${typeof fmt === 'function' ? fmt(p.budget) : p.budget}` : '—'],
     ['Stop-loss',      p.stop_loss_pct != null ? `${p.stop_loss_pct}%` : '—'],
     ['Trailing',       p.trailing_stop_pct != null ? `${p.trailing_stop_pct}%` : '—'],
@@ -488,8 +488,66 @@ function btStanceToggle() {
     if (el) el.disabled = on;
   });
 }
-// Apply initial state on load.
-document.addEventListener('DOMContentLoaded', btStanceToggle);
+
+// ── Start date/time spinners ─────────────────────────────────────────────────
+function btAdjustSpin(id, delta, min, max) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  let cur = parseInt(el.value, 10);
+  if (Number.isNaN(cur)) cur = min;
+  let nv = cur + delta;
+  if (nv < min) nv = max;
+  else if (nv > max) nv = min;
+  el.value = String(nv).padStart(2, '0');
+}
+
+function _btTodayMinusDaysUTC(days) {
+  const d = new Date(Date.now() - (Number(days) || 0) * 86400000);
+  return d.toISOString().slice(0, 10);
+}
+
+function _btSyncStartMax() {
+  const days     = Number(document.getElementById('bt-days')?.value) || 0;
+  const startEl  = document.getElementById('bt-start');
+  if (!startEl) return;
+  const maxStart = _btTodayMinusDaysUTC(days);
+  startEl.max    = maxStart;
+  // Reset to the new "today − days" whenever the prior value would now exceed
+  // the new max (e.g. user shortened the run length). Also seed on first load.
+  // When we do reset, also seed the hh:mm to the current UTC time so the
+  // simulated window lines up naturally with "now" (end_ms = now()).
+  if (!startEl.value || startEl.value > maxStart) {
+    startEl.value = maxStart;
+    const now    = new Date();
+    const hh     = String(now.getUTCHours()).padStart(2, '0');
+    const mm     = String(now.getUTCMinutes()).padStart(2, '0');
+    const hourEl = document.getElementById('bt-start-hour');
+    const minEl  = document.getElementById('bt-start-min');
+    if (hourEl) hourEl.value = hh;
+    if (minEl)  minEl.value  = mm;
+  }
+}
+
+function _btClampSpin(id, min, max) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  let n = parseInt(el.value.replace(/\D/g, ''), 10);
+  if (Number.isNaN(n)) n = min;
+  if (n < min) n = min;
+  if (n > max) n = max;
+  el.value = String(n).padStart(2, '0');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  btStanceToggle();
+  _btSyncStartMax();
+  document.getElementById('bt-days')?.addEventListener('input', _btSyncStartMax);
+  // Free-typing into the spin inputs — clamp on blur and pad to 2 digits.
+  document.getElementById('bt-start-hour')?.addEventListener('blur',
+    () => _btClampSpin('bt-start-hour', 0, 23));
+  document.getElementById('bt-start-min')?.addEventListener('blur',
+    () => _btClampSpin('bt-start-min', 0, 59));
+});
 
 // ── Backtest control ─────────────────────────────────────────────────────────
 async function startBacktest() {
@@ -512,8 +570,12 @@ async function startBacktest() {
     risk_level:     Number(document.getElementById('bt-risk').value),
     speed:          Number(document.getElementById('bt-speed').value),
   };
-  const start = document.getElementById('bt-start').value;
-  if (start) body.start_date = start;
+  const startDate = document.getElementById('bt-start').value;
+  if (startDate) {
+    const hh = (document.getElementById('bt-start-hour').value || '0').padStart(2, '0');
+    const mm = (document.getElementById('bt-start-min').value  || '0').padStart(2, '0');
+    body.start_date = `${startDate}T${hh}:${mm}`;
+  }
 
   try {
     const r = await fetch('/api/backtest/start', {

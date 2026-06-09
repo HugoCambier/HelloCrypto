@@ -31,7 +31,7 @@ from .api import (
     _compute_sma,
     format_market_data,
     get_btc_dominance,
-    get_fear_and_greed,
+    get_fear_and_greed_history,
     load_config,
 )
 from .coin_tiers import is_allowed as _coin_allowed
@@ -127,10 +127,23 @@ def _fetch_klines(symbol: str, interval: str, start_ms: int, end_ms: int) -> lis
 
 
 def _start_ms_from(start_date: str | None, days: int) -> int:
-    """Return epoch-ms for start of backtest window."""
+    """Return epoch-ms for start of backtest window.
+
+    Accepts ``YYYY-MM-DD`` (midnight UTC), ``YYYY-MM-DDTHH:MM``,
+    ``YYYY-MM-DDTHH:MM:SS``, or ``YYYY-MM-DD HH:MM`` — all interpreted as UTC.
+    The intra-hour precision matters: ``decide_every_n_candles`` shifts the
+    decision calendar by the start's minute-of-hour, which can swing PnL by
+    tens of dollars over a 1000-day backtest.
+    """
     if start_date:
-        dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=UTC)
-        return int(dt.timestamp() * 1000)
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M",
+                    "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+            try:
+                dt = datetime.strptime(start_date, fmt).replace(tzinfo=UTC)
+                return int(dt.timestamp() * 1000)
+            except ValueError:
+                continue
+        raise ValueError(f"Invalid start_date format: {start_date!r}")
     return int((datetime.now(UTC) - timedelta(days=days)).timestamp() * 1000)
 
 
@@ -503,8 +516,12 @@ def run_live(
         (start_ms + warmup * HOUR_MS) / 1000
     ).strftime("%Y-%m-%d %H:%M")
 
-    # Pre-fetch global context once (cached, doesn't change during replay)
-    fear_greed    = get_fear_and_greed()
+    # Historical FNG indexed by date so each simulated day sees the value
+    # that actually held then — not the live value of the moment the backtest
+    # was launched (which would shift PnL by tens of $ when FNG crosses 25/75).
+    # On fetch failure, ``fng_history`` is None → per-cycle lookups yield None
+    # → decider skips the FNG modifier (safe, neutral fallback).
+    fng_history   = get_fear_and_greed_history(days + 60)
     btc_dominance = get_btc_dominance()
 
     llm_call_count = 0
@@ -517,6 +534,8 @@ def run_live(
         # ts is deterministic from the global hour grid — independent of any
         # symbol's index, so all symbols at i refer to the same wall-clock hour.
         ts = start_ms + i * HOUR_MS
+        cycle_date = datetime.fromtimestamp(ts / 1000, tz=UTC).date()
+        fear_greed_today = (fng_history or {}).get(cycle_date.isoformat())
         # Only include symbols that have actual data at this hour (no
         # forward-fill — we want a price decision based on real market data).
         prices = {sym: float(kl[4])
@@ -575,7 +594,7 @@ def run_live(
                     decision = llm_call(
                         prompt=build_analysis(
                             market_data, holdings, cash, budget, risk_level,
-                            recent_decisions, fear_greed, btc_dominance, scores,
+                            recent_decisions, fear_greed_today, btc_dominance, scores,
                             prices=prices, peak_prices=peak_prices,
                             cooldown_map=cooldown_map, total_fees=total_fees,
                             cycle=current_step,
@@ -660,8 +679,7 @@ def run_live(
             # que la simulation et le run réel. La cadence (decide_every_cycles)
             # est gérée par le décideur lui-même via ``strat_state``.
             market_raw = _enrich_from_klines(symbols, all_klines, all_klines_1d, i)
-            fng_v = (fear_greed or {}).get("value") if fear_greed else None
-            cycle_date = datetime.fromtimestamp(ts / 1000, tz=UTC).date()
+            fng_v = (fear_greed_today or {}).get("value") if fear_greed_today else None
             decision, strat_state = regime_decision(
                 market_raw=market_raw, holdings=holdings, cash=cash,
                 cycle=current_step, now_ts=ts / 1000.0,

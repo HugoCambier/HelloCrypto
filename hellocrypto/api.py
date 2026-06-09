@@ -483,6 +483,32 @@ def get_fear_and_greed() -> dict | None:
     return _cached("fng", _fetch)
 
 
+def get_fear_and_greed_history(days: int = 2000) -> dict[str, dict] | None:
+    """Return historical FNG indexed by ``YYYY-MM-DD`` (UTC date).
+
+    Used by the backtest so each simulated day sees the FNG value that
+    actually held on that day, instead of polluting the whole replay with
+    the live value of the moment the backtest was launched (which could
+    shift PnL by tens of dollars if FNG crossed 25 or 75 between launches).
+
+    Returns ``{date_iso: {"value": int, "label": str}}`` or ``None`` on
+    fetch failure — callers must treat ``None`` as "no FNG modifier".
+    """
+    from datetime import UTC as _UTC
+    from datetime import datetime as _dt
+    limit = min(max(days, 60), 3000)
+    def _fetch():
+        r = requests.get(f"https://api.alternative.me/fng/?limit={limit}",
+                         timeout=10)
+        out: dict[str, dict] = {}
+        for d in r.json().get("data", []):
+            iso = _dt.fromtimestamp(int(d["timestamp"]), tz=_UTC).date().isoformat()
+            out[iso] = {"value": int(d["value"]),
+                        "label": d["value_classification"]}
+        return out
+    return _cached(f"fng_hist_{limit}", _fetch)
+
+
 def get_btc_dominance() -> float | None:
     """Return BTC market cap dominance % from CoinGecko (cached 5 min)."""
     def _fetch():
