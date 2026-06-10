@@ -47,6 +47,15 @@ def _state_file(session_id: str | None):
     return SIM_STATE_FILE.with_name(f"{SIM_STATE_FILE.stem}_{session_id}{SIM_STATE_FILE.suffix}")
 
 
+# Cap the cumulative-trade fields persisted in the sim state. Each running sim
+# was accumulating hundreds of trades + timeseries points into agent_state,
+# which the cron tick then re-reads at every heartbeat (×288/day). With 4 active
+# sims the per-day read alone was hitting 200+ MB. The full trade record is
+# already in the `trades` table — keeping the last 200 entries in state is
+# enough for the dashboard's "tail" view + sim.run resume continuity.
+_STATE_TRUNCATE = 200
+
+
 def _save_state(state: dict, session_id: str | None = None, *,
                 update_saved_at: bool = True) -> None:
     # `saved_at` is the gate the cron uses to space DECISION cycles. Stops-only
@@ -58,10 +67,18 @@ def _save_state(state: dict, session_id: str | None = None, *,
         if update_saved_at
         else (state.get("saved_at") or datetime.utcnow().isoformat())
     )
+    slim = {**state, "saved_at": saved_at, "schema_version": 1}
+    # Truncate the two cumulative fields. Both keep their most recent entries
+    # so the dashboard's live PnL chart + recent-trades list stay intact.
+    hist = slim.get("history")
+    if isinstance(hist, list) and len(hist) > _STATE_TRUNCATE:
+        slim["history"] = hist[-_STATE_TRUNCATE:]
+    ts = slim.get("value_timeseries")
+    if isinstance(ts, list) and len(ts) > _STATE_TRUNCATE:
+        slim["value_timeseries"] = ts[-_STATE_TRUNCATE:]
     try:
         from db.store import set_state
-        set_state(_state_key(session_id),
-                  {**state, "saved_at": saved_at, "schema_version": 1})
+        set_state(_state_key(session_id), slim)
         return
     except ImportError:
         pass
@@ -69,7 +86,7 @@ def _save_state(state: dict, session_id: str | None = None, *,
     try:
         path = _state_file(session_id)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({**state, "saved_at": saved_at}, indent=2))
+        path.write_text(json.dumps(slim, indent=2))
     except Exception as exc:
         log.warning("[SIM] Impossible de sauvegarder l'état: %s", exc)
 
@@ -93,6 +110,48 @@ def _load_state(session_id: str | None = None) -> dict | None:
         return data
     except Exception:
         return None
+
+
+def _load_state_meta(session_id: str | None = None) -> dict | None:
+    """Cron-gate projection : return only {session_id, saved_at, cycle}.
+
+    The full sim state can be 200+ KB (history + value_timeseries). The cron
+    heartbeat only needs three fields to decide whether to fire a decision
+    cycle. SQL-side projection drops the load from ~240 KB to ~100 bytes.
+    Falls back to full _load_state on Firestore/SQLite-without-JSON or any
+    error.
+    """
+    try:
+        from db.snapshots import _USE_POSTGRES
+        from db.store import _postgres, _sqlite
+    except ImportError:
+        return _load_state(session_id)
+    key = _state_key(session_id)
+    try:
+        if _USE_POSTGRES:
+            with _postgres() as c:
+                c.execute(
+                    "SELECT (value::jsonb)->>'session_id' AS session_id, "
+                    "(value::jsonb)->>'saved_at' AS saved_at, "
+                    "((value::jsonb)->>'cycle')::int AS cycle "
+                    "FROM agent_state WHERE key=%s",
+                    (key,),
+                )
+                row = c.fetchone()
+                return dict(row) if row and row["saved_at"] else None
+        with _sqlite() as c:
+            row = c.execute(
+                "SELECT json_extract(value, '$.session_id') AS session_id, "
+                "json_extract(value, '$.saved_at')   AS saved_at, "
+                "json_extract(value, '$.cycle')      AS cycle "
+                "FROM agent_state WHERE key=?",
+                (key,),
+            ).fetchone()
+            return dict(row) if row and row["saved_at"] else None
+    except Exception:
+        # Any SQL/JSON edge case → fall back to the full load (correct, just
+        # heavier). Better than failing the cron tick.
+        return _load_state(session_id)
 
 
 # ── Stops-only tick (between full decision cycles) ───────────────────────────

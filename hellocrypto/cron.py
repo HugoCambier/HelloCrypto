@@ -253,10 +253,13 @@ def _run_sim_cycle(active_sim: dict, stop_event: threading.Event) -> dict:
     budget  = float(params.get("budget") or cfg.get("budget", 100))
     run_cfg = {**cfg, **{k: v for k, v in params.items() if v is not None}}
 
-    last_state = sim._load_state(sid) or {}
-    if last_state.get("session_id") == sid and last_state.get("saved_at"):
+    # Gate check : lite projection of {session_id, saved_at, cycle} only.
+    # Was loading the full state (200+ KB with history + timeseries) just to
+    # read saved_at — every heartbeat × every active sim. Now ~100 bytes.
+    meta = sim._load_state_meta(sid) or {}
+    if meta.get("session_id") == sid and meta.get("saved_at"):
         try:
-            elapsed = (datetime.utcnow() - datetime.fromisoformat(last_state["saved_at"])).total_seconds()
+            elapsed = (datetime.utcnow() - datetime.fromisoformat(meta["saved_at"])).total_seconds()
             if elapsed < cycle_seconds - GATE_TOLERANCE_SEC:
                 res = sim.tick_stops_only(sid, run_cfg)
                 log.info("[SIM] Stops-only tick session=%s elapsed=%.0fs/%ds → %s (fired=%d)",
@@ -270,9 +273,7 @@ def _run_sim_cycle(active_sim: dict, stop_event: threading.Event) -> dict:
     # sim.run's max_cycles is an ABSOLUTE counter (compared against the
     # persisted cycle), not invocation-local. To run exactly one more cycle,
     # we pass (current_cycle + 1).
-    current_cycle = 0
-    if last_state.get("session_id") == sid:
-        current_cycle = int(last_state.get("cycle", 0))
+    current_cycle = int(meta.get("cycle", 0)) if meta.get("session_id") == sid else 0
     target_max = current_cycle + 1
 
     log.info("[SIM] Running 1 cycle | session=%s | first=%s | from_cycle=%d → max=%d | cycle_seconds=%ds",
