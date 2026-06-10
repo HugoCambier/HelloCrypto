@@ -202,6 +202,19 @@ def regime_decision(
         for k, v in STANCE_PARAMS[stance].items():
             if k not in user_pinned:
                 p[k] = v
+        # Strong-DEPLOY concentration: when DEPLOY fires AND ≥70% of the
+        # watchlist is in daily uptrend, cut top_n from 4 to 2 so capital
+        # concentrates on BTC (boosted ×2 by ``_btc_conviction_mult``) + the
+        # single best-scoring alt. The tail positions in normal DEPLOY get
+        # crap-sized allocations anyway after BTC's 65% cap, so dropping them
+        # mostly removes noise — and frees us from carrying weak picks during
+        # the cleanest bull windows.
+        if stance == "DEPLOY" and "top_n" not in user_pinned and market_raw:
+            bull_breadth = sum(
+                1 for d in market_raw.values() if d.get("trend_1d") == "haussier"
+            ) / len(market_raw)
+            if bull_breadth >= 0.70:
+                p["top_n"] = 2
         # Contrarian sentiment modulation on top of stance: when the crowd
         # is at extremes, the next move tends to mean-revert. Raise the bar
         # in extreme greed, lower it in extreme fear. Only nudges by ±1, so
