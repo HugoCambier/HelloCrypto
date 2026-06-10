@@ -848,6 +848,10 @@ function onScrub(idxStr) {
   // Dragging to the far right = back to the canonical final snapshot (which
   // also carries the final liquidation), so null it out.
   _btScrubIdx = idx >= _btFrames.length - 1 ? null : idx;
+  // Scrubbing changes the trade count; land on page 1 of the new set so a
+  // shrinking history never strands the table on a now-empty page.
+  const tradesList = document.getElementById('bt-trades-list');
+  if (tradesList) tradesList.dataset.page = '1';
   _renderActive();
   const endEl  = document.getElementById('bt-end-ts');
   const stepEl = document.getElementById('bt-step');
