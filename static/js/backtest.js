@@ -5,7 +5,8 @@
 // the template render somehow misses the injection.
 const COIN_UNIVERSE = window.COIN_UNIVERSE || [];
 
-let _btPollIv  = null;
+let _btPollIv  = null;   // truthy while a poll loop is active (not the timer handle)
+let _btPollTimer = null; // the actual setTimeout handle for the next poll tick
 let _latestSnap = null;
 // Post-run time scrubber: each timeseries point is a full instant-t frame.
 // _btScrubIdx is null when showing the final run, or the frame index being
@@ -609,20 +610,27 @@ async function stopBacktest() {
   try { await fetch('/api/backtest/stop', { method: 'POST' }); toast('Arrêté', 'warn'); } catch {}
 }
 
-// Polling cadence : 3s pendant un run. Avant : 1s → ~80 KB/s sur
+// Polling cadence : 3s pendant le replay. Avant : 1s → ~80 KB/s sur
 // /api/backtest/status × Vercel cold-starts qui retombent dans _load_last_backtest
 // = principal poste d'egress des journées avec un backtest. 3s suffit pour
-// l'UX (progression visible, countdown smooth).
-const _BT_POLL_MS = 3000;
+// l'UX du replay (countdown smooth).
+//
+// Exception : pendant le chargement des klines, on échantillonne à 600ms. La
+// phase de fetch ne dure que quelques secondes et chaque symbole pousse un
+// message « Chargement X (i/N)… » qui était sinon avalé entre deux ticks 3s
+// (on ne voyait que le fallback « Chargement des données Binance… »).
+const _BT_POLL_MS      = 3000;
+const _BT_LOAD_POLL_MS = 600;
 
 function startPolling() {
-  if (_btPollIv) clearInterval(_btPollIv);
+  _stopBtPolling();
+  _btPollIv = true;   // active; pollStatus se replanifie lui-même
   pollStatus();
-  _btPollIv = setInterval(pollStatus, _BT_POLL_MS);
 }
 
 function _stopBtPolling() {
-  if (_btPollIv) { clearInterval(_btPollIv); _btPollIv = null; }
+  if (_btPollTimer) { clearTimeout(_btPollTimer); _btPollTimer = null; }
+  _btPollIv = null;
   const startBtn = document.getElementById('bt-start-btn');
   const stopBtn  = document.getElementById('bt-stop-btn');
   if (startBtn) startBtn.disabled = false;
@@ -630,9 +638,11 @@ function _stopBtPolling() {
 }
 
 async function pollStatus() {
+  let loading = false;
   try {
     const r = await fetch('/api/backtest/status');
     const d = await r.json();
+    loading = !!d.loading;
     // Hydrate the run-params cache from the server. The backend stashes the
     // launch params into _bt_state at start, so a page reload mid-run still
     // shows the running config in the Paramètres tab.
@@ -646,8 +656,13 @@ async function pollStatus() {
     if (!d.running && _btPollIv) {
       _stopBtPolling();
       loadSnapshot();
+      return;
     }
   } catch {}
+  // Reschedule: tight cadence while loading klines, relaxed during replay.
+  if (_btPollIv) {
+    _btPollTimer = setTimeout(pollStatus, loading ? _BT_LOAD_POLL_MS : _BT_POLL_MS);
+  }
 }
 
 // Pull the heavy /api/backtest/snapshot once (history + timeseries + positions).
@@ -686,7 +701,9 @@ async function loadSnapshot() {
 // on days with a long backtest.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    if (_btPollIv) { clearInterval(_btPollIv); _btPollIv = null; }
+    // Pause polling without touching the run buttons (the run may still be live).
+    if (_btPollTimer) { clearTimeout(_btPollTimer); _btPollTimer = null; }
+    _btPollIv = null;
   } else if (!_btPollIv) {
     // Only re-arm if a run is still in progress on the server side.
     fetch('/api/backtest/status').then(r => r.json()).then(d => {
