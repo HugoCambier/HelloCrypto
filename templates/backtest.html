@@ -244,11 +244,6 @@
         </div>
       </div>
 
-      <div>
-        <label class="lbl">Vitesse : <span id="bt-speed-val" class="text-blue-400 font-bold">50</span>x</label>
-        <input class="w-full accent-blue-500" type="range" id="bt-speed" min="1" max="500" value="50" oninput="onSpeedChange(this.value)">
-      </div>
-
       <div class="flex gap-2 pt-2">
         <button id="bt-start-btn" onclick="startBacktest()" class="flex-1 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 transition-colors font-semibold text-sm">Lancer</button>
         <button id="bt-stop-btn" onclick="stopBacktest()" disabled class="flex-1 py-2.5 rounded-lg bg-red-700 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors font-semibold text-sm">Arrêter</button>

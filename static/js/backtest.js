@@ -73,7 +73,6 @@ function renderRunParamsTab() {
     ['Min-hold',       p.min_hold_hours != null ? `${p.min_hold_hours}h` : '—'],
     ['Cooldown rebuy', p.rebuy_cooldown_hours ? `${p.rebuy_cooldown_hours}h` : 'off'],
     ['Décision /N bougies', p.decide_every_n_candles ? `toutes les ${p.decide_every_n_candles}h` : 'chaque heure'],
-    ['Vitesse',        p.speed ? `${p.speed}x` : '—'],
   ];
   grid.innerHTML = items.map(([k, v]) => `
     <div class="bg-slate-800/40 border border-slate-700/50 rounded-lg px-3 py-2">
@@ -412,7 +411,6 @@ function _buildRecapMarkdown() {
     `- Risque : ${p.risk_level ?? '—'}/10`,
     `- Seuil achat ${p.buy_threshold ?? '—'} · top-N ${p.top_n ?? '—'} · confirm-bear ${p.trend_confirm_hours ?? '—'}h · min-hold ${p.min_hold_hours ?? '—'}h · cooldown ${p.rebuy_cooldown_hours ?? 0}h`,
     ...(p.enable_regime_stance ? [`- Stance régime : DEPLOY 1.4× sizing / SELECTIVE 1.0× / PRESERVE 0.7× / CASH 0.5× — seuil + top-N pilotés par stance`] : []),
-    `- Vitesse de simulation : ${p.speed ?? '—'}x`,
     '',
     '## Performance globale',
     `- Total final : $${fmtNum(total)} (${fmtDollar(pnl)}, ${fmtPct(pnlPct, 2)})`,
@@ -574,7 +572,6 @@ async function startBacktest() {
     rebuy_cooldown_hours: Math.max(0, Number(document.getElementById('bt-rebuy-cd').value) || 0),
     decide_every_n_candles: Math.max(1, Number(document.getElementById('bt-decide-every').value) || 4),
     risk_level:     Number(document.getElementById('bt-risk').value),
-    speed:          Number(document.getElementById('bt-speed').value),
   };
   const startDate = document.getElementById('bt-start').value;
   if (startDate) {
@@ -604,21 +601,6 @@ async function startBacktest() {
 
 async function stopBacktest() {
   try { await fetch('/api/backtest/stop', { method: 'POST' }); toast('Arrêté', 'warn'); } catch {}
-}
-
-async function onSpeedChange(val) {
-  document.getElementById('bt-speed-val').textContent = val;
-  // Keep the cached snapshot's speed in sync with what's actually applied.
-  if (_btRunParams) {
-    _btRunParams.speed = Number(val);
-    renderRunParamsTab();
-  }
-  try {
-    await fetch('/api/backtest/speed', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ speed: Number(val) }),
-    });
-  } catch {}
 }
 
 // Polling cadence : 3s pendant un run. Avant : 1s → ~80 KB/s sur

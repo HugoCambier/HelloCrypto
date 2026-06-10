@@ -364,10 +364,9 @@ def run_live(
     llm_every_n_candles: int = 4,
     on_step=None,
     stop_event=None,
-    speed_ref: dict | None = None,
     start_hour_offset: int = 0,
 ) -> dict:
-    """Replay historical candles with speed control.
+    """Replay historical candles as fast as possible.
 
     Args:
         start_date:             ISO date string "YYYY-MM-DD". If None, uses `days` ago.
@@ -383,7 +382,6 @@ def run_live(
                                 après un SELL.
         llm_mode:               Use the production LLM agent for decisions.
         llm_every_n_candles:    In LLM mode, call the LLM every N candles (throttle).
-        speed_ref:              Mutable dict {"value": float} — candles/second.
     """
     stop_loss  = stop_loss_pct  / 100
     trail_stop = trailing_stop_pct / 100
@@ -822,15 +820,6 @@ def run_live(
 
         if on_step:
             on_step(last_snap)
-
-        # In LLM mode the LLM call already took real time — no extra sleep needed
-        if not llm_mode:
-            speed     = speed_ref["value"] if speed_ref else 10.0
-            sleep_sec = max(0.005, 1.0 / speed)
-            if stop_event:
-                stop_event.wait(timeout=sleep_sec)
-            else:
-                time.sleep(sleep_sec)
 
     # ── Final liquidation: sell all remaining positions at last price ─────────
     if holdings and prices:

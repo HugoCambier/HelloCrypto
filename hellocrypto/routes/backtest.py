@@ -18,7 +18,6 @@ log = logging.getLogger(__name__)
 _bt_lock       = threading.Lock()
 _bt_stop_event = threading.Event()
 _bt_state: dict = {"running": False, "loading": False, "snapshot": None}
-_bt_speed: dict = {"value": 10.0}
 
 # DB key holding the last completed backtest (snapshot + params + completed_at).
 # Lets the cockpit + chart survive a Vercel instance recycle: the final run
@@ -160,11 +159,9 @@ def bt_start():
         rebuy_cd_h      = max(0.0, float(body.get("rebuy_cooldown_hours", 0)))
         risk       = max(1, min(int(body.get("risk_level", cfg.get("risk_level", 3))), 10))
         sell_cd    = max(0, int(body.get("sell_cooldown_cycles", cfg.get("sell_cooldown_cycles", 3))))
-        speed      = max(1.0, min(500.0, float(body.get("speed", 10.0))))
         llm_mode   = bool(body.get("llm_mode", False))
         llm_every  = max(1, int(body.get("llm_every_n_candles", 4)))
         decide_every_n = max(1, int(body.get("decide_every_n_candles", 4)))
-        _bt_speed["value"] = speed
         _bt_stop_event = threading.Event()
         # Stash the launch params so the frontend's "Paramètres" tab can
         # hydrate from /api/backtest/status (survives page reloads as long
@@ -183,7 +180,6 @@ def bt_start():
             "min_hold_hours":       min_hold_h,
             "rebuy_cooldown_hours": rebuy_cd_h,
             "decide_every_n_candles": decide_every_n,
-            "speed":             speed,
         }
         _bt_state = {"running": True, "loading": True, "snapshot": None,
                      "params": launch_params}
@@ -211,7 +207,7 @@ def bt_start():
                 decide_every_n_candles=decide_every_n,
                 enable_regime_stance=bool(body.get("enable_regime_stance", True)),
                 llm_mode=llm_mode, llm_every_n_candles=llm_every,
-                on_step=on_step, stop_event=_bt_stop_event, speed_ref=_bt_speed,
+                on_step=on_step, stop_event=_bt_stop_event,
             )
             with _bt_lock:
                 _bt_state = {"running": False, "loading": False,
@@ -234,19 +230,6 @@ def bt_start():
 def bt_stop():
     _bt_stop_event.set()
     return jsonify({"ok": True})
-
-
-@bp.post("/api/backtest/speed")
-def bt_speed_update():
-    body  = request.json or {}
-    speed = max(1.0, min(500.0, float(body.get("speed", 10.0))))
-    _bt_speed["value"] = speed
-    # Keep the params snapshot in sync so the Paramètres tab reflects the
-    # actually-applied speed, which the user can tweak live mid-run.
-    with _bt_lock:
-        if isinstance(_bt_state.get("params"), dict):
-            _bt_state["params"]["speed"] = speed
-    return jsonify({"speed": speed})
 
 
 # ── Grid search ──────────────────────────────────────────────────────────────
@@ -300,7 +283,6 @@ def grid_start():
                     risk_level=risk, buy_threshold=8, top_n=3,
                     sell_cooldown_cycles=3,
                     llm_mode=False, on_step=None, stop_event=None,
-                    speed_ref={"value": 500},
                 )
                 results.append({
                     "risk_level": risk, "stop_loss": sl, "trailing_stop": ts,
