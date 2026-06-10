@@ -40,6 +40,10 @@
     .progress-strip { background:#0d1424; border-top:1px solid #1f2937; padding:10px 24px; display:flex; align-items:center; gap:18px; }
     .progress-strip .bar { flex:1; height:6px; background:#1e293b; border-radius:3px; overflow:hidden; }
     .progress-strip .bar > div { height:100%; background:#3b82f6; transition:width .3s; }
+    .bt-scrubber { flex:1; height:6px; -webkit-appearance:none; appearance:none; background:#1e293b; border-radius:3px; cursor:pointer; outline:none; }
+    .bt-scrubber::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%; background:#60a5fa; border:2px solid #0d1424; cursor:grab; }
+    .bt-scrubber::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:#60a5fa; border:2px solid #0d1424; cursor:grab; }
+    .bt-scrubber:active::-webkit-slider-thumb { cursor:grabbing; }
 
     .pnl-pos{color:#34d399} .pnl-neg{color:#f87171}
     .kpi { background:#111827; border:1px solid #1f2937; border-radius:10px; padding:12px 14px; }
@@ -460,7 +464,10 @@
       <span class="uppercase tracking-wider mx-1.5">→</span>
       <span id="bt-end-ts" class="text-slate-200 font-semibold">—</span>
     </div>
-    <div class="bar"><div id="bt-progress" style="width:0%"></div></div>
+    <div class="bar" id="bt-bar-wrap"><div id="bt-progress" style="width:0%"></div></div>
+    <input type="range" id="bt-scrubber" class="bt-scrubber hidden" min="0" max="0" value="0" step="1"
+           title="Glisser pour rejouer un instant du run"
+           oninput="onScrub(this.value)">
     <div class="text-xs text-slate-400 whitespace-nowrap">
       <span id="bt-step" class="font-semibold">—</span>
       <span id="bt-status" class="text-slate-500 ml-2">En attente…</span>

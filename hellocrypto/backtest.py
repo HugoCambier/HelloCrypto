@@ -320,6 +320,56 @@ def _make_snapshot(current_step, total_steps, ts_ms, cash, budget, holdings,
     }
 
 
+def _build_ctx(market_raw, decision, fng_today, btc_dominance, scores):
+    """Compact market context for instant-t replay. Same shape as
+    ``/api/market/context`` so the dashboard's context card renders it
+    client-side without any extra call when scrubbing a finished run."""
+    return {
+        "live":          False,
+        "stance":        (decision or {}).get("stance"),
+        "btc_dominance": btc_dominance,
+        "fng_value":     (fng_today or {}).get("value"),
+        "fng_label":     (fng_today or {}).get("label"),
+        "symbols": [
+            {
+                "symbol":   sym,
+                "score":    (scores or {}).get(sym),
+                "trend":    d.get("trend"),
+                "trend_1d": d.get("trend_1d"),
+            }
+            for sym, d in (market_raw or {}).items()
+        ],
+    }
+
+
+def _frame(snap, cycle, ctx):
+    """An instant-t timeseries point. Carries the chart fields (ts/v/bh/btc)
+    plus everything the dashboard needs to repaint the PERFORMANCE and
+    GRAPHIQUE tabs at this instant — so a finished run can be scrubbed with a
+    cursor and zero extra calls. Trades/PnL bars are reconstructed client-side
+    by filtering the full history on ``cycle``."""
+    return {
+        "ts":   snap["current_ts"],
+        "v":    snap["total_value"],
+        "bh":   snap.get("bh_total"),
+        "btc":  snap.get("btc_total"),
+        "cycle":             cycle,
+        "cash":              snap["cash"],
+        "pnl":               snap["pnl"],
+        "pnl_pct":           snap["pnl_pct"],
+        "win_rate":          snap["win_rate"],
+        "trades_count":      snap["trades_count"],
+        "alpha":             snap["alpha"],
+        "benchmark_pnl_pct": snap["benchmark_pnl_pct"],
+        "btc_bh_pnl":        snap["btc_bh_pnl"],
+        "total_fees":        snap["total_fees"],
+        "budget":            snap["budget"],
+        "positions":         snap["positions"],
+        "prices":            snap["prices"],
+        "ctx":               ctx,
+    }
+
+
 # ── Stop-loss check ───────────────────────────────────────────────────────────
 
 def _check_stops(sym, all_klines, i, holdings, prices, peak_prices,
@@ -524,6 +574,7 @@ def run_live(
 
     llm_call_count = 0
     llm_last_error = ""
+    last_ctx: dict | None = None  # carried across LLM-throttled cycles
 
     for i in range(warmup, min_len):
         if stop_event and stop_event.is_set():
@@ -602,6 +653,7 @@ def run_live(
                     )
                     llm_call_count += 1
                     recent_decisions = (recent_decisions + [decision])[-3:]
+                    last_ctx = _build_ctx(market_raw, decision, fear_greed_today, btc_dominance, scores)
 
                     history.append({
                         "cycle":     current_step,
@@ -700,6 +752,7 @@ def run_live(
             )
             actions = decision.get("actions", [])
             scores  = decision.get("scores", {}) or {}
+            last_ctx = _build_ctx(market_raw, decision, fear_greed_today, btc_dominance, scores)
 
             # Sells first — frees cash for the buys below. ``scale_out`` is
             # un sell partiel (qty fraction de la position courante) qui ne
@@ -794,12 +847,8 @@ def run_live(
             current_step, total_steps, ts,
             cash, budget, holdings, prices, history, total_fees, initial_prices,
         )
-        timeseries.append({
-            "ts":  last_snap["current_ts"],
-            "v":   last_snap["total_value"],
-            "bh":  last_snap.get("bh_total"),
-            "btc": last_snap.get("btc_total"),
-        })
+        last_snap["ctx"] = last_ctx
+        timeseries.append(_frame(last_snap, current_step, last_ctx))
         # Downsample to keep snapshot lightweight while preserving shape
         if len(timeseries) > 250:
             step = max(1, len(timeseries) // 200)
@@ -851,12 +900,8 @@ def run_live(
             total_steps, total_steps, final_ts,
             cash, budget, holdings, prices, history, total_fees, initial_prices,
         )
-        timeseries.append({
-            "ts":  last_snap["current_ts"],
-            "v":   last_snap["total_value"],
-            "bh":  last_snap.get("bh_total"),
-            "btc": last_snap.get("btc_total"),
-        })
+        last_snap["ctx"] = last_ctx
+        timeseries.append(_frame(last_snap, total_steps, last_ctx))
         if len(timeseries) > 250:
             step = max(1, len(timeseries) // 200)
             last_snap["timeseries"] = timeseries[::step] + [timeseries[-1]]

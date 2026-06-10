@@ -7,6 +7,11 @@ const COIN_UNIVERSE = window.COIN_UNIVERSE || [];
 
 let _btPollIv  = null;
 let _latestSnap = null;
+// Post-run time scrubber: each timeseries point is a full instant-t frame.
+// _btScrubIdx is null when showing the final run, or the frame index being
+// replayed. All scrubbing is client-side — zero extra calls.
+let _btFrames   = [];
+let _btScrubIdx = null;
 // Snapshot of the params used to launch the current/last backtest. We only
 // freeze this on a successful POST to /api/backtest/start — that way the
 // "Paramètres" tab keeps showing the run's params even after the user edits
@@ -31,7 +36,7 @@ function switchRTab(name, btn) {
   });
   if (name === 'params')      renderRunParamsTab();
   else if (name === 'recap')  renderRecapTab();
-  else if (_latestSnap)       renderFromSnapshot(_latestSnap);
+  else if (_latestSnap)       _renderActive();
   else if (name === 'performance' || name === 'charts') {
     // Tab needs the heavy snapshot but we don't have it yet (split status/
     // snapshot endpoints — status is now snapshot-less). Pull it once on
@@ -593,6 +598,7 @@ async function startBacktest() {
     _btRunParams = { ...body };
     renderRunParamsTab();
     toast('Backtest lancé', 'ok');
+    _showProgressBar();
     document.getElementById('bt-start-btn').disabled = true;
     document.getElementById('bt-stop-btn').disabled  = false;
     startPolling();
@@ -664,7 +670,9 @@ async function loadSnapshot() {
     }
     if (d.snapshot) {
       _latestSnap = d.snapshot;
+      _btFrames   = d.snapshot.timeseries || [];
       renderFromSnapshot(d.snapshot);
+      _setupScrubber();
     }
   } catch {}
   finally {
@@ -772,27 +780,89 @@ function renderFromSnapshot(snap) {
       chartRef: _refs.volBars,
       history: snap.history || [],
     });
-    _refetchBtContextIfNeeded(snap);
+    // Context is embedded in the snapshot (computed from the backtest's own
+    // klines), so the card paints with zero extra calls — including while
+    // scrubbing a finished run.
+    renderMarketContextCard('market-context-card', snap.ctx);
   }
 }
 
-// Refetch the market context whenever the backtest's current cycle timestamp
-// changes (and the Charts tab is visible). Throttled by ts equality, not by
-// time — playback speed varies; we just don't want N requests per real second
-// when the snap polls itself.
-let _btCtxLastTs = null;
-function _refetchBtContextIfNeeded(snap) {
-  // snap.current_ts is "YYYY-MM-DD HH:MM" — convert to ISO for the endpoint.
-  const ts = snap?.current_ts;
-  if (!ts || ts === _btCtxLastTs) return;
-  _btCtxLastTs = ts;
-  const atIso = ts.replace(' ', 'T') + ':00';
-  fetchJson(`/api/market/context?at=${encodeURIComponent(atIso)}`, 0, { force: true })
-    .then(ctx => {
-      if (_btCtxLastTs !== ts) return;  // a newer cycle landed during the fetch
-      renderMarketContextCard('market-context-card', ctx);
-    })
-    .catch(() => {});
+// ── Time scrubber ──────────────────────────────────────────────────────────
+// Synthesize a snapshot frozen at frame `idx` from data already in the
+// browser: KPIs/positions/prices/ctx come straight from the frame, the PnL
+// chart is truncated, and trades/PnL-bars are reconstructed by filtering the
+// full history on `cycle`. No network call.
+function _frameSnap(idx) {
+  const f = _btFrames[idx];
+  if (!f || !_latestSnap) return _latestSnap;
+  return {
+    ..._latestSnap,
+    budget:            f.budget ?? _latestSnap.budget,
+    cash:              f.cash,
+    total:             f.v,
+    total_value:       f.v,
+    pnl:               f.pnl,
+    pnl_pct:           f.pnl_pct,
+    win_rate:          f.win_rate,
+    trades_count:      f.trades_count,
+    alpha:             f.alpha,
+    benchmark_pnl_pct: f.benchmark_pnl_pct,
+    btc_bh_pnl:        f.btc_bh_pnl,
+    total_fees:        f.total_fees,
+    positions:         f.positions || [],
+    prices:            f.prices || {},
+    ctx:               f.ctx,
+    current_ts:        f.ts,
+    timeseries:        _btFrames.slice(0, idx + 1),
+    history:           (_latestSnap.history || []).filter(h => (h.cycle ?? 0) <= (f.cycle ?? Infinity)),
+  };
+}
+
+// Render whatever is active: the scrubbed frame, or the full final run.
+function _renderActive() {
+  if (!_latestSnap) return;
+  renderFromSnapshot(_btScrubIdx != null ? _frameSnap(_btScrubIdx) : _latestSnap);
+}
+
+function onScrub(idxStr) {
+  const idx = Number(idxStr);
+  const f = _btFrames[idx];
+  if (!f) return;
+  // Dragging to the far right = back to the canonical final snapshot (which
+  // also carries the final liquidation), so null it out.
+  _btScrubIdx = idx >= _btFrames.length - 1 ? null : idx;
+  _renderActive();
+  const endEl  = document.getElementById('bt-end-ts');
+  const stepEl = document.getElementById('bt-step');
+  const lastCycle = _btFrames[_btFrames.length - 1]?.cycle;
+  if (endEl)  endEl.textContent  = f.ts;
+  if (stepEl) stepEl.textContent = `cycle ${f.cycle} / ${lastCycle ?? '—'}`;
+}
+
+// Reveal the scrubber once a finished run has ≥2 frames; otherwise keep the
+// passive progress bar. Resets to the run's end.
+function _setupScrubber() {
+  const sc  = document.getElementById('bt-scrubber');
+  const bar = document.getElementById('bt-bar-wrap');
+  if (!sc) return;
+  _btScrubIdx = null;
+  if (_btFrames.length > 1) {
+    sc.max   = String(_btFrames.length - 1);
+    sc.value = sc.max;
+    sc.classList.remove('hidden');
+    if (bar) bar.classList.add('hidden');
+  } else {
+    sc.classList.add('hidden');
+    if (bar) bar.classList.remove('hidden');
+  }
+}
+
+// Back to the live progress bar (a new run is starting).
+function _showProgressBar() {
+  _btFrames = [];
+  _btScrubIdx = null;
+  document.getElementById('bt-scrubber')?.classList.add('hidden');
+  document.getElementById('bt-bar-wrap')?.classList.remove('hidden');
 }
 
 function renderKpis(snap) {
@@ -863,7 +933,7 @@ function renderKpis(snap) {
   renderFilterToolbar('pnl-filters', {
     granularityDefault: 'day',
     periodDefault: 'all',
-    onChange: () => _latestSnap && renderFromSnapshot(_latestSnap),
+    onChange: () => _latestSnap && _renderActive(),
   });
   renderFilterToolbar('trades-filters', {
     showGranularity: false,
@@ -872,7 +942,7 @@ function renderKpis(snap) {
       // Period change resets the trades table to page 1.
       const list = document.getElementById('bt-trades-list');
       if (list) list.dataset.page = '1';
-      if (_latestSnap) renderFromSnapshot(_latestSnap);
+      if (_latestSnap) _renderActive();
     },
   });
 
