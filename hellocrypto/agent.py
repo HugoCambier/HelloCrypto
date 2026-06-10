@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import logging
 import time
-from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -44,8 +43,6 @@ from .trading import check_stops as _trading_check_stops
 from .trading import compute_position_size
 
 load_dotenv()
-
-Path("data").mkdir(exist_ok=True)
 
 log = logging.getLogger(__name__)
 
