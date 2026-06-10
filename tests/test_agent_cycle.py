@@ -73,6 +73,29 @@ def test_execute_cycle_skips_dust_position_on_stop_loss(monkeypatch):
         ref_prices={}, recent_decisions=[], peak_prices={}, cooldown_map={},
     )
 
-    # Dust dropped from tracking, no trade recorded, cycle completes cleanly.
+    # Dust dropped from tracking, no trade recorded, cycle completes cleanly,
+    # and the symbol is remembered so the next tick won't retry it.
     assert "BTCUSDC" not in positions
     assert "BTCUSDC" not in new_state["cooldown_map"]
+    assert new_state["dust_symbols"] == ["BTCUSDC"]
+
+
+def test_execute_cycle_does_not_retry_known_dust(monkeypatch):
+    """A symbol already flagged dust is skipped without hitting the API again."""
+    positions = {"BTCUSDC": {"qty": 0.00001, "avg_price": 100.0}}
+    calls: list = []
+
+    def tracking_sell(sym, qty):
+        calls.append((sym, qty))
+        raise NotionalTooSmall(sym)
+
+    _patch_cycle_io(monkeypatch, positions, market_sell=tracking_sell)
+
+    new_state = agent._execute_cycle(
+        cfg=_base_cfg(), cycle=2, last_llm_call=0.0, llm_call_count=0,
+        ref_prices={}, recent_decisions=[], peak_prices={}, cooldown_map={},
+        dust_symbols=["BTCUSDC"],
+    )
+
+    assert calls == []  # no doomed API call for a known-dust symbol
+    assert new_state["dust_symbols"] == ["BTCUSDC"]

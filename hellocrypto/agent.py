@@ -107,17 +107,22 @@ def _check_stops(positions: dict, prices: dict, peak_prices: dict,
     return _trading_check_stops(positions, enriched_prices, peak_prices, stop_loss, trail_stop)
 
 
-def _sell_or_skip_dust(symbol: str, qty: float):
+def _sell_or_skip_dust(symbol: str, qty: float, dust_known: set[str]):
     """market_sell, returning None when the position is unsellable dust.
 
-    A position below Binance's MIN_NOTIONAL can't be liquidated; we log and skip
-    it so a single dust holding doesn't abort the whole cycle (and the remaining
-    positions still get their stops + the decider still runs).
+    A position below Binance's MIN_NOTIONAL can't be liquidated. *dust_known*
+    (persisted across cron ticks) lets us log the situation once, then skip the
+    doomed API call on every subsequent tick. A single dust holding never aborts
+    the cycle — the other positions still get their stops and the decider runs.
     """
+    if symbol in dust_known:
+        return None  # already flagged unsellable — skip the API call silently
     try:
         return market_sell(symbol, qty)
     except NotionalTooSmall:
-        log.warning("SELL %s ignoré — position sous le min notional Binance (dust)", symbol)
+        log.info("SELL %s ignoré — position dust (sous le min notional Binance), "
+                 "ne sera plus retentée", symbol)
+        dust_known.add(symbol)
         return None
 
 
@@ -166,6 +171,7 @@ def _execute_cycle(
     cooldown_map: dict,
     initial_total_value: float = 0.0,
     strat_state: dict | None = None,
+    dust_symbols: list[str] | None = None,
 ) -> dict:
     """Execute one trading cycle (shared by run_one_cycle and run_agent).
 
@@ -177,6 +183,7 @@ def _execute_cycle(
     across cycles. Ignored when decider == "llm".
     """
     strat_state = dict(strat_state or {})
+    dust_known = set(dust_symbols or [])
     watchlist = cfg["watchlist"]
     budget = float(cfg["budget"])
     stop_loss = float(cfg["stop_loss_pct"]) / 100
@@ -198,6 +205,7 @@ def _execute_cycle(
         _real_sid, _real_sname = None, None
 
     positions = get_open_positions(watchlist)
+    held_symbols = set(positions)
     cash = get_balance("USDC")
     market_data_raw = _fetch_market_data(watchlist, cycle_sec)
     prices = _prices_from_data(market_data_raw)
@@ -226,7 +234,7 @@ def _execute_cycle(
 
     # ── Stop-loss + trailing stop ─────────────────────────────────────────
     for sig in _check_stops(positions, prices, peak_prices, stop_loss, trail_stop):
-        result = _sell_or_skip_dust(sig.symbol, sig.qty)
+        result = _sell_or_skip_dust(sig.symbol, sig.qty, dust_known)
         if result is None:
             del positions[sig.symbol]
             continue
@@ -288,7 +296,7 @@ def _execute_cycle(
                 continue
             qty = action.get("qty", positions[sym]["qty"])
             price = prices.get(sym) or get_ticker(sym)
-            result = _sell_or_skip_dust(sym, qty)
+            result = _sell_or_skip_dust(sym, qty, dust_known)
             if result is None:
                 del positions[sym]
                 continue
@@ -311,6 +319,7 @@ def _execute_cycle(
             if amount < 10:
                 continue
             _, fee, fee_asset = market_buy(sym, amount)
+            dust_known.discard(sym)  # re-acquired above min notional
             price = prices.get(sym) or get_ticker(sym)
             save_trade("BUY", sym, amount, price, action.get("reason", ""),
                        fee, fee_asset, session_id=_real_sid, session_name=_real_sname)
@@ -332,6 +341,7 @@ def _execute_cycle(
             "cooldown_map":        cooldown_map,
             "initial_total_value": initial_total_value,
             "strat_state":         strat_state,
+            "dust_symbols":        sorted(dust_known & held_symbols),
         }
 
     # ── LLM gating ────────────────────────────────────────────────────────
@@ -471,6 +481,7 @@ def _execute_cycle(
                     amount = spendable
                 if amount >= 10:
                     _, fee, fee_asset = market_buy(sym, amount)
+                    dust_known.discard(sym)  # re-acquired above min notional
                     price = prices.get(sym) or get_ticker(sym)
                     save_trade("BUY", sym, amount, price, reason, fee, fee_asset,
                                session_id=_real_sid, session_name=_real_sname)
@@ -482,7 +493,7 @@ def _execute_cycle(
             elif atype == "sell" and sym in positions:
                 qty = action.get("qty", positions[sym]["qty"])
                 price = prices.get(sym) or get_ticker(sym)
-                result = _sell_or_skip_dust(sym, qty)
+                result = _sell_or_skip_dust(sym, qty, dust_known)
                 if result is None:
                     continue
                 _, fee, fee_asset = result
@@ -509,6 +520,7 @@ def _execute_cycle(
         "cooldown_map":        cooldown_map,
         "initial_total_value": initial_total_value,
         "strat_state":         strat_state,
+        "dust_symbols":        sorted(dust_known & held_symbols),
     }
 
 
@@ -555,6 +567,7 @@ def run_one_cycle() -> None:
             cooldown_map=state.get("cooldown_map", {}),
             initial_total_value=state.get("initial_total_value", 0.0),
             strat_state=state.get("strat_state", {}),
+            dust_symbols=state.get("dust_symbols", []),
         )
         _save_state(new_state)
     except Exception as exc:
@@ -630,6 +643,7 @@ def run_agent() -> None:
                 cooldown_map=state["cooldown_map"],
                 initial_total_value=state["initial_total_value"],
                 strat_state=state.get("strat_state", {}),
+                dust_symbols=state.get("dust_symbols", []),
             )
         except Exception as exc:
             log.error("Erreur cycle #%d: %s", cycle, exc, exc_info=True)
