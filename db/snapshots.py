@@ -364,3 +364,48 @@ def latest_prices(symbols: list[str]) -> dict[str, float]:
         if d.get("close") is not None:
             out[d["symbol"]] = float(d["close"])
     return out
+
+
+def latest_snapshot_rows(symbols: list[str],
+                         columns: list[str] | None = None) -> dict[str, dict]:
+    """Most recent snapshot row per symbol, keyed by symbol.
+
+    Lets the dashboard build the live market-context card from captured data
+    (~2 KB for a 10-coin watchlist) instead of live Binance calls. ``columns``
+    is whitelisted against ``_COLUMNS``; ``symbol`` is always included.
+    """
+    if _USE_FIRESTORE or not symbols:
+        return {}
+    if columns:
+        bad = [c for c in columns if c not in set(_COLUMNS)]
+        if bad:
+            raise ValueError(f"latest_snapshot_rows: unknown columns {bad}")
+        select_cols = list(dict.fromkeys(["symbol", *columns]))
+    else:
+        select_cols = list(_COLUMNS)
+    sel = ", ".join(select_cols)
+    out: dict[str, dict] = {}
+    if _USE_POSTGRES:
+        from db.store import _postgres
+        with _postgres() as c:
+            c.execute(
+                f"SELECT DISTINCT ON (symbol) {sel} FROM price_snapshots "
+                f"WHERE symbol = ANY(%s) ORDER BY symbol, timestamp DESC",
+                (list(symbols),),
+            )
+            rows = c.fetchall()
+    else:
+        from db.store import _sqlite
+        ph = ",".join("?" * len(symbols))
+        with _sqlite() as c:
+            # MAX(timestamp) + bare columns → the latest row per symbol (SQLite
+            # bare-column-with-aggregate semantics).
+            rows = c.execute(
+                f"SELECT {sel}, MAX(timestamp) FROM price_snapshots "
+                f"WHERE symbol IN ({ph}) GROUP BY symbol",
+                tuple(symbols),
+            ).fetchall()
+    for r in rows:
+        d = dict(r)
+        out[d["symbol"]] = d
+    return out

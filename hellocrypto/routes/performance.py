@@ -9,9 +9,7 @@ from flask import Blueprint, jsonify, request
 
 from ..api import (
     compute_scores,
-    get_btc_dominance,
     get_enriched_market_data,
-    get_fear_and_greed,
     load_config,
     load_history,
 )
@@ -259,34 +257,45 @@ def _latest_snapshot_ts() -> str | None:
 
 
 def _context_live(watchlist: list[str]) -> dict:
-    """Compute market context from live Binance/CoinGecko data."""
-    market = get_enriched_market_data(watchlist, cycle_seconds=300) if watchlist else {}
-    scores = compute_scores(market) if market else {}
-    try:
-        dom = get_btc_dominance()
-    except Exception:
-        dom = None
-    try:
-        fng = get_fear_and_greed()
-    except Exception:
-        fng = None
-    stance = _derive_stance(market) if market else None
-    as_of = _latest_snapshot_ts() or (datetime.utcnow().isoformat() + "Z")
+    """Market context from the latest captured snapshots (DB), not live Binance.
+
+    The dashboard must not drive Binance traffic that could rate-limit the
+    shared IP/key and starve the decision cron — so the live context card reads
+    the freshest captured row per symbol (~2 KB) instead of refetching. The
+    drawdown-based CASH stance gate isn't available from a single-row read
+    (no 7d window); ``_derive_stance`` degrades to its trend-breadth path.
+    """
+    if not watchlist:
+        return {"live": False, "as_of_ts": _latest_snapshot_ts(), "stance": None,
+                "btc_dominance": None, "fng_value": None, "fng_label": None,
+                "symbols": []}
+    from db.snapshots import latest_snapshot_rows
+    rows = latest_snapshot_rows(
+        watchlist,
+        columns=["timestamp", "trend", "trend_1d", "score",
+                 "fng_value", "fng_label", "btc_dominance"],
+    )
+    market_raw = {
+        sym: {"trend": r.get("trend"), "trend_1d": r.get("trend_1d")}
+        for sym, r in rows.items()
+    }
+    stance = _derive_stance(market_raw) if market_raw else None
+    btc = rows.get("BTCUSDC") or {}
     return {
         "live":          True,
-        "as_of_ts":      as_of,
+        "as_of_ts":      _latest_snapshot_ts() or (datetime.utcnow().isoformat() + "Z"),
         "stance":        stance,
-        "btc_dominance": dom,
-        "fng_value":     fng.get("value") if fng else None,
-        "fng_label":     fng.get("label") if fng else None,
+        "btc_dominance": btc.get("btc_dominance"),
+        "fng_value":     btc.get("fng_value"),
+        "fng_label":     btc.get("fng_label"),
         "symbols": [
             {
                 "symbol":   sym,
-                "score":    (scores or {}).get(sym),
-                "trend":    market[sym].get("trend"),
-                "trend_1d": market[sym].get("trend_1d"),
+                "score":    rows[sym].get("score"),
+                "trend":    rows[sym].get("trend"),
+                "trend_1d": rows[sym].get("trend_1d"),
             }
-            for sym in watchlist if sym in market
+            for sym in watchlist if sym in rows
         ],
     }
 
