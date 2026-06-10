@@ -1332,9 +1332,18 @@ function renderSimComparisons(snap) {
     snap.win_rate >= 50 ? 'pnl-pos' : 'text-slate-300',
     `${snap.trades_count ?? 0} trades`);
 
-  const sells = (snap.history||[]).filter(t => t.pnl != null);
-  const best  = sells.length ? Math.max(...sells.map(t=>t.pnl)) : null;
-  const worst = sells.length ? Math.min(...sells.map(t=>t.pnl)) : null;
+  // best/worst trade come pre-aggregated (snap.best_sell/worst_sell) so the
+  // live-status poll no longer ships the full history. Fall back to scanning
+  // history for older snapshots that predate the aggregation.
+  let best = snap.best_sell ?? null;
+  let worst = snap.worst_sell ?? null;
+  if (best == null && worst == null && Array.isArray(snap.history)) {
+    const sells = snap.history.filter(t => t.pnl != null);
+    if (sells.length) {
+      best  = Math.max(...sells.map(t=>t.pnl));
+      worst = Math.min(...sells.map(t=>t.pnl));
+    }
+  }
   _setKpi('kpi-best', best != null ? fmtPnl(best) : '—', pnlClass(best),
           worst != null ? fmtPnl(worst) : '—', pnlClass(worst));
 }

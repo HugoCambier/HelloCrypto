@@ -66,13 +66,18 @@ class SimState:
 
     def to_dict(self) -> dict:
         with self._lock:
+            # Drop the history array from the live-status payload (best/worst are
+            # pre-aggregated in the snapshot); mirrors the serverless projection
+            # so both deployments expose the same lightweight shape.
+            snap = copy.deepcopy(self.snapshot)
+            snap.pop("history", None)
             return {
                 "running":          self.running,
                 "session_id":       self.session_id,
                 "session_name":     self.session_name,
                 "cycle_seconds":    self.cycle_seconds,
                 "cycle_started_at": self.cycle_started_at,
-                "snapshot":         copy.deepcopy(self.snapshot),
+                "snapshot":         snap,
                 "error":            self.error,
             }
 
@@ -181,7 +186,7 @@ def _serverless_status_list() -> list[dict]:
     """One status dict per serverless-active session (cron model)."""
     out: list[dict] = []
     for sid, active in _read_active_sims().items():
-        snap_data = sim_engine._load_state(sid) or {}
+        snap_data = sim_engine._load_state_status(sid) or {}
         params = active.get("params", {})
         if snap_data.get("session_id") != sid:
             snap_data = {

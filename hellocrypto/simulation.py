@@ -116,6 +116,60 @@ def _load_state(session_id: str | None = None) -> dict | None:
         return None
 
 
+# Engine-internal state the dashboard's 5s status poll never reads. Shipping
+# them out of Supabase 12×/min/tab was pure waste (recent_decisions alone holds
+# the LLM decision text); history is dropped too — its only UI use (best/worst
+# trade) is now pre-aggregated in the snapshot.
+_STATUS_DROP_KEYS = (
+    "history", "recent_decisions", "strat_state", "peak_prices",
+    "cooldown_map", "initial_prices", "params", "initial_total_value",
+)
+
+
+def _strip_status(state: dict | None) -> dict | None:
+    if not state:
+        return state
+    return {k: v for k, v in state.items() if k not in _STATUS_DROP_KEYS}
+
+
+def _load_state_status(session_id: str | None = None) -> dict | None:
+    """Dashboard-poll projection : the full sim state minus the engine-internal
+    fields the frontend never renders (see ``_STATUS_DROP_KEYS``).
+
+    Cuts Supabase egress on ``/api/simulation/status`` (polled every 5s per open
+    tab). Same SQL-projection trick as ``_load_state_meta``, falling back to a
+    full load + in-Python strip on Firestore / SQLite-without-JSON / any error.
+    The drop keys are a fixed constant — never interpolated from user input.
+    """
+    try:
+        from db.snapshots import _USE_POSTGRES
+        from db.store import _postgres, _sqlite
+    except ImportError:
+        return _strip_status(_load_state(session_id))
+    key = _state_key(session_id)
+    try:
+        if _USE_POSTGRES:
+            expr = "value::jsonb" + "".join(f" - '{k}'" for k in _STATUS_DROP_KEYS)
+            with _postgres() as c:
+                c.execute(f"SELECT ({expr}) AS v FROM agent_state WHERE key=%s", (key,))
+                row = c.fetchone()
+                if not row or row["v"] is None:
+                    return None
+                v = row["v"]
+                return json.loads(v) if isinstance(v, str) else v
+        paths = ", ".join(f"'$.{k}'" for k in _STATUS_DROP_KEYS)
+        with _sqlite() as c:
+            row = c.execute(
+                f"SELECT json_remove(value, {paths}) AS v FROM agent_state WHERE key=?",
+                (key,),
+            ).fetchone()
+            if not row or row["v"] is None:
+                return None
+            return json.loads(row["v"])
+    except Exception:
+        return _strip_status(_load_state(session_id))
+
+
 def _load_state_meta(session_id: str | None = None) -> dict | None:
     """Cron-gate projection : return only {session_id, saved_at, cycle}.
 
@@ -274,6 +328,9 @@ def _snapshot(cycle, cash, holdings, prices, history, total_fees,
     trades_only = [t for t in history if t["action"] != "ANALYSE"]
     sells_only  = [t for t in trades_only if "SELL" in t["action"] and "stop" not in t["action"]]
     profitable  = [t for t in sells_only if t.get("pnl", 0) > 0]
+    # Pre-aggregated so the dashboard's live poll can drop the (heavy) history
+    # array from its payload — best/worst over every closed trade with a PnL.
+    sell_pnls   = [t["pnl"] for t in trades_only if t.get("pnl") is not None]
 
     return {
         "cycle":           cycle,
@@ -306,6 +363,8 @@ def _snapshot(cycle, cash, holdings, prices, history, total_fees,
             }
             for sym, h in holdings.items()
         ],
+        "best_sell":  round(max(sell_pnls), 2) if sell_pnls else None,
+        "worst_sell": round(min(sell_pnls), 2) if sell_pnls else None,
         "cycle_sec": cycle_sec,
         "history":   list(reversed(history)),
     }
