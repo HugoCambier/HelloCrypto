@@ -30,27 +30,13 @@ def api_portfolio():
         positions = get_open_positions(watchlist)
         cash      = get_balance("USDC")
 
-        prices = {}
-        for sym in watchlist:
-            try:
-                prices[sym] = get_ticker(sym)
-            except Exception:
-                log.warning("Prix indisponible pour %s", sym, exc_info=True)
-                prices[sym] = None
-
-        # Fallback: when the live ticker is unreachable (the serverless host is
-        # often blocked from Binance even though the capture cron isn't), value
-        # held positions with the latest captured snapshot close so the live
-        # PnL never silently collapses to $0.00.
-        missing = [sym for sym in positions if not prices.get(sym)]
-        if missing:
-            try:
-                from db.snapshots import latest_prices
-                for sym, close in latest_prices(missing).items():
-                    if close:
-                        prices[sym] = close
-            except Exception:
-                log.warning("Fallback prix snapshot indisponible", exc_info=True)
+        # Prices come from the latest captured snapshots (DB), NOT a live Binance
+        # ticker. /api/portfolio is polled every 60s per open tab; hammering
+        # Binance's public ticker from the dashboard risks rate-limiting the
+        # shared IP/key and starving the decision cron of market data. The
+        # capture cycle already writes fresh closes (~5min) we read for free.
+        from db.snapshots import latest_prices
+        prices = latest_prices(watchlist)
 
         portfolio_val = sum(
             p["qty"] * prices[sym]
@@ -87,9 +73,9 @@ def api_portfolio():
                 for sym, p in positions.items()
             ],
             "market": [
-                {"symbol": sym, "price": prices[sym]}
+                {"symbol": sym, "price": prices.get(sym)}
                 for sym in watchlist
-                if prices[sym] is not None
+                if prices.get(sym) is not None
             ],
         })
     except Exception:
