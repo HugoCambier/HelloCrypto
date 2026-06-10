@@ -86,10 +86,6 @@ def _run_one(symbols: list[str], offset: int, args: argparse.Namespace) -> dict:
         min_hold_hours       = args.min_hold_hours,
         rebuy_cooldown_hours = args.rebuy_cooldown_hours,
         start_hour_offset    = offset,
-        # Bypass the dashboard's per-candle sleep (defaults to 10 candles/s →
-        # 40 min of pure sleep on 1000d × 10 symbols). The bench has no UI to
-        # animate.
-        speed_ref            = {"value": 1e9},
     )
     elapsed = time.time() - started
     if "error" in snap:
