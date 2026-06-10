@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 
 from . import strategy
 from .api import (
+    NotionalTooSmall,
     compute_scores,
     format_market_data_compact,
     get_balance,
@@ -104,6 +105,20 @@ def _check_stops(positions: dict, prices: dict, peak_prices: dict,
         for sym in positions
     }
     return _trading_check_stops(positions, enriched_prices, peak_prices, stop_loss, trail_stop)
+
+
+def _sell_or_skip_dust(symbol: str, qty: float):
+    """market_sell, returning None when the position is unsellable dust.
+
+    A position below Binance's MIN_NOTIONAL can't be liquidated; we log and skip
+    it so a single dust holding doesn't abort the whole cycle (and the remaining
+    positions still get their stops + the decider still runs).
+    """
+    try:
+        return market_sell(symbol, qty)
+    except NotionalTooSmall:
+        log.warning("SELL %s ignoré — position sous le min notional Binance (dust)", symbol)
+        return None
 
 
 def _performance_report(prices: dict, positions: dict, cash: float,
@@ -211,7 +226,11 @@ def _execute_cycle(
 
     # ── Stop-loss + trailing stop ─────────────────────────────────────────
     for sig in _check_stops(positions, prices, peak_prices, stop_loss, trail_stop):
-        _, fee, fee_asset = market_sell(sig.symbol, sig.qty)
+        result = _sell_or_skip_dust(sig.symbol, sig.qty)
+        if result is None:
+            del positions[sig.symbol]
+            continue
+        _, fee, fee_asset = result
         save_trade(
             f"SELL ({sig.kind})", sig.symbol, sig.qty, sig.price,
             f"{sig.kind.replace('-', ' ').title()} déclenché", fee, fee_asset,
@@ -269,7 +288,11 @@ def _execute_cycle(
                 continue
             qty = action.get("qty", positions[sym]["qty"])
             price = prices.get(sym) or get_ticker(sym)
-            _, fee, fee_asset = market_sell(sym, qty)
+            result = _sell_or_skip_dust(sym, qty)
+            if result is None:
+                del positions[sym]
+                continue
+            _, fee, fee_asset = result
             save_trade("SELL", sym, qty, price, action.get("reason", ""),
                        fee, fee_asset, session_id=_real_sid, session_name=_real_sname)
             peak_prices.pop(sym, None)
@@ -459,7 +482,10 @@ def _execute_cycle(
             elif atype == "sell" and sym in positions:
                 qty = action.get("qty", positions[sym]["qty"])
                 price = prices.get(sym) or get_ticker(sym)
-                _, fee, fee_asset = market_sell(sym, qty)
+                result = _sell_or_skip_dust(sym, qty)
+                if result is None:
+                    continue
+                _, fee, fee_asset = result
                 save_trade("SELL", sym, qty, price, reason, fee, fee_asset,
                            session_id=_real_sid, session_name=_real_sname)
                 peak_prices.pop(sym, None)

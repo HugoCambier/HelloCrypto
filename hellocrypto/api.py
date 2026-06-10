@@ -22,6 +22,15 @@ log = logging.getLogger(__name__)
 BASE_URL    = "https://api.binance.com"
 CONFIG_FILE = Path("config.json")
 
+
+class NotionalTooSmall(Exception):
+    """Binance rejected an order: value below the symbol's MIN_NOTIONAL filter.
+
+    Raised for the specific ``-1013 Filter failure: NOTIONAL`` case — a position
+    too small to trade (dust). Callers treat the order as a no-op rather than
+    letting it abort the cycle.
+    """
+
 _DEFAULT_CONFIG = {
     "enabled": False,
     "mode": "simulation",
@@ -762,15 +771,35 @@ def market_sell(symbol: str, qty: float) -> tuple[dict, float, str]:
     Returns:
         ``(order_response, fee_usdc, fee_asset)``
     """
-    order = api_post("/api/v3/order", {
-        "symbol":           symbol,
-        "side":             "SELL",
-        "type":             "MARKET",
-        "quantity":         f"{qty:.5f}",
-        "newClientOrderId": f"hc_sell_{int(time.time() * 1000)}",
-    })
+    try:
+        order = api_post("/api/v3/order", {
+            "symbol":           symbol,
+            "side":             "SELL",
+            "type":             "MARKET",
+            "quantity":         f"{qty:.5f}",
+            "newClientOrderId": f"hc_sell_{int(time.time() * 1000)}",
+        })
+    except requests.exceptions.HTTPError as e:
+        if _is_notional_failure(e):
+            raise NotionalTooSmall(symbol) from e
+        raise
     fee, asset = _extract_fee_usdc(order)
     return order, fee, asset
+
+
+def _is_notional_failure(exc: requests.exceptions.HTTPError) -> bool:
+    """True when *exc* is Binance's ``-1013`` MIN_NOTIONAL filter rejection.
+
+    -1013 also covers LOT_SIZE / PRICE_FILTER, so we match the NOTIONAL message
+    specifically rather than the bare code.
+    """
+    body = {}
+    if exc.response is not None:
+        try:
+            body = exc.response.json()
+        except ValueError:
+            return False
+    return body.get("code") == -1013 and "NOTIONAL" in str(body.get("msg", "")).upper()
 
 
 # ── Persistence ───────────────────────────────────────────────────────────────
