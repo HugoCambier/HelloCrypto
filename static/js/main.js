@@ -52,19 +52,18 @@ function switchRTab(name, btn) {
   if (name === 'orders' && typeof loadOrdersTab === 'function') loadOrdersTab();
 }
 
-// Conditional tabs visibility (Runs and Orders depend on the selected run).
-// - Runs : visible whenever the user is viewing the Activité réelle pinned
-//   card — i.e. either the catch-all (no session) or the active session.
-//   Past real sessions hide it; the user has drilled into a specific run.
-// - Orders: real mode AND view is "live" (active session OR catch-all). A
-//   finished real session is read-only; placing orders against it would be
-//   ambiguous (positions belong to "now", not the past run).
+// Conditional tabs visibility (Runs and Orders).
+// Visible ONLY on the "Activité réelle" catch-all (real mode + no specific
+// session selected). Selecting a real session — active or finished — drills
+// into that run's performance view and hides the global-scoped tabs:
+//   - Runs lists every real session, which doesn't belong inside one of them.
+//   - Orders posts trades against the live Binance account, so it's a
+//     portfolio-wide action, not a per-session one.
 function _updateOrdersTabVisibility() {
-  const isReal               = _selectedMode === 'real';
-  const isFinishedRealRun    = isReal && _selectedSession && _selectedSession !== _activeRealSessionId;
-  const isPinnedRealView     = isReal && !isFinishedRealRun;  // catch-all or active session
-  const ordersVisible        = isPinnedRealView;
-  const runsVisible          = isPinnedRealView;
+  const isReal       = _selectedMode === 'real';
+  const isCatchAll   = isReal && !_selectedSession;  // pinned "Activité réelle"
+  const ordersVisible = isCatchAll;
+  const runsVisible   = isCatchAll;
 
   document.getElementById('rtab-orders-btn')?.classList.toggle('hidden', !ordersVisible);
   document.getElementById('rtab-runs-btn')?.classList.toggle('hidden', !runsVisible);
