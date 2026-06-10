@@ -210,16 +210,16 @@ def _execute_cycle(
     strategy.update_peak_prices(positions, prices, peak_prices)
 
     # ── Stop-loss + trailing stop ─────────────────────────────────────────
-    for sym, qty, price, reason_tag, _ in _check_stops(positions, prices, peak_prices, stop_loss, trail_stop):
-        _, fee, fee_asset = market_sell(sym, qty)
+    for sig in _check_stops(positions, prices, peak_prices, stop_loss, trail_stop):
+        _, fee, fee_asset = market_sell(sig.symbol, sig.qty)
         save_trade(
-            f"SELL ({reason_tag})", sym, qty, price,
-            f"{reason_tag.replace('-', ' ').title()} déclenché", fee, fee_asset,
+            f"SELL ({sig.kind})", sig.symbol, sig.qty, sig.price,
+            f"{sig.kind.replace('-', ' ').title()} déclenché", fee, fee_asset,
             session_id=_real_sid, session_name=_real_sname,
         )
-        peak_prices.pop(sym, None)
-        cooldown_map[sym] = cycle
-        del positions[sym]
+        peak_prices.pop(sig.symbol, None)
+        cooldown_map[sig.symbol] = cycle
+        del positions[sig.symbol]
 
     # ── Decider routing ──────────────────────────────────────────────────
     # ``deterministic`` bypasses the LLM (and its gating): the decider has
