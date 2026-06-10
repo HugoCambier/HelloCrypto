@@ -146,6 +146,26 @@ def _per_coin_size_factor(tier: int) -> float:
     return max(0.5, 1.0 - max(0, tier - 5) * 0.10)
 
 
+# Hard cap on a single position as a fraction of remaining cash at the moment
+# of the buy. Prevents the BTC conviction boost (below) from eating the whole
+# pool when BTC happens to be the first candidate in the queue.
+_MAX_POSITION_PCT_OF_CASH = 0.65
+
+
+def _btc_conviction_mult(symbol: str, stance: str) -> float:
+    """Asymmetric sizing: BTC gets 2× weight in DEPLOY, 1.5× in SELECTIVE.
+
+    The honest 1000-day bench-path shows we underperform BTC by ~75 pts of
+    return because we split capital across the watchlist while BTC alone
+    rides the trend. In confirmed bull regimes (DEPLOY/SELECTIVE) we lean
+    harder into BTC to capture more of that trend. PRESERVE/CASH stay
+    symmetric — defensive stances shouldn't concentrate on a single asset.
+    """
+    if symbol != "BTCUSDC":
+        return 1.0
+    return {"DEPLOY": 2.0, "SELECTIVE": 1.5}.get(stance, 1.0)
+
+
 def regime_decision(
     *,
     market_raw: dict[str, dict],
@@ -510,7 +530,11 @@ def regime_decision(
                 continue
         size_factor = _per_coin_size_factor(tier)
         size_mult   = float(p.get("size_multiplier", 1.0))
-        alloc = cash_after * max_pct * size_factor * size_mult
+        btc_mult    = _btc_conviction_mult(sym, stance)
+        alloc = cash_after * max_pct * size_factor * size_mult * btc_mult
+        # Cap any single position so a 2× BTC boost can't drain the pool
+        # before the next candidates get their share.
+        alloc = min(alloc, cash_after * _MAX_POSITION_PCT_OF_CASH)
         if alloc < 10:
             break
         fng_note = ""
@@ -518,14 +542,15 @@ def regime_decision(
             sign = "+" if fng_adj > 0 else ""
             fng_note = f", fng={fng_value} (thr {sign}{fng_adj})"
         label = "Top-up" if is_topup else "Entry"
+        btc_note = f", btc-conviction×{btc_mult:.1f}" if btc_mult != 1.0 else ""
         actions.append({
             "type":        "buy",
             "symbol":      sym,
             "usdc_amount": round(alloc, 2),
             "reason": (
-                f"{label} score {score}/10 ≥ {effective_threshold} (tier {tier}, stance {stance}{fng_note}), "
+                f"{label} score {score}/10 ≥ {effective_threshold} (tier {tier}, stance {stance}{fng_note}{btc_note}), "
                 f"trend_1d={d.get('trend_1d', '?')}, "
-                f"risk {risk_level} → {max_pct*size_factor*size_mult*100:.0f}% cash"
+                f"{alloc / cash_after * 100:.0f}% du cash dispo"
             ),
         })
         # Preserve entry_ts on top-ups so min_hold / bear_confirm timers stay

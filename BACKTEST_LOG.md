@@ -57,7 +57,8 @@ Fixé dans `006f303` (retry + fail-loud). Plus besoin du caveat ±$15
 | 2026-06-08 | `b0274f2` | + **garde-fou top-up** (no DCA on losing) | **+$81.4** | **-30.1%** | 🏆 **best PnL ET DD** — le revert `fbd0e50` était une erreur |
 | 2026-06-08 | `583f597` (revert via `cc0d2bb`) | + early-exit zombie 100h/-3% | +$164.7 | **-37.1%** | ❌ DD régresse, early-exit -$148.5 sur 48 trades — porte fermée |
 | 2026-06-09 | HEAD + FNG live (bug) | bench-path médiane sur 10 coins | +$74.6 | -37% | ⚠️ artificiellement gonflé par FNG=10 live appliqué aux 1000j |
-| 2026-06-09 | HEAD + FNG historique (fix) | bench-path médiane (nouveau baseline) | **+$64.7** | **-45%** | 🎯 baseline honnête — toute optim future à comparer contre ça |
+| 2026-06-09 | HEAD + FNG historique (fix) | bench-path médiane (baseline transitoire) | +$64.7 | -45% | baseline honnête mais sous-exposé aux montées BTC |
+| 2026-06-10 | + BTC asym sizing | DEPLOY ×2 / SELECTIVE ×1.5 sur BTC, cap 65% cash | **+$89.0** | **-38.9%** | 🎯 nouveau baseline — médiane +$24, DD allégé de 6.5pts |
 
 ## Baseline honnête post-fix FNG (2026-06-09)
 
@@ -83,6 +84,36 @@ Effet du fix sur les 4 cellules mod-4 (start=2023-09-13, 1000j) :
 Variance inter-cellule chute de 63% (cohérence retrouvée). Le DD plus
 profond révèle le vrai risque masqué par le bug. **Le $110 d'avant
 n'existait pas — c'était un artefact mesure.**
+
+## BTC asymmetric sizing (2026-06-10)
+
+Le diag CSV montrait qu'on capturait ~50% de la perf BTC (médiane $65 vs
+BTC ~$130) parce qu'on dilue capital sur 10 coins quand BTC seul rideait
+la tendance. Ajout d'un facteur de conviction BTC dans `_btc_conviction_mult`:
+- DEPLOY → BTC ×2.0
+- SELECTIVE → BTC ×1.5
+- PRESERVE / CASH → ×1.0 (defensive ne concentre pas)
+
+Hard cap à 65% du cash_after par position pour éviter que BTC rafle tout
+quand il sort en rank 1 du tri par score.
+
+Bench-path post-change (start=2023-09-13, 1000j, 10 coins):
+
+| offset | avant | après | Δ |
+|---|---|---|---|
+| +0h | $59.98 | $88.23 | +$28 |
+| +1h | $79.38 | $89.71 | +$10 |
+| +2h | $54.97 | $38.17 | **−$17** |
+| +3h | $69.34 | $99.09 | +$30 |
+| **médiane** | **$64.66** | **$88.97** | **+$24 (+38%)** |
+| DD médiane | −45.4% | **−38.9%** | +6.5 pts |
+| trades médiane | 417 | 352 | −65 |
+| α vs BTC médian | −$44 | **−$13** | +$31 |
+
+3 cellules sur 4 améliorent. Cellule +2h régresse de $17 — un mauvais
+timing d'entrée BTC sur cette trajectoire, mais médiane > best of baseline.
+Variance inter-cellule monte ($24 → $61 spread) — attendu vu la
+concentration. On capture maintenant ~68% de la perf BTC (vs 50% avant).
 
 ## Découverte clé : le garde-fou top-up
 
