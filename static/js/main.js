@@ -1061,30 +1061,34 @@ function _renderHoldingsForSelection() {
     renderHoldings('holdings-list', positions);
     return;
   }
-  // Finished run (sim or real) → freeze open positions at the run's end. Qty
-  // from the run (real: the account via /api/portfolio; sim: reconstructed from
-  // trade history), priced at frozen_prices (the run's last captured snapshot).
-  const fp = _lastPerf?.frozen_prices || {};
-  const qtySrc = _selectedMode === 'real'
-    ? (_livePortfolio?.positions || [])
-    : positionsFromHistory(_lastPerf?.history || []);
-  const frozen = qtySrc
-    .filter(p => (p.qty || 0) > 0)
-    .map(p => {
-      const price = fp[p.symbol] ?? p.current_price ?? p.price ?? p.avg_price;
-      return {
-        symbol:        p.symbol,
-        qty:           p.qty,
-        avg_price:     p.avg_price ?? p.entry_price,
-        current_price: price,
-      };
-    });
+  // Finished run (sim or real) → freeze open positions at the run's end.
+  const frozen = _frozenPositions();
   if (frozen.length) {
     renderHoldings('holdings-list', frozen);
     return;
   }
   document.getElementById('holdings-list').innerHTML =
     '<span class="text-slate-500 text-xs">Aucune position ouverte</span>';
+}
+
+// Open positions of a *finished* run, valued at the run's end. Qty from the run
+// (real: the account via /api/portfolio — unchanged since close; sim:
+// reconstructed from trade history), priced at frozen_prices (the run's last
+// captured snapshot). Shared by the holdings table and the KPI total so both
+// reflect the same frozen close.
+function _frozenPositions() {
+  const fp = _lastPerf?.frozen_prices || {};
+  const qtySrc = _selectedMode === 'real'
+    ? (_livePortfolio?.positions || [])
+    : positionsFromHistory(_lastPerf?.history || []);
+  return qtySrc
+    .filter(p => (p.qty || 0) > 0)
+    .map(p => ({
+      symbol:        p.symbol,
+      qty:           p.qty,
+      avg_price:     p.avg_price ?? p.entry_price,
+      current_price: fp[p.symbol] ?? p.current_price ?? p.price ?? p.avg_price,
+    }));
 }
 
 function _renderPnlChart() {
@@ -1187,19 +1191,26 @@ function _renderKpis(p) {
 
   const budget = p.budget ?? _cfg?.budget ?? 0;
 
-  // Live total: cash + open positions value
+  // Total = cash + open positions value.
   let total, pnl;
-  if (_selectedMode === 'real' && _livePortfolio && !_livePortfolio.error) {
+  const realActive = _selectedMode === 'real'
+    && (!_selectedSession || _selectedSession === _activeRealSessionId);
+  if (realActive && _livePortfolio && !_livePortfolio.error) {
+    // Active real run → live account at current prices.
     const cash = _livePortfolio.cash ?? 0;
     const posVal = (_livePortfolio.positions || []).reduce((s, x) => s + (x.value || 0), 0);
     total = cash + posVal;
     pnl   = total - budget;
   } else {
-    // Past sim session: cashflow + unrealized of remaining positions (last known price)
-    const net = p.net ?? 0;
-    const unrealized = unrealizedFromHistory(p.history || []);
-    total = budget + net + unrealized;
-    pnl   = net + unrealized;
+    // Finished run → freeze: cash at close + positions valued at the run's last
+    // snapshot. Cash = live balance (real, unchanged since close) or budget+net
+    // (sim cashflow). Positions priced at frozen_prices via _frozenPositions().
+    const posVal = _frozenPositions().reduce((s, x) => s + x.qty * (x.current_price || 0), 0);
+    const cash = _selectedMode === 'real'
+      ? (_livePortfolio?.cash ?? 0)
+      : (budget + (p.net ?? 0));
+    total = cash + posVal;
+    pnl   = total - budget;
   }
   const pnlPct = budget > 0 ? pnl/budget*100 : 0;
 
