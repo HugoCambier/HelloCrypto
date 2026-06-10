@@ -547,6 +547,20 @@ def api_performance():
         except Exception:
             log.exception("Failed to load cycle timestamps")
 
+    # Dense equity curve for the live PnL chart of a *running* sim. Sourced here
+    # (60s) instead of the 5s /api/simulation/status poll — the array only grows
+    # one point per cycle, so shipping it 12× as often was wasted egress.
+    sim_value_series: list = []
+    if mode == "simulation" and session_id:
+        try:
+            from db.store import get_state as _get_state
+            active_sims_state = _get_state("active_sims") or {}
+            if isinstance(active_sims_state, dict) and session_id in active_sims_state:
+                from .. import simulation as _sim_engine
+                sim_value_series = _sim_engine._load_state_value_series(session_id) or []
+        except Exception:
+            log.exception("Failed to load sim value timeseries")
+
     return jsonify({
         "period":            period,
         "mode":              mode,
@@ -568,6 +582,7 @@ def api_performance():
         "bh_breakdown":      bh_breakdown,
         "btc_breakdown":     btc_breakdown,
         "cycle_timestamps":  cycle_timestamps,
+        "value_timeseries":  sim_value_series,
         "sessions":          sessions,
         "budget":            round(effective_budget, 2),
     })

@@ -123,6 +123,10 @@ def _load_state(session_id: str | None = None) -> dict | None:
 _STATUS_DROP_KEYS = (
     "history", "recent_decisions", "strat_state", "peak_prices",
     "cooldown_map", "initial_prices", "params", "initial_total_value",
+    # value_timeseries only grows one point per cycle (~5min) yet was re-shipped
+    # every 5s. The live PnL chart now sources it from /api/performance (60s) via
+    # _load_state_value_series, so it's dropped from the high-frequency poll too.
+    "value_timeseries",
 )
 
 
@@ -168,6 +172,43 @@ def _load_state_status(session_id: str | None = None) -> dict | None:
             return json.loads(row["v"])
     except Exception:
         return _strip_status(_load_state(session_id))
+
+
+def _load_state_value_series(session_id: str | None = None) -> list:
+    """Just the ``value_timeseries`` array (dense equity curve), SQL-projected.
+
+    Drives the live PnL chart from the 60s ``/api/performance`` poll instead of
+    the 5s status poll — the array only gains a point per cycle (~5min), so the
+    high-frequency poll was re-shipping the same ~10 KB 12×/min for nothing.
+    """
+    try:
+        from db.snapshots import _USE_POSTGRES
+        from db.store import _postgres, _sqlite
+    except ImportError:
+        return (_load_state(session_id) or {}).get("value_timeseries") or []
+    key = _state_key(session_id)
+    try:
+        if _USE_POSTGRES:
+            with _postgres() as c:
+                c.execute(
+                    "SELECT value::jsonb -> 'value_timeseries' AS v "
+                    "FROM agent_state WHERE key=%s", (key,),
+                )
+                row = c.fetchone()
+                if not row or row["v"] is None:
+                    return []
+                v = row["v"]
+                return (json.loads(v) if isinstance(v, str) else v) or []
+        with _sqlite() as c:
+            row = c.execute(
+                "SELECT json_extract(value, '$.value_timeseries') AS v "
+                "FROM agent_state WHERE key=?", (key,),
+            ).fetchone()
+            if not row or row["v"] is None:
+                return []
+            return json.loads(row["v"]) or []
+    except Exception:
+        return (_load_state(session_id) or {}).get("value_timeseries") or []
 
 
 def _load_state_meta(session_id: str | None = None) -> dict | None:

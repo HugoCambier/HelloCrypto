@@ -1071,11 +1071,13 @@ function _renderPnlChart() {
   let valueMode = 'absolute';
   let budget    = _lastPerf.budget ?? _cfg?.budget ?? 0;
 
-  // Priority 1: live sim → cycle-by-cycle total_value (dense, exact)
+  // Priority 1: live sim → cycle-by-cycle total_value (dense, exact). Sourced
+  // from /api/performance (60s) rather than the 5s status poll — see
+  // _load_state_value_series. Refreshes at cycle cadence, which is all it needs.
   if (_selectedMode === 'simulation' && _simRunning && _selectedSession === _simSessionId
-      && Array.isArray(_simSnap?.value_timeseries) && _simSnap.value_timeseries.length) {
-    series = _simSnap.value_timeseries;
-    budget = _simSnap.budget ?? budget;
+      && Array.isArray(_lastPerf?.value_timeseries) && _lastPerf.value_timeseries.length) {
+    series = _lastPerf.value_timeseries;
+    budget = _simSnap?.budget ?? budget;
   } else {
     // Priority 2: reconstruct from trade history forward-filled at every
     // decision cycle (so a 185-cycle sim that only traded once still draws
