@@ -570,7 +570,14 @@ def run_live(
     # On fetch failure, ``fng_history`` is None → per-cycle lookups yield None
     # → decider skips the FNG modifier (safe, neutral fallback).
     fng_history   = get_fear_and_greed_history(days + 60)
-    btc_dominance = get_btc_dominance()
+    # BTC dominance has no free historical series (CoinGecko /global is
+    # spot-only), so — unlike FNG — we cannot replay it point-in-time. We
+    # therefore attach the live value only to cycles that fall on *today*;
+    # every earlier cycle gets None, which build_analysis treats as "no
+    # dominance hint" (neutral). This stops a 2020 replay from feeding the LLM
+    # June-2026 dominance as if it held back then (anachronistic rotation bias).
+    live_dom  = get_btc_dominance()
+    today_utc = datetime.now(UTC).date()
 
     llm_call_count = 0
     llm_last_error = ""
@@ -585,6 +592,7 @@ def run_live(
         ts = start_ms + i * HOUR_MS
         cycle_date = datetime.fromtimestamp(ts / 1000, tz=UTC).date()
         fear_greed_today = (fng_history or {}).get(cycle_date.isoformat())
+        dom_cycle = live_dom if cycle_date >= today_utc else None
         # Only include symbols that have actual data at this hour (no
         # forward-fill — we want a price decision based on real market data).
         prices = {sym: float(kl[4])
@@ -643,7 +651,7 @@ def run_live(
                     decision = llm_call(
                         prompt=build_analysis(
                             market_data, holdings, cash, budget, risk_level,
-                            recent_decisions, fear_greed_today, btc_dominance, scores,
+                            recent_decisions, fear_greed_today, dom_cycle, scores,
                             prices=prices, peak_prices=peak_prices,
                             cooldown_map=cooldown_map, total_fees=total_fees,
                             cycle=current_step,
@@ -653,7 +661,7 @@ def run_live(
                     )
                     llm_call_count += 1
                     recent_decisions = (recent_decisions + [decision])[-3:]
-                    last_ctx = _build_ctx(market_raw, decision, fear_greed_today, btc_dominance, scores)
+                    last_ctx = _build_ctx(market_raw, decision, fear_greed_today, dom_cycle, scores)
 
                     history.append({
                         "cycle":     current_step,
@@ -752,7 +760,7 @@ def run_live(
             )
             actions = decision.get("actions", [])
             scores  = decision.get("scores", {}) or {}
-            last_ctx = _build_ctx(market_raw, decision, fear_greed_today, btc_dominance, scores)
+            last_ctx = _build_ctx(market_raw, decision, fear_greed_today, dom_cycle, scores)
 
             # Sells first — frees cash for the buys below. ``scale_out`` is
             # un sell partiel (qty fraction de la position courante) qui ne
@@ -973,10 +981,27 @@ def main() -> None:
         print(f"Erreur: {result['error']}")
         return
 
+    # Symboles réellement tournés ≠ symboles demandés : une paire qui n'existait
+    # pas encore sur la période (klines vides → data insuffisante), un tier > risk
+    # ou une coverage <50% sont exclus. Le résumé doit le montrer, sinon un
+    # backtest 2020 sur 10 paires USDC affiche "10 symboles" alors qu'il n'en a
+    # tourné que 2 (BTC/ETH), les autres n'existant pas encore.
+    excluded = {
+        "tier > risk":  result.get("excluded_by_tier") or [],
+        "data insuff.": result.get("skipped_symbols") or [],
+        "coverage<50%": result.get("excluded_late_launch") or [],
+    }
+    dropped = {s for lst in excluded.values() for s in lst}
+    ran = [s for s in syms if s not in dropped]
+    excl_line = ""
+    if dropped:
+        parts = [f"{label}: {', '.join(lst)}" for label, lst in excluded.items() if lst]
+        excl_line = "\nExclus       : " + " ; ".join(parts)
+
     print(f"""
 ═══ RÉSULTATS DU BACKTEST ═══
 Mode         : {'LLM' if args.llm else 'Déterministe (regime_decision)'}
-Symboles     : {', '.join(syms)}
+Symboles     : {len(ran)}/{len(syms)} — {', '.join(ran) or '(aucun)'}{excl_line}
 Budget       : ${result['total_value'] - result['pnl'] + result.get('pnl',0):,.2f}
 Valeur finale: ${result['total_value']:,.2f}
 PnL          : {result['pnl']:+.2f} USDC ({result['pnl_pct']:+.2f}%)
