@@ -366,6 +366,43 @@ def latest_prices(symbols: list[str]) -> dict[str, float]:
     return out
 
 
+def prices_at(symbols: list[str], as_of_ts: str) -> dict[str, float]:
+    """Captured close per symbol at-or-before ``as_of_ts`` (most recent ≤ ts).
+
+    Used to value a *finished* run's open positions at the run's end rather than
+    today's market: a closed run takes no more action, so its PnL must be frozen
+    at its last captured prices. Returns ``{symbol: close}``.
+    """
+    if _USE_FIRESTORE or not symbols or not as_of_ts:
+        return {}
+    out: dict[str, float] = {}
+    if _USE_POSTGRES:
+        from db.store import _postgres
+        with _postgres() as c:
+            c.execute(
+                "SELECT DISTINCT ON (symbol) symbol, close FROM price_snapshots "
+                "WHERE symbol = ANY(%s) AND timestamp <= %s AND close IS NOT NULL "
+                "ORDER BY symbol, timestamp DESC",
+                (list(symbols), as_of_ts),
+            )
+            rows = c.fetchall()
+    else:
+        from db.store import _sqlite
+        ph = ",".join("?" * len(symbols))
+        with _sqlite() as c:
+            rows = c.execute(
+                f"SELECT symbol, close, MAX(timestamp) FROM price_snapshots "
+                f"WHERE symbol IN ({ph}) AND timestamp <= ? AND close IS NOT NULL "
+                f"GROUP BY symbol",
+                (*symbols, as_of_ts),
+            ).fetchall()
+    for r in rows:
+        d = dict(r)
+        if d.get("close") is not None:
+            out[d["symbol"]] = float(d["close"])
+    return out
+
+
 def latest_snapshot_rows(symbols: list[str],
                          columns: list[str] | None = None) -> dict[str, dict]:
     """Most recent snapshot row per symbol, keyed by symbol.

@@ -507,6 +507,22 @@ def api_performance():
             prev_ts = t["timestamp"]
         sessions.append({"start": session_start, "end": prev_ts})
 
+    # Is the selected session still armed (live) or finished? Drives both the
+    # benchmark end-anchor and the frozen-position valuation below.
+    is_active = True
+    if session_id:
+        try:
+            from db.store import get_state as _get_state
+            active_real = _get_state("active_real_session_id") or None
+            active_sims_state = _get_state("active_sims") or {}
+            is_active = (
+                session_id == active_real
+                or (isinstance(active_sims_state, dict)
+                    and session_id in active_sims_state)
+            )
+        except Exception:
+            is_active = True
+
     # Benchmark timeseries (BH + BTC) — anchor on the session start when known,
     # else on the first trade. Use the session's own budget + watchlist so the
     # curves are measured against the same capital as the strategy.
@@ -524,20 +540,8 @@ def api_performance():
     if with_bench and (sorted_trades or sess_started_at):
         start_iso = sess_started_at or sorted_trades[0]["timestamp"]
         end_iso: str | None = None
-        if session_id:
-            try:
-                from db.store import get_state as _get_state
-                active_real = _get_state("active_real_session_id") or None
-                active_sims_state = _get_state("active_sims") or {}
-                is_active = (
-                    session_id == active_real
-                    or (isinstance(active_sims_state, dict)
-                        and session_id in active_sims_state)
-                )
-            except Exception:
-                is_active = False
-            if not is_active and sorted_trades:
-                end_iso = sorted_trades[-1]["timestamp"]
+        if session_id and not is_active and sorted_trades:
+            end_iso = sorted_trades[-1]["timestamp"]
         try:
             bench = _compute_benchmarks(start_iso, effective_watchlist,
                                         effective_budget, end_iso=end_iso)
@@ -560,15 +564,29 @@ def api_performance():
     # (60s) instead of the 5s /api/simulation/status poll — the array only grows
     # one point per cycle, so shipping it 12× as often was wasted egress.
     sim_value_series: list = []
-    if mode == "simulation" and session_id:
+    if mode == "simulation" and session_id and is_active:
         try:
-            from db.store import get_state as _get_state
-            active_sims_state = _get_state("active_sims") or {}
-            if isinstance(active_sims_state, dict) and session_id in active_sims_state:
-                from .. import simulation as _sim_engine
-                sim_value_series = _sim_engine._load_state_value_series(session_id) or []
+            from .. import simulation as _sim_engine
+            sim_value_series = _sim_engine._load_state_value_series(session_id) or []
         except Exception:
             log.exception("Failed to load sim value timeseries")
+
+    # Run-end prices for a *finished* run: a closed run takes no further action,
+    # so its open positions must be valued at the run's end, not today's market.
+    # We return the captured close per symbol at the run's last cycle; the
+    # frontend applies them to the qty it already holds (sim: reconstructed from
+    # history; real: from /api/portfolio). Pure snapshot read — no Binance call
+    # in this 60s-polled endpoint.
+    frozen_prices: dict = {}
+    if session_id and not is_active:
+        try:
+            run_end_ts = cycle_timestamps[-1] if cycle_timestamps else (
+                sorted_trades[-1]["timestamp"] if sorted_trades else None)
+            if run_end_ts and effective_watchlist:
+                from db.snapshots import prices_at
+                frozen_prices = prices_at(effective_watchlist, run_end_ts)
+        except Exception:
+            log.exception("Failed to load run-end prices")
 
     return jsonify({
         "period":            period,
@@ -592,6 +610,7 @@ def api_performance():
         "btc_breakdown":     btc_breakdown,
         "cycle_timestamps":  cycle_timestamps,
         "value_timeseries":  sim_value_series,
+        "frozen_prices":     frozen_prices,
         "sessions":          sessions,
         "budget":            round(effective_budget, 2),
     })

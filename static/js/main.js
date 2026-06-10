@@ -1044,13 +1044,15 @@ async function loadPerformance() {
 }
 
 function _renderHoldingsForSelection() {
-  // Sim mode + running selected run → use snapshot
+  // Active sim → live snapshot
   if (_selectedMode === 'simulation' && _simRunning && _selectedSession === _simSessionId && _simSnap?.holdings) {
     renderHoldings('holdings-list', _simSnap.holdings, _simSnap.prices || {});
     return;
   }
-  // Real mode → use live /api/portfolio
-  if (_selectedMode === 'real' && _livePortfolio && !_livePortfolio.error) {
+  // Active real run (or the default live view) → live account (/api/portfolio)
+  const realActive = _selectedMode === 'real'
+    && (!_selectedSession || _selectedSession === _activeRealSessionId);
+  if (realActive && _livePortfolio && !_livePortfolio.error) {
     const positions = (_livePortfolio.positions || []).map(p => ({
       symbol: p.symbol, qty: p.qty, value: p.value,
       avg_price: p.avg_price ?? p.entry_price,
@@ -1059,7 +1061,28 @@ function _renderHoldingsForSelection() {
     renderHoldings('holdings-list', positions);
     return;
   }
-  // Past sim session or empty → no live positions
+  // Finished run (sim or real) → freeze open positions at the run's end. Qty
+  // from the run (real: the account via /api/portfolio; sim: reconstructed from
+  // trade history), priced at frozen_prices (the run's last captured snapshot).
+  const fp = _lastPerf?.frozen_prices || {};
+  const qtySrc = _selectedMode === 'real'
+    ? (_livePortfolio?.positions || [])
+    : positionsFromHistory(_lastPerf?.history || []);
+  const frozen = qtySrc
+    .filter(p => (p.qty || 0) > 0)
+    .map(p => {
+      const price = fp[p.symbol] ?? p.current_price ?? p.price ?? p.avg_price;
+      return {
+        symbol:        p.symbol,
+        qty:           p.qty,
+        avg_price:     p.avg_price ?? p.entry_price,
+        current_price: price,
+      };
+    });
+  if (frozen.length) {
+    renderHoldings('holdings-list', frozen);
+    return;
+  }
   document.getElementById('holdings-list').innerHTML =
     '<span class="text-slate-500 text-xs">Aucune position ouverte</span>';
 }
