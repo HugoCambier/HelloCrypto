@@ -325,3 +325,42 @@ def load_snapshots(
     with _sqlite() as c:
         rows = c.execute(sql, params).fetchall()
     return [dict(r) for r in rows]
+
+
+def latest_prices(symbols: list[str]) -> dict[str, float]:
+    """Most recent captured close per symbol from ``price_snapshots``.
+
+    Fallback price source for hosts that can't reach the live Binance ticker
+    (the dashboard on serverless): the capture cycle writes these closes from an
+    environment that *can* reach Binance, so they're the freshest prices a
+    blocked host has. Returns ``{symbol: close}`` (only symbols with a snapshot).
+    """
+    if _USE_FIRESTORE or not symbols:
+        return {}
+    out: dict[str, float] = {}
+    if _USE_POSTGRES:
+        from db.store import _postgres
+        with _postgres() as c:
+            c.execute(
+                "SELECT DISTINCT ON (symbol) symbol, close FROM price_snapshots "
+                "WHERE symbol = ANY(%s) AND close IS NOT NULL "
+                "ORDER BY symbol, timestamp DESC",
+                (list(symbols),),
+            )
+            rows = c.fetchall()
+    else:
+        from db.store import _sqlite
+        ph = ",".join("?" * len(symbols))
+        with _sqlite() as c:
+            # Bare `close` alongside MAX(timestamp) returns the matching row's
+            # value (documented SQLite bare-column behaviour).
+            rows = c.execute(
+                f"SELECT symbol, close, MAX(timestamp) FROM price_snapshots "
+                f"WHERE symbol IN ({ph}) AND close IS NOT NULL GROUP BY symbol",
+                tuple(symbols),
+            ).fetchall()
+    for r in rows:
+        d = dict(r)
+        if d.get("close") is not None:
+            out[d["symbol"]] = float(d["close"])
+    return out
