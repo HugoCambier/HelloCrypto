@@ -68,11 +68,15 @@ def _save_state(state: dict, session_id: str | None = None, *,
         else (state.get("saved_at") or datetime.utcnow().isoformat())
     )
     slim = {**state, "saved_at": saved_at, "schema_version": 1}
-    # Truncate the two cumulative fields. Both keep their most recent entries
-    # so the dashboard's live PnL chart + recent-trades list stay intact.
+    # Strip ANALYSE entries from history — they're persisted in market_analyses
+    # and every frontend consumer filters them out. Was accounting for 99% of
+    # the in-state history rows. Then truncate to keep the most recent N (real
+    # trades + recent timeseries points), so state stays bounded over long runs.
     hist = slim.get("history")
-    if isinstance(hist, list) and len(hist) > _STATE_TRUNCATE:
-        slim["history"] = hist[-_STATE_TRUNCATE:]
+    if isinstance(hist, list):
+        real_trades = [t for t in hist if t.get("action") != "ANALYSE"]
+        if len(real_trades) != len(hist) or len(real_trades) > _STATE_TRUNCATE:
+            slim["history"] = real_trades[-_STATE_TRUNCATE:]
     ts = slim.get("value_timeseries")
     if isinstance(ts, list) and len(ts) > _STATE_TRUNCATE:
         slim["value_timeseries"] = ts[-_STATE_TRUNCATE:]
@@ -621,12 +625,11 @@ def run(
             summary   = decision.get("summary", "")
             log.info("[SIM] Cycle %d | déterministe | %s", cycle, summary)
             recent_decisions = (recent_decisions + [decision])[-3:]
-            history.append({
-                "cycle": cycle, "timestamp": datetime.utcnow().isoformat(),
-                "action": "ANALYSE", "sentiment": sentiment, "reason": summary,
-                "symbol": "", "qty": None, "amount": None, "price": None,
-                "fee": None, "pnl": None,
-            })
+            # ANALYSE entries used to be appended to history here for the dashboard
+            # to render. The frontend filters them out everywhere (action!='ANALYSE'),
+            # and the same data is already persisted in market_analyses — the
+            # in-state copy was 99% pure duplication and the main reason sim states
+            # ballooned to 200+ KB.
             try:
                 from db.store import save_market_analysis as _db_analysis
                 _db_analysis(sentiment=sentiment, summary=summary,
@@ -760,20 +763,9 @@ def run(
         summary   = decision.get("summary", "")
         log.info("[SIM] Cycle %d | %s | %s", cycle, sentiment, summary)
         recent_decisions = (recent_decisions + [decision])[-3:]
-
-        history.append({
-            "cycle":     cycle,
-            "timestamp": datetime.utcnow().isoformat(),
-            "action":    "ANALYSE",
-            "sentiment": sentiment,
-            "reason":    summary,
-            "symbol":    "",
-            "qty":       None,
-            "amount":    None,
-            "price":     None,
-            "fee":       None,
-            "pnl":       None,
-        })
+        # ANALYSE entry no longer appended to history (cf. deterministic branch
+        # above): persisted once via save_market_analysis below, and the
+        # frontend filters action!='ANALYSE' in every consumer anyway.
 
         # Save market analysis to DB
         try:
