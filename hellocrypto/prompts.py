@@ -52,6 +52,67 @@ SYSTEM = (
 )
 
 
+def _format_decider_state(s: dict) -> str:
+    """Compact, machine-readable block summarising every input the
+    deterministic decider sees — so the LLM and the rules play on the same
+    information footing. Kept dense on purpose (every line is a rule or a
+    state value, no narration).
+    """
+    sp = s.get("stance_params") or {}
+    stance      = s.get("stance") or "OFF"
+    breadth     = s.get("bull_breadth")
+    btc_conv    = s.get("btc_conviction") or {}
+    strong      = s.get("strong_deploy")
+    bear_1d     = s.get("bear_hours_1d")
+    bear_1h     = s.get("bear_hours_1h")
+    peak        = s.get("portfolio_peak")
+    dd_pct      = s.get("dd_pct_from_peak")
+    cb_dd       = s.get("circuit_breaker_dd")
+    coin_tiers  = s.get("coin_tiers") or {}
+    hold_hours  = s.get("hold_hours") or {}
+
+    lines = ["\nÉTAT MACHINE & RÈGLES À RESPECTER :"]
+    sp_parts = []
+    for k, v in sp.items():
+        if v is not None:
+            sp_parts.append(f"{k}={v}")
+    if sp_parts:
+        lines.append(f"- Stance {stance} : " + ", ".join(sp_parts))
+    if strong and breadth is not None:
+        lines.append(
+            f"- Strong-DEPLOY ON (breadth bull={breadth:.0%} ≥70%) → top_n forcé à 2"
+        )
+    if btc_conv:
+        d = btc_conv.get("DEPLOY_mult")
+        sel = btc_conv.get("SELECTIVE_mult")
+        cap = btc_conv.get("cap_pct")
+        lines.append(
+            f"- BTC conviction sizing : ×{d} en DEPLOY, ×{sel} en SELECTIVE "
+            f"(cap {cap}% du cash dispo/position)"
+        )
+    if bear_1d is not None or bear_1h is not None:
+        lines.append(
+            f"- Bear duration BTC : trend_1d={bear_1d or 0}h, trend_1h={bear_1h or 0}h "
+            f"(sortie après confirm-bear={sp.get('trend_confirm_hours','?')}h)"
+        )
+    if peak is not None:
+        lines.append(
+            f"- Portfolio : peak=${peak:.2f}, DD courant={dd_pct:.1f}% "
+            f"(circuit-breaker à {cb_dd:.0f}%)"
+        )
+    if hold_hours:
+        min_h = sp.get("min_hold_hours") or 0
+        hh_parts = [
+            f"{sym.replace('USDC',''):s}={h}h{' ✓' if h >= min_h else ' ✗'}"
+            for sym, h in hold_hours.items()
+        ]
+        lines.append(f"- Hold-time positions (min={min_h}h) : " + ", ".join(hh_parts))
+    if coin_tiers:
+        ct_parts = [f"{sym.replace('USDC',''):s}={t}" for sym, t in coin_tiers.items()]
+        lines.append("- Tiers (1=safest, 10=riskiest) : " + ", ".join(ct_parts))
+    return "\n".join(lines) + "\n"
+
+
 def build_analysis(
     market_data: str,
     positions: dict,
@@ -70,6 +131,7 @@ def build_analysis(
     playbook_section: str | None = None,
     behavior_section: str | None = None,
     regime_overlay: str | None = None,
+    decider_state: dict | None = None,
 ) -> str:
     """Return the user-turn prompt for a market analysis cycle.
 
@@ -243,6 +305,11 @@ def build_analysis(
     # Regime stance overlay — modulates the static risk profile by macro regime
     # (deploy in bull, preserve in bear). Placed right after the profile block.
     regime_block = f"\n{regime_overlay}\n" if regime_overlay else ""
+    # Decider state + active rules — surfaces all the inputs the deterministic
+    # decider uses (stance params, breadth, BTC conviction, coin tiers, hold
+    # hours, bear duration, portfolio peak/DD) so the LLM plays on the same
+    # information footing. Built by ``deciders.build_decider_context``.
+    decider_block = _format_decider_state(decider_state) if decider_state else ""
 
     # ── Pre-computed scores ──────────────────────────────────────────────────
     if scores:
@@ -271,7 +338,7 @@ POSITIONS OUVERTES :
 {portfolio_section}{decisions_section}
 PROFIL {profile_name} (risk_level {risk_level}/10) :
 {profile_desc}
-{regime_block}
+{regime_block}{decider_block}
 CONFIDENCE : flottant [0–1] — ton degré de certitude. Sera utilisé pour gater
 les trades (seuil applicatif côté serveur, < 0.5 ignoré par défaut) et pour
 moduler la taille (×confidence). Sois honnête : 0.9 = setup textbook avec ≥3

@@ -141,6 +141,7 @@ def apply_paper_actions(
     min_confidence: float = 0.0,
     confidence_calibration: dict | None = None,
     cash_floor_pct: float = 0.0,
+    now_ts: float | None = None,
 ) -> tuple[float, float, list[PaperTrade]]:
     """Apply a list of LLM-emitted actions in paper-trading mode.
 
@@ -219,7 +220,7 @@ def apply_paper_actions(
                              sym, amount, spendable, cash_floor_pct)
                     amount = spendable
             if amount >= 10:
-                res = paper_buy(sym, amount, prices[sym], holdings)
+                res = paper_buy(sym, amount, prices[sym], holdings, entry_ts=now_ts)
                 cash -= amount
                 fees_total += res.fee
                 peak_prices[sym] = prices[sym]

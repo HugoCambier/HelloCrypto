@@ -152,6 +152,87 @@ def _per_coin_size_factor(tier: int) -> float:
 _MAX_POSITION_PCT_OF_CASH = 0.65
 
 
+def build_decider_context(
+    *,
+    market_raw: dict,
+    holdings: dict,
+    cash: float,
+    strat_state: dict | None = None,
+    params: dict | None = None,
+    now_ts: float | None = None,
+) -> dict:
+    """Snapshot the deterministic decider's state + active rules so the LLM
+    sees the same context. Returned dict is rendered by ``prompts.build_analysis``
+    into a compact "ÉTAT MACHINE & RÈGLES" section.
+
+    Without this, the LLM is handicapped vs the deterministic decider — it
+    misses 7 inputs the deterministic uses: coin tiers, hold-hours per
+    position, bear-duration counters, portfolio peak/DD, stance params,
+    BTC conviction rule, strong-DEPLOY breadth rule.
+    """
+    p = _params(params)
+    stance: str = "OFF"
+    bull_breadth: float | None = None
+    strong_deploy = False
+    if p.get("enable_regime_stance") and market_raw:
+        stance = _derive_stance(market_raw)
+        for k, v in STANCE_PARAMS[stance].items():
+            p[k] = v
+        bull_breadth = sum(
+            1 for d in market_raw.values() if d.get("trend_1d") == "haussier"
+        ) / len(market_raw)
+        if stance == "DEPLOY" and bull_breadth >= 0.70:
+            p["top_n"] = 2
+            strong_deploy = True
+
+    hold_hours: dict[str, float] = {}
+    if now_ts is not None:
+        for sym, pos in (holdings or {}).items():
+            et = pos.get("entry_ts")
+            if et:
+                hold_hours[sym] = round((now_ts - et) / 3600, 1)
+
+    coin_tiers = {sym: coin_tier(sym) for sym in (market_raw or {})}
+
+    st = strat_state or {}
+    bear_since_1d = st.get("bear_since_1d")
+    bear_since_1h = st.get("bear_since_1h")
+    bear_hours_1d = round((now_ts - bear_since_1d) / 3600, 1) if (
+        bear_since_1d and now_ts is not None) else None
+    bear_hours_1h = round((now_ts - bear_since_1h) / 3600, 1) if (
+        bear_since_1h and now_ts is not None) else None
+
+    portfolio_now = cash + sum(
+        (h.get("qty") or 0) * float((market_raw.get(s) or {}).get("price") or 0)
+        for s, h in (holdings or {}).items()
+    )
+    portfolio_peak = float(st.get("portfolio_peak") or portfolio_now)
+    dd_pct = ((portfolio_peak - portfolio_now) / portfolio_peak * 100
+              if portfolio_peak > 0 else 0.0)
+
+    return {
+        "stance":             stance,
+        "stance_params": {
+            k: p.get(k) for k in (
+                "buy_threshold", "top_n", "size_multiplier",
+                "trend_confirm_hours", "min_hold_hours",
+                "score_exit_threshold", "exit_signal", "rebuy_cooldown_hours",
+            )
+        },
+        "strong_deploy":      strong_deploy,
+        "bull_breadth":       round(bull_breadth, 2) if bull_breadth is not None else None,
+        "btc_conviction":     {"DEPLOY_mult": 2.0, "SELECTIVE_mult": 1.5,
+                               "cap_pct": int(_MAX_POSITION_PCT_OF_CASH * 100)},
+        "coin_tiers":         coin_tiers,
+        "hold_hours":         hold_hours,
+        "bear_hours_1d":      bear_hours_1d,
+        "bear_hours_1h":      bear_hours_1h,
+        "portfolio_peak":     round(portfolio_peak, 2),
+        "dd_pct_from_peak":   round(dd_pct, 2),
+        "circuit_breaker_dd": float(p.get("max_portfolio_dd_pct") or 0),
+    }
+
+
 def _btc_conviction_mult(symbol: str, stance: str) -> float:
     """Asymmetric sizing: BTC gets 2× weight in DEPLOY, 1.5× in SELECTIVE.
 

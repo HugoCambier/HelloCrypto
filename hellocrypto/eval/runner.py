@@ -322,6 +322,20 @@ def run(
             if cfg.enable_behavior:
                 from .behavior import section_for_cycle as _bh_sec
                 behavior_section = _bh_sec(cyc.fear_greed, cyc.market)
+            # Surface the deterministic decider's state + rules so the LLM
+            # plays on the same information footing (coin tiers, hold-hours,
+            # bear duration, portfolio peak/DD, stance params, BTC conviction
+            # rule, strong-DEPLOY breadth rule). Without this the LLM is
+            # systematically handicapped vs the rules-only variant.
+            from ..deciders import build_decider_context
+            cyc_ts = _ts_to_unix(cyc.timestamp)
+            decider_state = build_decider_context(
+                market_raw=cyc.market, holdings=holdings, cash=cash,
+                strat_state=strat_state, now_ts=cyc_ts,
+                params={"decide_every_cycles": 1,
+                        **({"buy_threshold": cfg.buy_score_min}
+                           if cfg.buy_score_min != 8 else {})},
+            )
             prompt = prompts_mod.build_analysis(
                 market_data=format_market_data_compact(cyc.market, scenario.watchlist, scores),
                 positions=holdings,
@@ -340,6 +354,7 @@ def run(
                 playbook_section=playbook_section,
                 behavior_section=behavior_section,
                 regime_overlay=stance["overlay"] if stance else None,
+                decider_state=decider_state,
             )
             decision, usage = _llm_decision_via_cache(prompt, prompts_mod.SYSTEM, cfg)
 
@@ -378,6 +393,7 @@ def run(
             min_confidence=effective_min_conf,
             confidence_calibration=calibration,
             cash_floor_pct=cash_floor_pct,
+            now_ts=_ts_to_unix(cyc.timestamp),
         )
         cash = new_cash
         total_fees += fees
@@ -389,6 +405,13 @@ def run(
         total = cash + portfolio_val
         snapshots.append({"cycle": idx, "ts": cyc.timestamp,
                           "cash": round(cash, 2), "value": round(total, 2)})
+        # Track portfolio peak across cycles so the LLM path (which doesn't
+        # call regime_decision) still sees an accurate DD% on the next call
+        # to build_decider_context. The rules_only path also updates this via
+        # regime_decision's strat_state — keeping both paths consistent.
+        strat_state["portfolio_peak"] = max(
+            float(strat_state.get("portfolio_peak") or 0.0), total
+        )
 
     final_value = snapshots[-1]["value"] if snapshots else cfg.budget
     sells = [h for h in history if "SELL" in h["action"]]

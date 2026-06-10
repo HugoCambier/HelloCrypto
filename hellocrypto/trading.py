@@ -41,10 +41,16 @@ def paper_buy(
     usdc_amount: float,
     price: float,
     holdings: dict,
+    entry_ts: float | None = None,
 ) -> TradeResult:
     """Execute a simulated BUY. Mutates *holdings* in-place.
 
     Returns a TradeResult with fee and resulting qty.
+
+    ``entry_ts`` (unix seconds) is stamped on new positions so the LLM and
+    the deterministic decider can compute hold-time consistently. On top-ups
+    the original ``entry_ts`` is preserved — the min-hold timer anchors on
+    the *original* entry, not on each refill.
     """
     fee     = usdc_amount * FEE_RATE
     qty_net = (usdc_amount - fee) / price
@@ -55,9 +61,11 @@ def paper_buy(
         holdings[symbol] = {
             "qty":       new_qty,
             "avg_price": (prev["avg_price"] * prev["qty"] + price * qty_net) / new_qty,
+            "entry_ts":  prev.get("entry_ts"),
         }
     else:
-        holdings[symbol] = {"qty": qty_net, "avg_price": price}
+        holdings[symbol] = {"qty": qty_net, "avg_price": price,
+                            "entry_ts": entry_ts}
 
     return TradeResult(
         qty=qty_net,
