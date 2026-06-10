@@ -788,10 +788,13 @@ def save_trade(
     reason: str,
     fee: float = 0.0,
     fee_asset: str = "USDC",
+    session_id: str | None = None,
+    session_name: str | None = None,
 ) -> None:
     from db.store import save_trade as _db_save
     _db_save(action=action, symbol=symbol, amount=amount, price=price,
-             reason=reason, fee=fee, fee_asset=fee_asset, mode="real")
+             reason=reason, fee=fee, fee_asset=fee_asset, mode="real",
+             session_id=session_id, session_name=session_name)
 
 
 def load_config() -> dict:

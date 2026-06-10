@@ -185,20 +185,19 @@ function _renderPinnedRealCard() {
   const slot = document.getElementById('pinned-real-card');
   if (!slot) return;
   const realRunning = !!_activeRealSessionId;
-  const pinnedSid   = _activeRealSessionId;
-  const pinnedActive = _selectedMode === 'real' && _selectedSession === pinnedSid;
-  const pinnedOnClick = pinnedSid
-    ? `selectRun('real', '${pinnedSid}')`
-    : `selectRun('real', null)`;
+  // The pinned card is the PERMANENT real aggregate: it always shows every
+  // real trade (all real sessions + manual orders + Binance re-syncs), never
+  // a single session. Per-session views live in their own cards below.
+  const pinnedActive = _selectedMode === 'real' && !_selectedSession;
   slot.innerHTML = `
-    <div class="run-card real ${pinnedActive ? 'active' : ''}" onclick="${pinnedOnClick}">
+    <div class="run-card real ${pinnedActive ? 'active' : ''}" onclick="selectRun('real', null)">
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 mb-0.5">
           <span class="run-tag tag-real">RÉEL</span>
           <span class="text-sm font-semibold text-slate-100 truncate">Activité réelle</span>
           ${realRunning ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>' : ''}
         </div>
-        <div class="text-[11px] text-slate-500">${realRunning ? 'Runner armé · trades live sur Binance' : 'Runner désactivé'}</div>
+        <div class="text-[11px] text-slate-500">${realRunning ? 'Runner armé · cumul de toutes les sessions réelles' : 'Cumul de toutes les sessions réelles'}</div>
       </div>
       <div class="run-actions shrink-0">
         ${realRunning
