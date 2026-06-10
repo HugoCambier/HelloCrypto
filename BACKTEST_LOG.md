@@ -58,7 +58,8 @@ Fixé dans `006f303` (retry + fail-loud). Plus besoin du caveat ±$15
 | 2026-06-08 | `583f597` (revert via `cc0d2bb`) | + early-exit zombie 100h/-3% | +$164.7 | **-37.1%** | ❌ DD régresse, early-exit -$148.5 sur 48 trades — porte fermée |
 | 2026-06-09 | HEAD + FNG live (bug) | bench-path médiane sur 10 coins | +$74.6 | -37% | ⚠️ artificiellement gonflé par FNG=10 live appliqué aux 1000j |
 | 2026-06-09 | HEAD + FNG historique (fix) | bench-path médiane (baseline transitoire) | +$64.7 | -45% | baseline honnête mais sous-exposé aux montées BTC |
-| 2026-06-10 | + BTC asym sizing | DEPLOY ×2 / SELECTIVE ×1.5 sur BTC, cap 65% cash | **+$89.0** | **-38.9%** | 🎯 nouveau baseline — médiane +$24, DD allégé de 6.5pts |
+| 2026-06-10 | + BTC asym sizing | DEPLOY ×2 / SELECTIVE ×1.5 sur BTC, cap 65% cash | +$89.0 | -38.9% | médiane +$24, DD allégé de 6.5pts |
+| 2026-06-10 | + top_n adaptatif strong-DEPLOY | breadth bull ≥70% → top_n=4→2 (concentration BTC + 1 alt) | **+$107.1** | **-36.4%** | 🎯 **nouveau baseline — α +$5 vs BTC, 82% de la perf BTC captée** |
 
 ## Baseline honnête post-fix FNG (2026-06-09)
 
@@ -114,6 +115,41 @@ Bench-path post-change (start=2023-09-13, 1000j, 10 coins):
 timing d'entrée BTC sur cette trajectoire, mais médiane > best of baseline.
 Variance inter-cellule monte ($24 → $61 spread) — attendu vu la
 concentration. On capture maintenant ~68% de la perf BTC (vs 50% avant).
+
+## Top_n adaptatif en strong-DEPLOY (2026-06-10)
+
+Sur l'angle BTC asym seul, on plafonnait à ~68% de la perf BTC. Hypothèse :
+en DEPLOY normal `top_n=4`, mais après le BTC boost (65% cash) + position 2
+(~16%), les positions 3 et 4 récupèrent des miettes (5%/3%) — assez gros
+pour prendre des micro-losses, trop petits pour matter en gains. Donc on
+porte du risque sans upside.
+
+Fix : quand DEPLOY fire ET breadth bull ≥ 70% (≥7 coins sur 10 en trend_1d
+haussier), `top_n` passe de 4 à 2. SELECTIVE / PRESERVE / CASH inchangés.
+
+Bench-path post-change (start=2023-09-13, 1000j, 10 coins) — compose
+avec le BTC asym sizing du commit précédent :
+
+| offset | BTC asym seul | + top_n adaptatif | Δ |
+|---|---|---|---|
+| +0h | $88.23 | $145.40 | **+$57** |
+| +1h | $89.71 | $99.86 | +$10 |
+| +2h | $38.17 | $84.37 | **+$46** |
+| +3h | $99.09 | $114.24 | +$15 |
+| **médiane** | $88.97 | **$107.05** | **+$18 (+20%)** |
+| DD médiane | −38.9% | **−36.4%** | +2.5 pts |
+| α vs BTC médian | −$13 | **+$5** | +$18 |
+| trades médiane | 352 | 325 | −27 |
+
+**Les 4 cellules améliorent.** Cellule worst-case +2h passe de $38 à $84 —
+la trajectoire fragile devient nette. **α positif pour la première fois.**
+On capture maintenant **82% de la perf BTC** (vs 68% commit précédent,
+50% baseline FNG-fix).
+
+Mécanique probable : moins de positions tail = moins de bleeds sur des
+alts faibles, capital qui reste cash plutôt qu'allocué à des micro-positions
+qui pourrissent. Le combo {BTC ×2 conviction} + {top_n=2 en strong-DEPLOY}
+amplifie le signal en compressant le bruit.
 
 ## Découverte clé : le garde-fou top-up
 
