@@ -603,6 +603,13 @@ def api_performance():
     filtered = [t for t in history if datetime.fromisoformat(t["timestamp"]) >= cutoff]
     if session_id:
         filtered = [t for t in filtered if t.get("session_id") == session_id]
+    else:
+        # The permanent card compiles every session + manual orders. "(init)"
+        # entries are per-session bookkeeping for capital a run inherited (the
+        # position was already bought in an earlier session), not executed
+        # orders — counting them here would double-count that capital. They stay
+        # in the session-scoped view above so its equity curve can value them.
+        filtered = [t for t in filtered if "(init)" not in (t.get("action") or "")]
 
     buys        = [t for t in filtered if t["action"] == "BUY"]
     sells       = [t for t in filtered if "SELL" in t["action"] and "stop" not in t["action"].lower()]

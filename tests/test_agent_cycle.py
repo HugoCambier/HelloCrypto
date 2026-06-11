@@ -32,6 +32,11 @@ def _patch_cycle_io(monkeypatch, positions, *, market_sell):
     monkeypatch.setattr(agent, "get_ticker", lambda _s: 80.0)
     monkeypatch.setattr(agent, "record_buy", lambda *a, **k: None)
     monkeypatch.setattr(agent, "record_sell", lambda *a, **k: None)
+    # Never persist during the cycle test: baseline capture writes BUY (init)
+    # trades + the session row, and the decider writes a market analysis.
+    monkeypatch.setattr(agent, "_capture_run_baseline", lambda *a, **k: None)
+    import db.store as _store
+    monkeypatch.setattr(_store, "save_market_analysis", lambda *a, **k: None)
     monkeypatch.setattr(agent, "market_sell", market_sell)
     monkeypatch.setattr(
         agent, "regime_decision",
