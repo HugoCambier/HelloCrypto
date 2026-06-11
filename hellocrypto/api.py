@@ -920,20 +920,28 @@ def record_sell(action: str, symbol: str, qty: float, price: float, reason: str,
 
 
 def load_config() -> dict:
-    """Load config — file is authoritative for local dev, DB is fallback."""
-    try:
-        return json.loads(CONFIG_FILE.read_text())
-    except FileNotFoundError:
-        pass
-    except Exception:
-        log.exception("config.json read failed, trying DB")
+    """Load config — DB is authoritative, file is the fallback.
+
+    Mirrors ``save_config`` (which writes the DB as source of truth): readers
+    MUST read the DB first, otherwise a committed ``config.json`` shipped with
+    the code (e.g. the GitHub Actions cron checkout) shadows every change the
+    UI persisted to the DB — silently reverting ``decider`` and any other
+    UI-set field to its checked-in value. The file is only consulted when the
+    DB has no config row (fresh install, or local dev without a DB).
+    """
     try:
         from db.store import get_state
         cfg = get_state("config")
         if cfg is not None:
             return cfg
     except Exception:
-        log.exception("DB load_config failed, using defaults")
+        log.exception("DB load_config failed, trying config.json")
+    try:
+        return json.loads(CONFIG_FILE.read_text())
+    except FileNotFoundError:
+        pass
+    except Exception:
+        log.exception("config.json read failed, using defaults")
     return dict(_DEFAULT_CONFIG)
 
 
