@@ -693,7 +693,16 @@ def api_performance():
     effective_budget    = float(
         real_base if real_base is not None
         else (sess_budget if sess_budget is not None else config.get("budget", 100)))
-    effective_watchlist = sess_watchlist if sess_watchlist else config.get("watchlist", [])
+    # Both the live sim and the real agent trade the *current* config watchlist
+    # (re-read every cycle), not the one frozen in the session at arm time. So an
+    # active run's passive baselines must use the live watchlist too — otherwise a
+    # run armed when the list was narrower (e.g. BTC only) shows BH ≡ BTC even
+    # though the strategy now trades the full list. Finished runs keep their frozen
+    # watchlist as the best record of the universe they actually ran against.
+    if is_active:
+        effective_watchlist = config.get("watchlist", []) or sess_watchlist or []
+    else:
+        effective_watchlist = sess_watchlist if sess_watchlist else config.get("watchlist", [])
     if with_bench and (sorted_trades or sess_started_at):
         start_iso = sess_started_at or sorted_trades[0]["timestamp"]
         end_iso: str | None = None
