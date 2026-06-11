@@ -1027,6 +1027,243 @@ function renderHoldings(containerId, positions, prices) {
   }).join('');
 }
 
+// Compact "MM/DD HH:mm" label for the momentum chart's linear time axis.
+function _fmtTsShort(ms) {
+  const d = new Date(ms);
+  if (isNaN(d)) return '';
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// Walk the trade history to attach, per trade, the context the momentum tooltip
+// needs but the raw record doesn't carry:
+//   • BUY  → share of available cash the purchase consumed (amount / cash_before)
+//   • SELL → share of the held quantity sold (qty / qty_owned_before) + the
+//            gross plus-value (sell_price − avg_cost) × qty. The engine's
+//            net pnl already equals that minus the fee, so we add the fee back
+//            when pnl is present; otherwise we reconstruct from the avg cost.
+//
+// `anchorCash` is the real USDC balance *now*: when provided (active real run),
+// the per-buy cash is reconstructed by walking the history BACKWARD from it, so
+// "% du cash" reflects the actual account. Otherwise cash is reconstructed
+// FORWARD from the run budget (exact for sims/backtests, approximate for legacy
+// real runs with no live anchor). Returns a Map keyed by the trade object.
+function _buildTradeContext(trades, budget, anchorCash) {
+  const ctx = new Map();
+  const sorted = [...trades].sort((a, b) =>
+    String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
+  const amtOf = (t) => t.amount != null
+    ? Number(t.amount) : Number(t.qty || 0) * Number(t.price || 0);
+
+  // ── Cash available before each BUY ──────────────────────────────────────
+  const cashBefore = new Map();
+  if (anchorCash != null) {
+    let cash = anchorCash; // balance "now"
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      const t = sorted[i];
+      const amt = amtOf(t);
+      if (/BUY/i.test(t.action)) {
+        cash += amt;               // undo the spend → balance before this buy
+        cashBefore.set(t, cash);
+      } else if (/SELL/i.test(t.action)) {
+        cash -= amt - (t.fee || 0); // undo the proceeds
+      }
+    }
+  } else {
+    let cash = budget || 0;
+    for (const t of sorted) {
+      const amt = amtOf(t);
+      if (/BUY/i.test(t.action)) { cashBefore.set(t, cash); cash -= amt; }
+      else if (/SELL/i.test(t.action)) { cash += amt - (t.fee || 0); }
+    }
+  }
+
+  // ── Holdings → position %, plus-value (forward, cash-independent) ────────
+  const hold = {}; // sym → { qty, cost }  (cost = total cost basis of the position)
+  for (const t of sorted) {
+    const sym    = t.symbol;
+    const qty    = Number(t.qty || 0);
+    const price  = Number(t.price || 0);
+    const h = hold[sym] || (hold[sym] = { qty: 0, cost: 0 });
+    if (/BUY/i.test(t.action)) {
+      const cb = cashBefore.get(t);
+      ctx.set(t, { pctCash: cb > 0 ? amtOf(t) / cb * 100 : null });
+      h.qty  += qty;
+      h.cost += amtOf(t);
+    } else if (/SELL/i.test(t.action)) {
+      const qtyBefore = h.qty;
+      const avg = h.qty > 0 ? h.cost / h.qty : price;
+      const pv  = t.pnl != null ? t.pnl + (t.fee || 0) : (price - avg) * qty;
+      ctx.set(t, {
+        pctPos: qtyBefore > 0 ? qty / qtyBefore * 100 : null,
+        pv,
+      });
+      const ratio = qtyBefore > 0 ? Math.min(1, qty / qtyBefore) : 0;
+      h.cost = Math.max(0, h.cost - h.cost * ratio);
+      h.qty  = Math.max(0, h.qty - qty);
+      if (h.qty <= 1e-9) { h.qty = 0; h.cost = 0; }
+    }
+  }
+  return ctx;
+}
+
+// ─── Per-crypto price momentum chart with BUY/SELL signal markers ────────────
+// frames: [{ts, prices:{SYM:price}}] — dense per-cycle close series. Sources:
+//   • /api/performance?with_prices=1 → price_series (sim + real)
+//   • backtest snapshot.timeseries   → each frame already carries {ts, prices}
+// trades: history array (BUY/SELL with timestamp, symbol, price, qty, amount).
+// Each crypto is indexed to its first close (% variation) so wildly-different
+// price scales are comparable; markers sit on the curve at the trade's price.
+// The crypto selection is READ from the shared trades-table filter
+// (opts.sharedFilterId) — this chart never owns/renders that filter.
+function renderPriceMomentumChart(opts) {
+  const canvas = document.getElementById(opts.canvasId);
+  const empty  = document.getElementById(opts.emptyId);
+  if (!canvas) return;
+
+  const frames = (opts.frames || []).filter(f => f && f.ts && f.prices);
+  const trades = (opts.trades || []).filter(t =>
+    t && t.symbol && /BUY|SELL/i.test(t.action || '') && t.price != null);
+
+  // Universe = symbols that actually traded (mirrors the trades table filter),
+  // restricted to those we have price data for.
+  const priced = new Set();
+  for (const f of frames) for (const s of Object.keys(f.prices)) priced.add(s);
+  const allSymbols = [...new Set(trades.map(t => t.symbol))]
+    .filter(s => priced.has(s)).sort();
+
+  // Selection comes from the shared filter (empty dataset.symbols == all).
+  const csv = (opts.sharedFilterId && document.getElementById(opts.sharedFilterId)?.dataset.symbols) || '';
+  const sel = csv ? new Set(csv.split(',').filter(Boolean)) : null;
+  const shownSymbols = sel ? allSymbols.filter(s => sel.has(s)) : allSymbols;
+
+  if (!frames.length || !shownSymbols.length) {
+    canvas.classList.add('hidden'); empty?.classList.remove('hidden');
+    if (opts.chartRef?.current) { opts.chartRef.current.destroy(); opts.chartRef.current = null; }
+    return;
+  }
+  canvas.classList.remove('hidden'); empty?.classList.add('hidden');
+
+  const tsMs = (s) => new Date(s).getTime();
+  const tctx = _buildTradeContext(trades, opts.budget, opts.anchorCash);
+
+  // Base = first non-null close per symbol → every curve starts at 0%.
+  const base = {};
+  for (const f of frames) {
+    for (const s of shownSymbols) {
+      if (base[s] == null && f.prices[s] != null) base[s] = f.prices[s];
+    }
+  }
+
+  const datasets = [];
+  shownSymbols.forEach((s, i) => {
+    const col = HC_CHART_COLORS[i % HC_CHART_COLORS.length];
+    const data = frames
+      .filter(f => f.prices[s] != null && base[s])
+      .map(f => ({ x: tsMs(f.ts), y: (f.prices[s] / base[s] - 1) * 100 }));
+    datasets.push({
+      label: shortSym(s), data,
+      borderColor: col, backgroundColor: col, borderWidth: 1.5,
+      pointRadius: 0, tension: 0, fill: false,
+    });
+  });
+
+  // BUY/SELL markers — green/red regardless of symbol, placed at the trade's
+  // own price relative to that symbol's base. Each point carries the business
+  // metrics for the tooltip.
+  const shown = new Set(shownSymbols);
+  const buyPts = [], sellPts = [];
+  for (const t of trades) {
+    const s = t.symbol;
+    if (!shown.has(s) || !base[s]) continue;
+    const c = tctx.get(t) || {};
+    const amount = t.amount != null ? Number(t.amount) : Number(t.qty || 0) * Number(t.price || 0);
+    const pt = {
+      x: tsMs(t.timestamp), y: (t.price / base[s] - 1) * 100,
+      _sym: s, _amount: amount, _reason: (t.reason || '').trim(),
+      _pctCash: c.pctCash, _pctPos: c.pctPos, _pv: c.pv,
+    };
+    if (/BUY/i.test(t.action)) buyPts.push(pt); else sellPts.push(pt);
+  }
+  if (buyPts.length) datasets.push({
+    label: 'Achats', data: buyPts, showLine: false,
+    pointStyle: 'triangle', pointRadius: 6, pointHoverRadius: 8,
+    backgroundColor: '#22c55e', borderColor: '#064e3b', borderWidth: 1, _marker: 'buy',
+  });
+  if (sellPts.length) datasets.push({
+    label: 'Ventes', data: sellPts, showLine: false,
+    pointStyle: 'triangle', rotation: 180, pointRadius: 6, pointHoverRadius: 8,
+    backgroundColor: '#ef4444', borderColor: '#7f1d1d', borderWidth: 1, _marker: 'sell',
+  });
+
+  const _wrapReason = (txt) => {
+    // Soft-wrap a long reason into ~50-char lines so the tooltip stays readable.
+    if (!txt) return [];
+    const words = txt.split(/\s+/);
+    const lines = []; let cur = '';
+    for (const w of words) {
+      if ((cur + ' ' + w).trim().length > 50) { if (cur) lines.push(cur); cur = w; }
+      else cur = (cur ? cur + ' ' : '') + w;
+    }
+    if (cur) lines.push(cur);
+    return lines.slice(0, 4).map(l => '↳ ' + l);
+  };
+
+  if (opts.chartRef?.current) { opts.chartRef.current.destroy(); opts.chartRef.current = null; }
+  const chart = new Chart(canvas, {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true, animation: false,
+      interaction: { mode: 'nearest', intersect: true },
+      plugins: {
+        legend: { display: true, labels: { color: '#cbd5e1', font: { size: 11 }, boxWidth: 14, usePointStyle: true } },
+        tooltip: {
+          callbacks: {
+            title: (items) => items.length ? _fmtTsShort(items[0].parsed.x) : '',
+            label: (c) => {
+              const r = c.raw || {};
+              if (c.dataset._marker === 'buy') {
+                const pct = r._pctCash != null ? ` (${fmt(r._pctCash, 2)}% du cash)` : '';
+                return ` Achat ${shortSym(r._sym)} · $${fmt(r._amount, 2)}${pct}`;
+              }
+              if (c.dataset._marker === 'sell') {
+                const pct = r._pctPos != null ? ` (${fmt(r._pctPos, 2)}% de la position)` : '';
+                return ` Vente ${shortSym(r._sym)} · $${fmt(r._amount, 2)}${pct}`;
+              }
+              return ` ${c.dataset.label}: ${c.parsed.y >= 0 ? '+' : ''}${fmt(c.parsed.y, 2)}%`;
+            },
+            afterLabel: (c) => {
+              if (!c.dataset._marker) return undefined;
+              const r = c.raw || {};
+              const lines = [];
+              if (c.dataset._marker === 'sell' && r._pv != null) {
+                lines.push(`Plus-value : ${r._pv >= 0 ? '+' : ''}$${fmt(r._pv, 2)}`);
+              }
+              lines.push(..._wrapReason(r._reason));
+              return lines.length ? lines : undefined;
+            },
+          },
+          backgroundColor: '#1e293b', borderColor: '#334155', borderWidth: 1,
+          titleColor: '#94a3b8', bodyColor: '#e2e8f0',
+        },
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          ticks: { color: '#475569', maxTicksLimit: 8, font: { size: 10 }, callback: v => _fmtTsShort(v) },
+          grid: { color: '#1e293b' },
+        },
+        y: {
+          ticks: { color: '#475569', font: { size: 10 }, callback: v => `${v >= 0 ? '+' : ''}${fmtMax(v)}%` },
+          grid: { color: '#1e293b' },
+        },
+      },
+    },
+  });
+  if (opts.chartRef) opts.chartRef.current = chart;
+}
+
 // ─── Per-table symbol filter (compact multi-select dropdown) ─────────────────
 // Persists selection in the container's dataset so it survives re-renders.
 // Empty dataset.symbols == "all selected" — auto-grows when a new symbol
@@ -1299,6 +1536,9 @@ async function renderTradesTable(opts) {
     _renderSymbolFilter(opts.symbolFilterId, allSymbols, selectedSet, () => {
       list.dataset.page = '1';
       renderTradesTable(opts);
+      // Let a co-located consumer (e.g. the price-momentum chart that shares
+      // this filter) react to the same selection change.
+      opts.onSymbolChange?.();
     });
   }
 

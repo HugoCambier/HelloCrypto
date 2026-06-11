@@ -25,6 +25,7 @@ const _refs = {
   alloc: { current: null },
   pnlBars: { current: null },
   volBars: { current: null },
+  priceMom: { current: null },
 };
 
 // ── Right-panel tabs ─────────────────────────────────────────────────────────
@@ -778,7 +779,10 @@ function renderFromSnapshot(snap) {
     paginationId:   'bt-trades-pagination',
     pageSize:       100,
     history:        snap.history || [],
+    // The price-momentum chart below shares this same Cryptos filter.
+    onSymbolChange: () => _renderBtPriceMomentum(snap),
   });
+  _renderBtPriceMomentum(snap);
 
   // Charts tab
   if (!document.getElementById('rtab-charts').classList.contains('hidden')) {
@@ -802,6 +806,20 @@ function renderFromSnapshot(snap) {
     // scrubbing a finished run.
     renderMarketContextCard('market-context-card', snap.ctx);
   }
+}
+
+// Per-crypto price curves + BUY/SELL signals, under the trades table in the
+// Performance tab. Shares the trades table's Cryptos filter (bt-trades-symbol-filter);
+// frames come straight from the in-memory snapshot (each carries {ts, prices}).
+function _renderBtPriceMomentum(snap) {
+  renderPriceMomentumChart({
+    canvasId: 'price-mom-chart', emptyId: 'price-mom-empty',
+    sharedFilterId: 'bt-trades-symbol-filter',
+    chartRef: _refs.priceMom,
+    frames: snap.timeseries || [],
+    trades: snap.history || [],
+    budget: snap.budget,
+  });
 }
 
 // ── Time scrubber ──────────────────────────────────────────────────────────
