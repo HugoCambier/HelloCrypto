@@ -11,8 +11,12 @@ Two-layer source:
    profiled. Calibrated on 600d backtest (2024-10 → 2026-06).
 
 The ``risk_level`` param (1-10, user-set) controls *which coins* are
-candidates for entry: tier ≤ risk_level. Held positions are never
-filtered — exits always apply on the full watchlist.
+candidates for entry, via ``risk_tier_cap``: tier ≤ cap(risk_level).
+The cap is monotone and pivots on risk 7 (cap == 7) so that level — the
+production reference — keeps the legacy ``tier ≤ risk_level`` behavior
+exactly. Below 7 the universe narrows toward blue chips; above 7 it
+opens up. Held positions are never filtered — exits always apply on the
+full watchlist.
 """
 from __future__ import annotations
 
@@ -88,6 +92,19 @@ def coin_tier(symbol: str, at: date | None = None) -> int:
     return COIN_RISK_TIERS_BASELINE.get(symbol, DEFAULT_TIER)
 
 
+# risk_level → max coin tier eligible for NEW entries. Identity
+# (``tier ≤ risk_level``) with a blue-chip floor so the lowest levels still
+# trade BTC (tier 2) / ETH (tier 3) instead of an empty universe — a backtest
+# sweep showed widening the low end churns volatile alts and regresses both PnL
+# and drawdown there. risk 7 → 7 keeps the production reference exact.
+_MIN_TIER_CAP = 3
+
+
+def risk_tier_cap(risk_level: int) -> int:
+    """Return the highest coin tier eligible for entry at *risk_level*."""
+    return max(_MIN_TIER_CAP, min(10, int(risk_level)))
+
+
 def is_allowed(symbol: str, risk_level: int, at: date | None = None) -> bool:
     """True if *symbol* is allowed at the given user *risk_level*."""
-    return coin_tier(symbol, at=at) <= risk_level
+    return coin_tier(symbol, at=at) <= risk_tier_cap(risk_level)

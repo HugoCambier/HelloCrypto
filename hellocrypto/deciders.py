@@ -22,7 +22,7 @@ from datetime import date
 from typing import Any
 
 from .api import compute_score_rules
-from .coin_tiers import coin_tier
+from .coin_tiers import coin_tier, risk_tier_cap
 
 DEFAULTS = {
     "decide_every_cycles":   48,         # cadence gate (units = caller cycle)
@@ -126,13 +126,29 @@ def _max_pct(risk_level: int) -> float:
     return (5 + max(1, min(10, int(risk_level))) * 4) / 100
 
 
+# risk_level → (buy_threshold delta, hold/confirm-horizon multiplier). Profile
+# overlay applied on top of the resolved stance/default knobs. Pinned so risk 7
+# = (0, 1.0) leaves the production reference byte-identical. Lower risk = stricter
+# entry bar + longer horizon (measured, long-term) ; higher risk = looser bar +
+# shorter horizon (bullish, scalp). The universe axis lives in coin_tiers.
+_RISK_ENTRY = {
+    1: (+3, 1.6), 2: (+3, 1.5), 3: (+2, 1.4), 4: (+2, 1.3), 5: (+1, 1.2),
+    6: (+1, 1.1), 7: (0, 1.0), 8: (0, 0.9), 9: (-1, 0.8), 10: (-2, 0.7),
+}
+
+
+def _risk_entry(risk_level: int) -> tuple[int, float]:
+    """Return (buy_threshold delta, horizon multiplier) for *risk_level*."""
+    return _RISK_ENTRY[max(1, min(10, int(risk_level)))]
+
+
 def _per_coin_threshold(base_threshold: int, tier: int) -> int:
     """Coins with tier > 6 require a higher score to clear the entry bar.
 
     Net rule: +1 to threshold per tier above 6 (so tier 7→+1, 8→+2, 9→+3).
-    Tiers ≤ 6 use the base threshold unmodified. Combined with the existing
-    `tier > risk_level` filter, this gives a graded discouragement rather
-    than a binary cliff.
+    Tiers ≤ 6 use the base threshold unmodified. Combined with the
+    `tier > risk_tier_cap(risk_level)` universe filter, this gives a graded
+    discouragement rather than a binary cliff.
     """
     return base_threshold + max(0, tier - 6)
 
@@ -254,7 +270,7 @@ def regime_decision(
     cash: float,
     cycle: int,
     now_ts: float | None = None,
-    risk_level: int = 5,
+    risk_level: int = 7,
     strat_state: dict[str, Any] | None = None,
     params: dict | None = None,
     fng_value: int | None = None,
@@ -306,6 +322,18 @@ def regime_decision(
             elif fng_value <= FNG_EXTREME_FEAR:
                 fng_adj = -1
             p["buy_threshold"] = max(1, p["buy_threshold"] + fng_adj)
+
+    # ── Risk-level profile overlay (always applies; risk 7 = identity) ───────
+    # risk_level reshapes the *resolved* knobs into a coherent profile: lower
+    # risk raises the entry bar and stretches the hold/bear-confirm horizon
+    # (measured, long-term) ; higher risk lowers the bar and shortens the
+    # horizon (bullish, scalp). The (0, 1.0) entry at risk 7 leaves the pinned
+    # reference exact. The universe axis is applied at the tier filter below.
+    thr_delta, horizon_mult = _risk_entry(risk_level)
+    p["buy_threshold"]       = max(1, int(p["buy_threshold"]) + thr_delta)
+    p["trend_confirm_hours"] = float(p["trend_confirm_hours"]) * horizon_mult
+    p["min_hold_hours"]      = float(p["min_hold_hours"]) * horizon_mult
+
     st = dict(strat_state or {})
 
     # ── Portfolio-level drawdown circuit-breaker ────────────────────────────
@@ -612,7 +640,7 @@ def regime_decision(
             continue
         if d.get("trend_1d") == "baissier":
             continue
-        if tier > risk_level:
+        if tier > risk_tier_cap(risk_level):
             if not is_topup:
                 blocked_tier.append(sym)
             continue

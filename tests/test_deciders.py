@@ -500,26 +500,19 @@ def test_scale_out_does_not_fire_below_first_milestone():
     assert [a for a in result["actions"] if a["type"] == "scale_out"] == []
 
 
-def test_risk_tier_filter_low_risk_only_blue_chips():
-    """risk_level=2 → only BTC (baseline tier 2) passes; ETH (tier 3) skipped."""
-    from datetime import date
-    market = {
-        "BTCUSDC": _sym(trend="haussier"),
-        "ETHUSDC": _sym(trend="haussier"),
-    }
-    result, _ = regime_decision(
-        market_raw=market, holdings={}, cash=1000.0, cycle=0,
-        now_ts=1_000_000.0, risk_level=2,
-        params={"decide_every_cycles": 1, "enable_regime_stance": False,
-                "buy_threshold": 8},
-        as_of_date=date(1970, 1, 12),
-    )
-    buys = [a["symbol"] for a in result["actions"] if a["type"] == "buy"]
-    assert buys == ["BTCUSDC"]
+def _scored(score_2: bool = True) -> dict:
+    """Symbol scoring exactly 7 (base 5 + trend_1d haussier +2, rest neutral)
+    when ``score_2`` else a full-10 bull symbol."""
+    if score_2:
+        return {"trend_1d": "haussier", "trend": "neutre", "price": 100.0,
+                "macd": {"histogram": 0.0}, "sma7": 100.0, "sma25": 100.0}
+    return _sym(trend="haussier")
 
 
-def test_risk_tier_filter_max_risk_allows_all():
-    """risk_level=10 → no tier exclusion."""
+def test_risk_cap_blocks_high_tier_below_pivot():
+    """risk 5 → tier cap 6: a tier-8 coin (POL) is blocked, blue chips pass.
+    buy_threshold pinned low so the entry-bar overlay (+1 at risk 5) doesn't
+    mask the universe filter under test."""
     from datetime import date
     market = {
         "BTCUSDC": _sym(trend="haussier"),
@@ -527,13 +520,89 @@ def test_risk_tier_filter_max_risk_allows_all():
     }
     result, _ = regime_decision(
         market_raw=market, holdings={}, cash=1000.0, cycle=0,
-        now_ts=1_000_000.0, risk_level=10,
+        now_ts=1_000_000.0, risk_level=5,
+        params={"decide_every_cycles": 1, "enable_regime_stance": False,
+                "buy_threshold": 6, "top_n": 5},
+        as_of_date=date(1970, 1, 12),
+    )
+    buys = {a["symbol"] for a in result["actions"] if a["type"] == "buy"}
+    assert buys == {"BTCUSDC"}
+
+
+def test_risk_cap_opens_universe_above_pivot():
+    """risk 8 → tier cap 8: the tier-8 coin (POL) now clears the universe."""
+    from datetime import date
+    market = {
+        "BTCUSDC": _sym(trend="haussier"),
+        "POLUSDC": _sym(trend="haussier"),
+    }
+    result, _ = regime_decision(
+        market_raw=market, holdings={}, cash=1000.0, cycle=0,
+        now_ts=1_000_000.0, risk_level=8,
         params={"decide_every_cycles": 1, "enable_regime_stance": False,
                 "buy_threshold": 8, "top_n": 5},
         as_of_date=date(1970, 1, 12),
     )
     buys = {a["symbol"] for a in result["actions"] if a["type"] == "buy"}
     assert buys == {"BTCUSDC", "POLUSDC"}
+
+
+def test_risk_entry_threshold_gradient():
+    """Same setup, score-7 symbol: enters at risk 9 (bar 8-1=7) but not at
+    risk 5 (bar 8+1=9). Proves risk_level shapes entry selectivity."""
+    from datetime import date
+    market = {"BTCUSDC": _scored(score_2=True)}
+    common = dict(
+        holdings={}, cash=1000.0, cycle=0, now_ts=1_000_000.0,
+        params={"decide_every_cycles": 1, "enable_regime_stance": False,
+                "buy_threshold": 8},
+        as_of_date=date(1970, 1, 12),
+    )
+    aggressive, _ = regime_decision(market_raw=market, risk_level=9, **common)
+    measured, _ = regime_decision(market_raw=market, risk_level=5, **common)
+    assert [a for a in aggressive["actions"] if a["type"] == "buy"]
+    assert [a for a in measured["actions"] if a["type"] == "buy"] == []
+
+
+def test_risk_horizon_multiplier_scales_exit_timer():
+    """trend_confirm 24h × horizon mult: a 20h bear exits at risk 9 (×0.8 →
+    19.2h) but is held at risk 5 (×1.2 → 28.8h)."""
+    market = {
+        "BTCUSDC": {"trend_1d": "baissier", "trend": "baissier", "price": 100.0,
+                    "macd": {"histogram": -1.0}, "sma7": 95.0, "sma25": 100.0,
+                    "rsi14": 80.0},
+    }
+    now = 1_000_000.0
+    state = {
+        "bear_since_1d": {"BTCUSDC": now - 20 * 3600},
+        "bear_since_1h": {"BTCUSDC": now - 20 * 3600},
+        "entry_ts":      {"BTCUSDC": now - 100 * 3600},
+    }
+    common = dict(
+        holdings={"BTCUSDC": {"qty": 1.0, "avg_price": 100.0}}, cash=0,
+        cycle=0, now_ts=now,
+        params={"decide_every_cycles": 1, "enable_regime_stance": False,
+                "trend_confirm_hours": 24.0, "min_hold_hours": 12.0},
+    )
+    fast, _ = regime_decision(market_raw=market, risk_level=9,
+                              strat_state=dict(state, **{}), **common)
+    slow, _ = regime_decision(market_raw=market, risk_level=5,
+                              strat_state=dict(state, **{}), **common)
+    assert [a["symbol"] for a in fast["actions"] if a["type"] == "sell"] == ["BTCUSDC"]
+    assert [a for a in slow["actions"] if a["type"] == "sell"] == []
+
+
+def test_risk_profile_tables_pinned_on_seven():
+    """risk 7 is the production pivot: zero entry-bar shift, ×1.0 horizon, and
+    tier cap == 7 (legacy ``tier ≤ risk_level``)."""
+    from hellocrypto.coin_tiers import risk_tier_cap
+    from hellocrypto.deciders import _risk_entry
+    assert _risk_entry(7) == (0, 1.0)
+    assert risk_tier_cap(7) == 7
+    # Monotone: stricter below, looser above.
+    assert _risk_entry(3)[0] > 0 and _risk_entry(9)[0] < 0
+    assert _risk_entry(3)[1] > 1.0 and _risk_entry(9)[1] < 1.0
+    assert risk_tier_cap(1) == 3 and risk_tier_cap(10) == 10
 
 
 def test_risk_tier_does_not_block_exits():
