@@ -38,8 +38,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .runner import PROGRESS_FILE, StrategyConfig, progress_init, run
-from .scenario import load as load_scenario
+from dotenv import load_dotenv
+
+# Load .env BEFORE the runner imports anything that reaches for GEMINI_API_KEY
+# or DATABASE_URL. Without this, ``make bench`` fails on the first LLM call
+# with KeyError('GEMINI_API_KEY') because Make doesn't auto-export .env.
+load_dotenv()
+
+from .runner import PROGRESS_FILE, StrategyConfig, progress_init, run  # noqa: E402
+from .scenario import load as load_scenario  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -97,6 +104,26 @@ VARIANTS: dict[str, dict[str, Any]] = {
         "enable_confidence_calibration": True,
         "enable_regime_aware_thresholds": False,  # superseded by the stance
         "enable_regime_stance":          True,
+    },
+    # A/B for the decider-state prompt injection.  Both share the same flags
+    # except for ``enable_decider_state``.  Run them together with e.g.
+    # ``--variants baseline_no_state,baseline_with_state`` to isolate the
+    # effect of surfacing the deterministic decider's state in the prompt.
+    "baseline_no_state": {
+        "description":     "Baseline LLM WITHOUT decider_state in prompt (A/B control)",
+        "enable_playbook":               False,
+        "enable_behavior":               False,
+        "enable_confidence_calibration": False,
+        "enable_regime_aware_thresholds": False,
+        "enable_decider_state":          False,
+    },
+    "baseline_with_state": {
+        "description":     "Baseline LLM WITH decider_state in prompt (A/B treatment)",
+        "enable_playbook":               False,
+        "enable_behavior":               False,
+        "enable_confidence_calibration": False,
+        "enable_regime_aware_thresholds": False,
+        "enable_decider_state":          True,
     },
 }
 

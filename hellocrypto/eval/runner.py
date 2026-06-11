@@ -169,6 +169,14 @@ class StrategyConfig:
     # Regime-adaptive stance: deploy cash in bull / preserve in bear, modulate
     # the confidence gate by regime, inject a stance overlay into the prompt.
     enable_regime_stance: bool = False
+    # Surface the deterministic decider's state (coin tiers, hold-hours, bear
+    # duration, stance params, BTC conviction rule, strong-DEPLOY breadth rule)
+    # in the LLM prompt. OFF by default because the 2026-06-11 A/B on
+    # qwen2.5:14b (compact 1d, 4 scenarios) showed a mean -0.5pt return regression
+    # vs the unaugmented prompt — the LLM seems to over-respect the surfaced
+    # rules in bull regimes, missing upside. Kept as a flag so we can re-test
+    # on Gemini or stronger models later. See BACKTEST_LOG.md for details.
+    enable_decider_state: bool = False
 
 
 @dataclass
@@ -326,16 +334,19 @@ def run(
             # plays on the same information footing (coin tiers, hold-hours,
             # bear duration, portfolio peak/DD, stance params, BTC conviction
             # rule, strong-DEPLOY breadth rule). Without this the LLM is
-            # systematically handicapped vs the rules-only variant.
-            from ..deciders import build_decider_context
-            cyc_ts = _ts_to_unix(cyc.timestamp)
-            decider_state = build_decider_context(
-                market_raw=cyc.market, holdings=holdings, cash=cash,
-                strat_state=strat_state, now_ts=cyc_ts,
-                params={"decide_every_cycles": 1,
-                        **({"buy_threshold": cfg.buy_score_min}
-                           if cfg.buy_score_min != 8 else {})},
-            )
+            # systematically handicapped vs the rules-only variant. Toggleable
+            # via ``cfg.enable_decider_state`` so the bench can A/B whether
+            # the extra context actually helps.
+            decider_state = None
+            if cfg.enable_decider_state:
+                from ..deciders import build_decider_context
+                decider_state = build_decider_context(
+                    market_raw=cyc.market, holdings=holdings, cash=cash,
+                    strat_state=strat_state, now_ts=_ts_to_unix(cyc.timestamp),
+                    params={"decide_every_cycles": 1,
+                            **({"buy_threshold": cfg.buy_score_min}
+                               if cfg.buy_score_min != 8 else {})},
+                )
             prompt = prompts_mod.build_analysis(
                 market_data=format_market_data_compact(cyc.market, scenario.watchlist, scores),
                 positions=holdings,

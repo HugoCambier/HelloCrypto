@@ -151,6 +151,46 @@ alts faibles, capital qui reste cash plutôt qu'allocué à des micro-positions
 qui pourrissent. Le combo {BTC ×2 conviction} + {top_n=2 en strong-DEPLOY}
 amplifie le signal en compressant le bruit.
 
+## decider_state dans le prompt LLM — porte fermée (2026-06-11)
+
+Hypothèse : exposer au LLM les 7 inputs du décideur déterministe (coin tiers,
+hold-hours per position, bear duration counters, portfolio peak/DD, stance
+params, BTC conviction rule, strong-DEPLOY breadth rule) le ferait jouer à
+information égale et améliorerait ses décisions.
+
+A/B propre sur qwen2.5:14b (compact 1d, 4 scénarios held-out, même cache LLM,
+seule différence : présence de la section "ÉTAT MACHINE & RÈGLES" dans le
+prompt) :
+
+| Scénario | LLM sans state | LLM avec state | Δ ret |
+|---|---|---|---|
+| bull → correction | ret=−1.52, α=+5.74 | ret=−1.57, α=+5.70 | −0.05 |
+| fear + bear | ret=−0.14, α=+0.58 | ret=−0.02, α=+0.70 | +0.12 |
+| **greed + bull** | **ret=+1.88, α=+2.46** | **ret=−0.18, α=+0.40** | **−2.05** |
+| neutral + bull | ret=−0.04 | ret=−0.05 | −0.00 |
+| **mean** | **ret=+0.04, α=+2.18** | **ret=−0.45, α=+1.68** | **−0.50** |
+
+**Pattern observé** : la section rend le LLM **plus conservateur** (trades en
+greed+bull 20→15, fear+bear 10→5). En lui montrant les règles du déterministe
+(min_hold=12h, trend_confirm=36h, top_n=2 strong-DEPLOY…) on l'incite à les
+respecter même quand son intuition lui dirait d'aller plus fort — il se
+discipline pour ressembler au déterministe et perd son edge sur les régimes
+haussiers (greed+bull : −$2.05 de perte sur ce seul scénario porte la
+régression totale).
+
+**À noter aussi** : `baseline_no_state` (LLM nu) bat même `rules_only` sur ces
+4 scénarios avec α=+2.18 vs +0.09. Le LLM seul sans aide est déjà plus
+alpha-positif que les règles ET que la version "aidée".
+
+**Caveats** : N=4 scénarios trop faible (un seul domine), qwen2.5:14b
+surinterprète peut-être les règles écrites — un modèle plus puissant
+(Gemini, GPT-4) pourrait les utiliser correctement. Code et flag
+`StrategyConfig.enable_decider_state` conservés pour re-test futur.
+
+**Action** : flag default flip `True` → `False` dans `eval/runner.py`. Le
+LLM revient à son prompt nu. Variants `baseline_no_state` / `baseline_with_state`
+restent dans `eval/bench.py` pour rejouer l'A/B sur un autre modèle.
+
 ## Découverte clé : le garde-fou top-up
 
 Le commit `b0274f2` ("pas de DCA sur position en perte") a été reverted dans
