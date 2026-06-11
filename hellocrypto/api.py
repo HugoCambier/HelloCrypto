@@ -817,13 +817,52 @@ def save_trade(
     reason: str,
     fee: float = 0.0,
     fee_asset: str = "USDC",
+    qty: float | None = None,
+    pnl: float | None = None,
     session_id: str | None = None,
     session_name: str | None = None,
 ) -> None:
     from db.store import save_trade as _db_save
     _db_save(action=action, symbol=symbol, amount=amount, price=price,
-             reason=reason, fee=fee, fee_asset=fee_asset, mode="real",
-             session_id=session_id, session_name=session_name)
+             reason=reason, fee=fee, fee_asset=fee_asset, qty=qty, pnl=pnl,
+             mode="real", session_id=session_id, session_name=session_name)
+
+
+def record_buy(order: dict, symbol: str, usdc_amount: float, price: float,
+               reason: str, fee: float, fee_asset: str,
+               session_id: str | None = None, session_name: str | None = None) -> None:
+    """Persist a real BUY with its executed base-asset quantity.
+
+    The dashboard equity curve reconstructs each position from the trade log and
+    values it at ``qty × price``; without ``qty`` the bought tokens read as $0 and
+    the curve shows the full spend as a loss. Binance market orders return
+    ``executedQty`` (base filled) — fall back to ``usdc_amount / price`` if absent.
+    """
+    qty = 0.0
+    try:
+        qty = float((order or {}).get("executedQty") or 0)
+    except (TypeError, ValueError):
+        qty = 0.0
+    if qty <= 0 and price:
+        qty = usdc_amount / price
+    save_trade("BUY", symbol, usdc_amount, price, reason, fee, fee_asset,
+               qty=qty, session_id=session_id, session_name=session_name)
+
+
+def record_sell(action: str, symbol: str, qty: float, price: float, reason: str,
+                fee: float, fee_asset: str, avg_price: float | None = None,
+                session_id: str | None = None, session_name: str | None = None) -> None:
+    """Persist a real SELL: ``amount`` is the USDC recovered, ``qty`` the base sold.
+
+    ``amount`` must hold the USDC value (qty × price), not the coin quantity — the
+    performance endpoint reads ``amount`` for buys and ``qty × price`` for sells, so
+    storing qty in ``amount`` corrupts both. ``pnl`` is the realized result when the
+    position's entry price is known.
+    """
+    amount = round(qty * price, 2) if price else None
+    pnl = round((price - avg_price) * qty - (fee or 0), 4) if avg_price else None
+    save_trade(action, symbol, amount, price, reason, fee, fee_asset,
+               qty=qty, pnl=pnl, session_id=session_id, session_name=session_name)
 
 
 def load_config() -> dict:

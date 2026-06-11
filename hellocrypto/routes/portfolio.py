@@ -15,7 +15,8 @@ from ..api import (
     load_history,
     market_buy,
     market_sell,
-    save_trade,
+    record_buy,
+    record_sell,
 )
 from ..ratelimit import rate_limit
 
@@ -92,9 +93,9 @@ def api_buy():
     if not symbol or amount <= 0:
         return jsonify({"error": "symbol et amount requis"}), 400
     try:
-        _, fee, fee_asset = market_buy(symbol, amount)
+        order, fee, fee_asset = market_buy(symbol, amount)
         price = get_ticker(symbol)
-        save_trade("BUY", symbol, amount, price, "Ordre manuel — dashboard", fee, fee_asset)
+        record_buy(order, symbol, amount, price, "Ordre manuel — dashboard", fee, fee_asset)
         return jsonify({"ok": True, "price": price, "fee": fee, "fee_asset": fee_asset})
     except Exception:
         log.exception("Erreur api_buy")
@@ -112,7 +113,7 @@ def api_sell():
     try:
         _, fee, fee_asset = market_sell(symbol, qty)
         price = get_ticker(symbol)
-        save_trade("SELL", symbol, qty, price, "Ordre manuel — dashboard", fee, fee_asset)
+        record_sell("SELL", symbol, qty, price, "Ordre manuel — dashboard", fee, fee_asset)
         return jsonify({"ok": True, "price": price, "fee": fee, "fee_asset": fee_asset})
     except Exception:
         log.exception("Erreur api_sell")
@@ -141,8 +142,9 @@ def api_liquidate():
             try:
                 _, fee, fee_asset = market_sell(sym, qty)
                 price = get_ticker(sym)
-                save_trade("SELL", sym, qty, price,
-                           "Liquidation totale — Tout vendre", fee, fee_asset)
+                record_sell("SELL", sym, qty, price,
+                            "Liquidation totale — Tout vendre", fee, fee_asset,
+                            avg_price=info.get("avg_price"))
                 results.append({
                     "symbol": sym, "qty": round(qty, 8),
                     "price": price, "fee": fee, "fee_asset": fee_asset,

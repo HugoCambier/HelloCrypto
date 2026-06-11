@@ -1095,29 +1095,34 @@ function _renderPnlChart() {
   if (!_lastPerf) return;
 
   let series    = [];
-  let valueMode = 'absolute';
+  const valueMode = 'absolute';
   let budget    = _lastPerf.budget ?? _cfg?.budget ?? 0;
 
-  // Priority 1: live sim → cycle-by-cycle total_value (dense, exact). Sourced
-  // from /api/performance (60s) rather than the 5s status poll — see
-  // _load_state_value_series. Refreshes at cycle cadence, which is all it needs.
-  if (_selectedMode === 'simulation' && _simRunning && _selectedSession === _simSessionId
-      && Array.isArray(_lastPerf?.value_timeseries) && _lastPerf.value_timeseries.length) {
+  // Dense mark-to-market equity curve (cash + positions priced at each cycle's
+  // market close) — the same definition the backtest and the live sim use. A
+  // running sim ships its exact per-cycle total_value from state; finished sims
+  // and real runs get it server-side from trades × price_snapshots. Falls back
+  // to the client-side trade reconstruction only when the server couldn't build
+  // it (e.g. Firestore / purged logs), where positions sit at their entry price.
+  if (Array.isArray(_lastPerf?.value_timeseries) && _lastPerf.value_timeseries.length) {
     series = _lastPerf.value_timeseries;
-    budget = _simSnap?.budget ?? budget;
+    if (_selectedMode === 'simulation' && _simRunning && _selectedSession === _simSessionId) {
+      budget = _simSnap?.budget ?? budget;
+    }
   } else {
-    // Priority 2: reconstruct from trade history forward-filled at every
-    // decision cycle (so a 185-cycle sim that only traded once still draws
-    // 185 points, not 1). Falls back to trade-only points when the session
-    // pre-dates the cycle_timestamps capture.
     series = strategyTimeseriesFromCycles(
       _lastPerf.history || [], _lastPerf.cycle_timestamps || [], budget);
-    // For real mode, append a 'now' point with the actual live total
-    if (_selectedMode === 'real' && _livePortfolio && !_livePortfolio.error) {
-      const cash   = _livePortfolio.cash ?? 0;
-      const posVal = (_livePortfolio.positions || []).reduce((s, x) => s + (x.value || 0), 0);
-      series = [...series, { ts: new Date().toISOString(), v: cash + posVal }];
-    }
+  }
+
+  // Active real run → extend the curve to the present with a live 'now' point
+  // (current account value). A finished run takes no further action, so its
+  // curve stays frozen at the last captured cycle.
+  const realActive = _selectedMode === 'real'
+    && (!_selectedSession || _selectedSession === _activeRealSessionId);
+  if (realActive && _livePortfolio && !_livePortfolio.error) {
+    const cash   = _livePortfolio.cash ?? 0;
+    const posVal = (_livePortfolio.positions || []).reduce((s, x) => s + (x.value || 0), 0);
+    series = [...series, { ts: new Date().toISOString(), v: cash + posVal }];
   }
 
   renderPnlChart({

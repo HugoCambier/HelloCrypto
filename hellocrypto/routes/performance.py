@@ -21,7 +21,6 @@ log = logging.getLogger(__name__)
 
 bp = Blueprint("performance", __name__)
 
-_FEE_RATE = 0.001  # 0.1% per trade
 _BENCH_CACHE: dict = {}
 _BENCH_TTL  = 3600  # seconds — bumped from 600s: BH/BTC benchmarks shift on
 # the hourly grid, so refreshing once an hour is enough; previous 10-min TTL
@@ -132,13 +131,18 @@ def _compute_benchmarks(start_iso: str, watchlist: list[str], budget: float,
         _BENCH_CACHE[cache_key] = (now, result)
         return result
 
+    # Benchmarks anchor at the full budget so all three curves start at PnL 0 at
+    # t0 — like the strategy, which holds only cash before its first trade. The
+    # 0.1% entry fee is omitted from the passive baselines on purpose: a level
+    # shift there would make the curves "start" below zero.
+
     # BTC benchmark
     btc_ts = []
     if btc_kl:
         p0 = float(btc_kl[0][4])
         for k in btc_kl:
             ts_iso = datetime.utcfromtimestamp(int(k[0]) / 1000).isoformat()
-            v = budget * (1 - _FEE_RATE) * float(k[4]) / p0
+            v = budget * float(k[4]) / p0
             btc_ts.append({"ts": ts_iso, "v": round(v, 2)})
 
     # Buy & Hold benchmark — equal-weight split across watchlist
@@ -147,17 +151,16 @@ def _compute_benchmarks(start_iso: str, watchlist: list[str], budget: float,
     if bh_syms:
         initial = {s: float(klines[s][0][4]) for s in bh_syms}
         share   = budget / len(bh_syms)
-        w_net   = share * (1 - _FEE_RATE)
         min_len = min(len(klines[s]) for s in bh_syms)
         for i in range(min_len):
             ts_iso = datetime.utcfromtimestamp(int(klines[bh_syms[0]][i][0]) / 1000).isoformat()
-            v = sum(w_net * float(klines[s][i][4]) / initial[s] for s in bh_syms)
+            v = sum(share * float(klines[s][i][4]) / initial[s] for s in bh_syms)
             bh_ts.append({"ts": ts_iso, "v": round(v, 2)})
         # Per-symbol contribution at the LAST point (what the card shows)
         for s in bh_syms:
             init_p  = initial[s]
             final_p = float(klines[s][min_len - 1][4])
-            value   = w_net * final_p / init_p
+            value   = share * final_p / init_p
             pnl     = value - share
             bh_breakdown.append({
                 "symbol":   s,
@@ -174,7 +177,7 @@ def _compute_benchmarks(start_iso: str, watchlist: list[str], budget: float,
     if btc_kl:
         init_p  = float(btc_kl[0][4])
         final_p = float(btc_kl[-1][4])
-        value   = budget * (1 - _FEE_RATE) * final_p / init_p
+        value   = budget * final_p / init_p
         btc_breakdown = {
             "symbol":  "BTCUSDC",
             "weight":  round(budget, 2),
@@ -190,6 +193,100 @@ def _compute_benchmarks(start_iso: str, watchlist: list[str], budget: float,
               "btc_breakdown": btc_breakdown}
     _BENCH_CACHE[cache_key] = (now, result)
     return result
+
+
+def _iso_to_ms(iso: str) -> int:
+    dt = datetime.fromisoformat(iso)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return int(dt.timestamp() * 1000)
+
+
+def _strategy_value_series(trades: list, cycle_timestamps: list[str],
+                           budget: float) -> list:
+    """Dense mark-to-market equity curve: ``cash + Σ qty × market_price`` per cycle.
+
+    Walks the decision cycles, applies each trade as it occurs, and prices held
+    positions at the market close captured for that cycle (``price_snapshots`` —
+    the same source as the BH/BTC benchmarks). This is the definition the backtest
+    and the live sim already use; reconstructing it here lets finished sims and
+    real runs share it instead of valuing positions at their stale entry price.
+
+    A symbol with no snapshot at a given cycle falls back to its last trade price,
+    so the curve degrades gracefully rather than dropping the position to $0.
+    Returns ``[]`` when the cycle grid is unavailable (e.g. Firestore / purged
+    logs); the caller then falls back to the client-side trade reconstruction.
+    """
+    if not cycle_timestamps or not trades:
+        return []
+
+    import bisect
+
+    sorted_trades = sorted(trades, key=lambda t: t["timestamp"])
+    symbols = {t["symbol"] for t in sorted_trades if t.get("symbol")}
+    start_ms = _iso_to_ms(cycle_timestamps[0])
+    end_ms   = _iso_to_ms(cycle_timestamps[-1])
+
+    # Per-symbol close series (ascending), same source/path as the benchmarks.
+    grid: dict[str, tuple[list[int], list[float]]] = {}
+    for sym in symbols:
+        try:
+            kl = _load_close_series(sym, cycle_timestamps[0], cycle_timestamps[-1],
+                                    start_ms, end_ms)
+        except Exception:
+            kl = []
+        if kl:
+            grid[sym] = ([int(k[0]) for k in kl], [float(k[4]) for k in kl])
+
+    def price_at(sym: str, ms: int, fallback: float) -> float:
+        g = grid.get(sym)
+        if not g:
+            return fallback
+        times, closes = g
+        i = bisect.bisect_right(times, ms) - 1
+        return closes[i] if i >= 0 else fallback
+
+    cash = budget
+    holdings: dict[str, float] = {}
+    last_px: dict[str, float] = {}
+
+    def apply(t: dict) -> None:
+        nonlocal cash
+        sym = t.get("symbol")
+        if not sym:
+            return
+        if t.get("price"):
+            last_px[sym] = float(t["price"])
+        qty = float(t.get("qty") or 0)
+        amount = float(t["amount"]) if t.get("amount") is not None else qty * float(t.get("price") or 0)
+        if "BUY" in t["action"].upper():
+            cash -= amount
+            holdings[sym] = holdings.get(sym, 0.0) + qty
+        elif "SELL" in t["action"].upper():
+            cash += amount
+            holdings[sym] = holdings.get(sym, 0.0) - qty
+        if holdings.get(sym, 0.0) <= 1e-8:
+            holdings.pop(sym, None)
+
+    def snapshot_value(ms: int) -> float:
+        return cash + sum(q * price_at(sym, ms, last_px.get(sym, 0.0))
+                          for sym, q in holdings.items())
+
+    points: list = []
+    ti = 0
+    for cts in cycle_timestamps:
+        cms = _iso_to_ms(cts)
+        while ti < len(sorted_trades) and _iso_to_ms(sorted_trades[ti]["timestamp"]) <= cms:
+            apply(sorted_trades[ti])
+            ti += 1
+        points.append({"ts": cts, "v": round(snapshot_value(cms), 2)})
+    # Trades after the last recorded cycle still move the curve.
+    while ti < len(sorted_trades):
+        t = sorted_trades[ti]
+        apply(t)
+        points.append({"ts": t["timestamp"], "v": round(snapshot_value(_iso_to_ms(t["timestamp"])), 2)})
+        ti += 1
+    return points
 
 
 @bp.get("/api/watchlist/enriched")
@@ -560,9 +657,13 @@ def api_performance():
         except Exception:
             log.exception("Failed to load cycle timestamps")
 
-    # Dense equity curve for the live PnL chart of a *running* sim. Sourced here
-    # (60s) instead of the 5s /api/simulation/status poll — the array only grows
-    # one point per cycle, so shipping it 12× as often was wasted egress.
+    # Dense mark-to-market equity curve for the PnL chart — cash + positions
+    # priced at each cycle's market close, the same definition the backtest and
+    # the live sim use. A *running* sim reads its exact per-cycle total_value
+    # straight from sim state; every other run (finished sim, real) reconstructs
+    # it from trades + price_snapshots so held positions track the market instead
+    # of sitting at their entry price. Empty list → caller falls back to the
+    # client-side trade reconstruction (e.g. Firestore / purged logs).
     sim_value_series: list = []
     if mode == "simulation" and session_id and is_active:
         try:
@@ -570,6 +671,12 @@ def api_performance():
             sim_value_series = _sim_engine._load_state_value_series(session_id) or []
         except Exception:
             log.exception("Failed to load sim value timeseries")
+    elif session_id:
+        try:
+            sim_value_series = _strategy_value_series(
+                sorted_trades, cycle_timestamps, effective_budget)
+        except Exception:
+            log.exception("Failed to build strategy value timeseries")
 
     # Run-end prices for a *finished* run: a closed run takes no further action,
     # so its open positions must be valued at the run's end, not today's market.

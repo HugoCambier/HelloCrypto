@@ -31,7 +31,8 @@ from .api import (
     load_history,
     market_buy,
     market_sell,
-    save_trade,
+    record_buy,
+    record_sell,
 )
 from .deciders import regime_decision
 from .eval.behavior import section_for_cycle as _behavior_section
@@ -234,15 +235,16 @@ def _execute_cycle(
 
     # ── Stop-loss + trailing stop ─────────────────────────────────────────
     for sig in _check_stops(positions, prices, peak_prices, stop_loss, trail_stop):
+        avg_price = positions.get(sig.symbol, {}).get("avg_price")
         result = _sell_or_skip_dust(sig.symbol, sig.qty, dust_known)
         if result is None:
             del positions[sig.symbol]
             continue
         _, fee, fee_asset = result
-        save_trade(
+        record_sell(
             f"SELL ({sig.kind})", sig.symbol, sig.qty, sig.price,
             f"{sig.kind.replace('-', ' ').title()} déclenché", fee, fee_asset,
-            session_id=_real_sid, session_name=_real_sname,
+            avg_price, _real_sid, _real_sname,
         )
         peak_prices.pop(sig.symbol, None)
         cooldown_map[sig.symbol] = cycle
@@ -295,14 +297,15 @@ def _execute_cycle(
             if sym not in positions:
                 continue
             qty = action.get("qty", positions[sym]["qty"])
+            avg_price = positions[sym].get("avg_price")
             price = prices.get(sym) or get_ticker(sym)
             result = _sell_or_skip_dust(sym, qty, dust_known)
             if result is None:
                 del positions[sym]
                 continue
             _, fee, fee_asset = result
-            save_trade("SELL", sym, qty, price, action.get("reason", ""),
-                       fee, fee_asset, session_id=_real_sid, session_name=_real_sname)
+            record_sell("SELL", sym, qty, price, action.get("reason", ""),
+                         fee, fee_asset, avg_price, _real_sid, _real_sname)
             peak_prices.pop(sym, None)
             cooldown_map[sym] = cycle
             cash += qty * price  # local estimate; next cycle re-fetches real balance
@@ -318,11 +321,11 @@ def _execute_cycle(
                 amount = cash
             if amount < 10:
                 continue
-            _, fee, fee_asset = market_buy(sym, amount)
+            order, fee, fee_asset = market_buy(sym, amount)
             dust_known.discard(sym)  # re-acquired above min notional
             price = prices.get(sym) or get_ticker(sym)
-            save_trade("BUY", sym, amount, price, action.get("reason", ""),
-                       fee, fee_asset, session_id=_real_sid, session_name=_real_sname)
+            record_buy(order, sym, amount, price, action.get("reason", ""),
+                        fee, fee_asset, _real_sid, _real_sname)
             peak_prices[sym] = price
             cash -= amount
             log.info("BUY  $%.2f %s @ $%.4f — %s", amount, sym, price, action.get("reason", ""))
@@ -480,11 +483,11 @@ def _execute_cycle(
                     log.info("Clamp BUY %s $%.2f → $%.2f (cash floor)", sym, amount, spendable)
                     amount = spendable
                 if amount >= 10:
-                    _, fee, fee_asset = market_buy(sym, amount)
+                    order, fee, fee_asset = market_buy(sym, amount)
                     dust_known.discard(sym)  # re-acquired above min notional
                     price = prices.get(sym) or get_ticker(sym)
-                    save_trade("BUY", sym, amount, price, reason, fee, fee_asset,
-                               session_id=_real_sid, session_name=_real_sname)
+                    record_buy(order, sym, amount, price, reason, fee, fee_asset,
+                                _real_sid, _real_sname)
                     peak_prices[sym] = price
                     cash -= amount
                     log.info("BUY  $%.2f %s @ $%.4f (RSI=%.0f) [%s]",
@@ -492,13 +495,14 @@ def _execute_cycle(
 
             elif atype == "sell" and sym in positions:
                 qty = action.get("qty", positions[sym]["qty"])
+                avg_price = positions[sym].get("avg_price")
                 price = prices.get(sym) or get_ticker(sym)
                 result = _sell_or_skip_dust(sym, qty, dust_known)
                 if result is None:
                     continue
                 _, fee, fee_asset = result
-                save_trade("SELL", sym, qty, price, reason, fee, fee_asset,
-                           session_id=_real_sid, session_name=_real_sname)
+                record_sell("SELL", sym, qty, price, reason, fee, fee_asset,
+                             avg_price, _real_sid, _real_sname)
                 peak_prices.pop(sym, None)
                 cooldown_map[sym] = cycle
                 log.info("SELL %.6f %s @ $%.4f", qty, sym, price)

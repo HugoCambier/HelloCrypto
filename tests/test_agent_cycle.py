@@ -30,7 +30,8 @@ def _patch_cycle_io(monkeypatch, positions, *, market_sell):
     monkeypatch.setattr(agent, "_capture_snapshots", lambda *a, **k: None)
     monkeypatch.setattr(agent.strategy, "update_peak_prices", lambda *a, **k: None)
     monkeypatch.setattr(agent, "get_ticker", lambda _s: 80.0)
-    monkeypatch.setattr(agent, "save_trade", lambda *a, **k: None)
+    monkeypatch.setattr(agent, "record_buy", lambda *a, **k: None)
+    monkeypatch.setattr(agent, "record_sell", lambda *a, **k: None)
     monkeypatch.setattr(agent, "market_sell", market_sell)
     monkeypatch.setattr(
         agent, "regime_decision",

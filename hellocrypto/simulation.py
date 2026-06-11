@@ -24,7 +24,6 @@ from .eval.playbook import section_for_cycle as _playbook_section
 from .llm import call as llm_call
 from .llm import last_usage as llm_last_usage
 from .prompts import DECISION_SCHEMA, SYSTEM, build_analysis
-from .trading import FEE_RATE as SIM_FEE_RATE
 from .trading import paper_buy, paper_sell
 
 log = logging.getLogger(__name__)
@@ -352,17 +351,19 @@ def _snapshot(cycle, cash, holdings, prices, history, total_fees,
     btc_bh_pnl = btc_bh_pct = None
     if initial_prices and base > 0:
         valid = [(sym, p0) for sym, p0 in initial_prices.items() if p0 and prices.get(sym)]
+        # Passive baselines anchor at the full budget (no entry-fee haircut) so
+        # they start at PnL 0, matching the fee-free benchmarks served by
+        # /api/performance for the chart.
         if valid:
             weight     = base / len(valid)
-            weight_net = weight * (1 - SIM_FEE_RATE)
-            bh_value   = sum(weight_net * prices[sym] / p0 for sym, p0 in valid)
+            bh_value   = sum(weight * prices[sym] / p0 for sym, p0 in valid)
             benchmark_pnl     = round(bh_value - base, 2)
             benchmark_pnl_pct = round((bh_value - base) / base * 100, 2)
             alpha             = round(pnl - (bh_value - base), 2)
 
         btc_sym = next((s for s in initial_prices if "BTC" in s and initial_prices[s] and prices.get(s)), None)
         if btc_sym:
-            btc_val    = base * (1 - SIM_FEE_RATE) * prices[btc_sym] / initial_prices[btc_sym]
+            btc_val    = base * prices[btc_sym] / initial_prices[btc_sym]
             btc_bh_pnl = round(btc_val - base, 2)
             btc_bh_pct = round((btc_val - base) / base * 100, 2)
 
