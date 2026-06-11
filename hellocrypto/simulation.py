@@ -76,9 +76,10 @@ def _save_state(state: dict, session_id: str | None = None, *,
         real_trades = [t for t in hist if t.get("action") != "ANALYSE"]
         if len(real_trades) != len(hist) or len(real_trades) > _STATE_TRUNCATE:
             slim["history"] = real_trades[-_STATE_TRUNCATE:]
-    ts = slim.get("value_timeseries")
-    if isinstance(ts, list) and len(ts) > _STATE_TRUNCATE:
-        slim["value_timeseries"] = ts[-_STATE_TRUNCATE:]
+    # value_timeseries is NOT truncated here: it's the dense equity curve the PnL
+    # chart draws from, so it must span the whole run. _record_value_point already
+    # bounds it (downsample once it exceeds ~1000 points) while preserving the run
+    # start — truncating to the last N points instead would chop off the beginning.
     try:
         from db.store import set_state
         set_state(_state_key(session_id), slim)
