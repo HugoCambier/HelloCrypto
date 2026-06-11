@@ -338,6 +338,21 @@ def tick_stops_only(session_id: str, config: dict | None = None) -> dict:
 
 # ── Snapshot builder ───────────────────────────────────────────────────────────
 
+def _record_value_point(value_timeseries: list, snap: dict) -> None:
+    """Append this cycle's total_value to the equity curve, downsampling if long.
+
+    Mutates ``value_timeseries`` in place and stamps ``snap['value_timeseries']``
+    so the chart matches the displayed PnL exactly. Must run on EVERY cycle —
+    including the LLM-error path — otherwise the persisted state loses the series
+    and the chart falls back to the (flat) entry-price reconstruction.
+    """
+    value_timeseries.append({"ts": datetime.utcnow().isoformat(), "v": snap["total_value"]})
+    if len(value_timeseries) > 1000:
+        step = max(1, len(value_timeseries) // 500)
+        value_timeseries[:] = value_timeseries[::step] + [value_timeseries[-1]]
+    snap["value_timeseries"] = list(value_timeseries)
+
+
 def _snapshot(cycle, cash, holdings, prices, history, total_fees,
               initial_total_value, initial_prices, cycle_sec=60):
     portfolio_val = sum(
@@ -795,11 +810,7 @@ def run(
             # Shared end-of-cycle: snapshot, persist, emit, wait.
             snap = _snapshot(cycle, cash, holdings, prices, history, total_fees,
                              initial_total_value, initial_prices, cycle_sec)
-            value_timeseries.append({"ts": datetime.utcnow().isoformat(), "v": snap["total_value"]})
-            if len(value_timeseries) > 1000:
-                step = max(1, len(value_timeseries) // 500)
-                value_timeseries = value_timeseries[::step] + [value_timeseries[-1]]
-            snap["value_timeseries"] = list(value_timeseries)
+            _record_value_point(value_timeseries, snap)
             if on_cycle:
                 on_cycle(cycle, snap)
             _save_state({**snap,
@@ -841,6 +852,9 @@ def run(
         except Exception as exc:
             log.error("[SIM] Erreur LLM cycle %d: %s", cycle, exc)
             snap = _snapshot(cycle, cash, holdings, prices, history, total_fees, initial_total_value, initial_prices, cycle_sec)
+            # Still record the cycle's value — a transient LLM error must not wipe
+            # the equity curve (the save below replaces the whole state).
+            _record_value_point(value_timeseries, snap)
             if on_cycle:
                 on_cycle(cycle, snap)
             _save_state({**snap,
@@ -849,6 +863,7 @@ def run(
                          "initial_prices": initial_prices, "peak_prices": peak_prices,
                          "cooldown_map": cooldown_map, "recent_decisions": recent_decisions,
                          "initial_total_value": initial_total_value,
+                         "value_timeseries": value_timeseries, "strat_state": strat_state,
                          "session_id": session_id, "session_name": session_name,
                          "params": {"risk_level": risk_level, "cycle_seconds": cycle_sec,
                                     "stop_loss_pct": round(stop_loss * 100, 2),
@@ -933,12 +948,7 @@ def run(
 
         # ── Emit snapshot & persist state ─────────────────────────────────────
         snap = _snapshot(cycle, cash, holdings, prices, history, total_fees, initial_total_value, initial_prices, cycle_sec)
-        # Track per-cycle total value so the PnL chart matches the displayed PnL exactly.
-        value_timeseries.append({"ts": datetime.utcnow().isoformat(), "v": snap["total_value"]})
-        if len(value_timeseries) > 1000:
-            step = max(1, len(value_timeseries) // 500)
-            value_timeseries = value_timeseries[::step] + [value_timeseries[-1]]
-        snap["value_timeseries"] = list(value_timeseries)
+        _record_value_point(value_timeseries, snap)
         if on_cycle:
             on_cycle(cycle, snap)
 

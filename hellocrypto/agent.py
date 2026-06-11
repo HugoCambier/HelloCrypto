@@ -33,6 +33,7 @@ from .api import (
     market_sell,
     record_buy,
     record_sell,
+    save_trade,
 )
 from .deciders import regime_decision
 from .eval.behavior import section_for_cycle as _behavior_section
@@ -125,6 +126,57 @@ def _sell_or_skip_dust(symbol: str, qty: float, dust_known: set[str]):
                  "ne sera plus retentée", symbol)
         dust_known.add(symbol)
         return None
+
+
+def _capture_run_baseline(positions: dict, prices: dict, cash: float,
+                          initial_total_value: float, watchlist: list[str],
+                          session_id: str | None, session_name: str | None) -> None:
+    """Record the run's starting point so the dashboard PnL is well-defined.
+
+    A real run usually inherits positions from a prior run (the account isn't
+    wiped between runs). Without recording them, the equity curve treats that
+    capital as static cash and stays flat while the inherited coins move — then
+    the live 'now' point reveals the real account value, producing a phantom
+    jump. We mirror the simulation: emit a synthetic ``BUY (init)`` per holding
+    (priced at the run-start market price → curve starts at PnL 0) so the
+    reconstruction values them at market, and persist the run baseline on the
+    session so PnL is measured against the captured capital.
+    """
+    for sym, p in positions.items():
+        qty   = float(p.get("qty", 0))
+        entry = prices.get(sym) or float(p.get("avg_price") or 0)
+        if qty <= 0 or not entry:
+            continue
+        try:
+            save_trade("BUY (init)", sym, round(qty * entry, 2), entry,
+                       "Initialisation — avoir détenu au démarrage du run",
+                       qty=qty, session_id=session_id, session_name=session_name)
+        except Exception:
+            log.warning("Avoir initial %s non enregistré", sym, exc_info=True)
+
+    if not session_id:
+        return
+    try:
+        import json as _json
+
+        from db.store import get_session as _get_sess
+        from db.store import upsert_session as _upsert
+        existing: dict = {}
+        raw = (_get_sess(session_id) or {}).get("initial_state")
+        if isinstance(raw, str):
+            existing = _json.loads(raw)
+        elif isinstance(raw, dict):
+            existing = raw
+        _upsert(session_id=session_id, name=session_name, mode="real",
+                initial_state={**existing,
+                               "initial_total_value": initial_total_value,
+                               "initial_prices":      dict(prices),
+                               "initial_holdings":    {
+                                   s: {"qty": pp["qty"], "avg_price": pp.get("avg_price")}
+                                   for s, pp in positions.items()},
+                               "watchlist":           watchlist})
+    except Exception:
+        log.warning("Persistance du baseline de run échouée", exc_info=True)
 
 
 def _performance_report(prices: dict, positions: dict, cash: float,
@@ -227,6 +279,8 @@ def _execute_cycle(
         initial_total_value = cash + portfolio_val
         log.info("Valeur initiale du run: $%.2f (USDC) + $%.2f (crypto) = $%.2f",
                  cash, portfolio_val, initial_total_value)
+        _capture_run_baseline(positions, prices, cash, initial_total_value,
+                              watchlist, _real_sid, _real_sname)
 
     log.info("Cash: $%.2f USDC | Positions: %s", cash, list(positions.keys()))
 

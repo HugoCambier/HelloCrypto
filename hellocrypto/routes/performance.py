@@ -289,6 +289,45 @@ def _strategy_value_series(trades: list, cycle_timestamps: list[str],
     return points
 
 
+def _symbol_price_series(symbols: list[str], cycle_timestamps: list[str]) -> list:
+    """Per-cycle close series for each symbol, aligned to the cycle grid.
+
+    Returns ``[{ts, prices: {symbol: close}}, ...]`` — one frame per decision
+    cycle, each carrying the market close (from ``price_snapshots``, the same
+    source as the benchmarks) for every symbol that traded. Drives the
+    per-crypto momentum chart; a symbol missing a snapshot at a given cycle is
+    simply omitted from that frame so the curve degrades gracefully.
+    """
+    if not symbols or not cycle_timestamps:
+        return []
+
+    import bisect
+
+    start_ms = _iso_to_ms(cycle_timestamps[0])
+    end_ms   = _iso_to_ms(cycle_timestamps[-1])
+    grid: dict[str, tuple[list[int], list[float]]] = {}
+    for sym in symbols:
+        try:
+            kl = _load_close_series(sym, cycle_timestamps[0], cycle_timestamps[-1],
+                                    start_ms, end_ms)
+        except Exception:
+            kl = []
+        if kl:
+            grid[sym] = ([int(k[0]) for k in kl], [float(k[4]) for k in kl])
+
+    out: list = []
+    for cts in cycle_timestamps:
+        cms = _iso_to_ms(cts)
+        prices: dict[str, float] = {}
+        for sym, (times, closes) in grid.items():
+            i = bisect.bisect_right(times, cms) - 1
+            if i >= 0:
+                prices[sym] = round(closes[i], 8)
+        if prices:
+            out.append({"ts": cts, "prices": prices})
+    return out
+
+
 @bp.get("/api/watchlist/enriched")
 def api_watchlist_enriched():
     """Return watchlist symbols with inline market indicators."""
@@ -525,6 +564,7 @@ def api_performance():
     mode           = request.args.get("mode", "real")
     session_id     = request.args.get("session_id")
     with_bench     = request.args.get("with_benchmarks", "1") not in ("0", "false", "no")
+    with_prices    = request.args.get("with_prices", "0") not in ("0", "false", "no")
     config         = load_config()
 
     # Resolve the actual budget / watchlist / start anchor for the selected session.
@@ -671,7 +711,10 @@ def api_performance():
             sim_value_series = _sim_engine._load_state_value_series(session_id) or []
         except Exception:
             log.exception("Failed to load sim value timeseries")
-    elif session_id:
+    # Finished sim, real run, or a live sim whose state series was wiped (e.g.
+    # repeated LLM errors) → reconstruct the dense MTM curve from trades +
+    # snapshots so held positions track the market instead of their entry price.
+    if not sim_value_series and session_id:
         try:
             sim_value_series = _strategy_value_series(
                 sorted_trades, cycle_timestamps, effective_budget)
@@ -695,6 +738,17 @@ def api_performance():
         except Exception:
             log.exception("Failed to load run-end prices")
 
+    # Per-crypto close series for the momentum chart (only when asked — the
+    # Graphiques tab sets with_prices=1; the 60s-polled Performance tab skips it).
+    price_series: list = []
+    if with_prices and cycle_timestamps:
+        traded_symbols = sorted({t["symbol"] for t in (buys + all_sells)
+                                 if t.get("symbol")})
+        try:
+            price_series = _symbol_price_series(traded_symbols, cycle_timestamps)
+        except Exception:
+            log.exception("Failed to build per-symbol price series")
+
     return jsonify({
         "period":            period,
         "mode":              mode,
@@ -717,6 +771,7 @@ def api_performance():
         "btc_breakdown":     btc_breakdown,
         "cycle_timestamps":  cycle_timestamps,
         "value_timeseries":  sim_value_series,
+        "price_series":      price_series,
         "frozen_prices":     frozen_prices,
         "sessions":          sessions,
         "budget":            round(effective_budget, 2),

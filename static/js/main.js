@@ -31,10 +31,14 @@ let _simCycleStartedAt = null;
 let _simCycleSeconds   = null;
 let _simNextCycleAt    = null;
 let _renameTargetId    = null;
+// Run-context-bar countdown: 'sim' uses the selected sim's server-computed
+// next cycle; 'real' counts to the next 5-min UTC boundary (real runs fire on
+// the cron heartbeat, no per-session gating). null → no countdown in the bar.
+let _ctxCdMode         = null;       // 'sim' | 'real' | null
 
 const _refs = {
   pnl: { current: null }, dd: { current: null }, alloc: { current: null },
-  pnlBars: { current: null }, volBars: { current: null },
+  pnlBars: { current: null }, volBars: { current: null }, priceMom: { current: null },
 };
 
 // ─── Right-panel tabs ────────────────────────────────────────────────────────
@@ -123,12 +127,12 @@ function _renderRunCtxBar() {
   const bar = document.getElementById('run-ctx-bar');
   if (!bar) return;
   const id = _selectedSession;
-  if (!id) { bar.classList.add('hidden'); return; }
+  if (!id) { bar.classList.add('hidden'); _ctxCdMode = null; _syncCountdownTicker(); return; }
 
   const isSim = _selectedMode === 'simulation';
   const src   = isSim ? _runs : _realRuns;
   const s     = src.find(r => r.id === id);
-  if (!s) { bar.classList.add('hidden'); return; }
+  if (!s) { bar.classList.add('hidden'); _ctxCdMode = null; _syncCountdownTicker(); return; }
 
   const name      = s.name || id;
   const isRunning = isSim ? !!_simSessions[id] : id === _activeRealSessionId;
@@ -154,9 +158,18 @@ function _renderRunCtxBar() {
     else       deleteRealRun(id, name, s.trade_count || 0);
   };
 
-  // Countdown: only meaningful when this run is the live sim feeding the panel.
-  const showCd = isSim && isRunning && id === _simSessionId && (_simNextCycleAt || _simCycleStartedAt);
-  document.getElementById('run-ctx-next').classList.toggle('hidden', !showCd);
+  // Countdown to the next cycle: the live sim feeding the panel (server-aligned
+  // estimate), or an active real run (next 5-min cron boundary). Finished runs
+  // and non-live sims show nothing.
+  if (isSim && isRunning && id === _simSessionId && (_simNextCycleAt || _simCycleStartedAt)) {
+    _ctxCdMode = 'sim';
+  } else if (!isSim && isRunning) {
+    _ctxCdMode = 'real';
+  } else {
+    _ctxCdMode = null;
+  }
+  document.getElementById('run-ctx-next').classList.toggle('hidden', _ctxCdMode == null);
+  _syncCountdownTicker();
 
   // Cycle counter: prefer the live snapshot when running (most accurate),
   // otherwise fall back to the cycle_count served by the sessions list
@@ -515,7 +528,7 @@ async function loadRunParams() {
 }
 
 function _destroyCharts() {
-  for (const key of ['pnl', 'dd', 'alloc', 'pnlBars', 'volBars']) {
+  for (const key of ['pnl', 'dd', 'alloc', 'pnlBars', 'volBars', 'priceMom']) {
     if (_refs[key]?.current) {
       try { _refs[key].current.destroy(); } catch {}
       _refs[key].current = null;
@@ -523,7 +536,7 @@ function _destroyCharts() {
   }
   // Belt-and-suspenders: clean up any orphaned Chart.js instances on these canvases.
   if (typeof Chart !== 'undefined') {
-    for (const id of ['pnl-chart', 'dd-chart', 'alloc-chart', 'pnl-bars-chart', 'vol-bars-chart']) {
+    for (const id of ['pnl-chart', 'dd-chart', 'alloc-chart', 'pnl-bars-chart', 'vol-bars-chart', 'price-mom-chart']) {
       const canvas = document.getElementById(id);
       if (canvas) {
         const existing = Chart.getChart(canvas);
@@ -893,16 +906,12 @@ async function _pollSimStatus() {
     _simCycleSeconds   = sel?.cycle_seconds || null;
     _simNextCycleAt    = sel?.next_cycle_at || null;
 
-    if (_simRunning) {
-      if (!_countdownIv) _countdownIv = setInterval(_tickCountdown, 1000);
-    } else {
-      _stopCountdown();
-      _stopSimPoll();
-    }
+    if (!_simRunning) _stopSimPoll();
 
     _updateSidebarLiveRail();
     renderRunsList(); // refresh "running" indicator dots (per session)
     _renderRunCtxBar();
+    _syncCountdownTicker();
 
     // Push live updates to the right panel only when viewing a running session.
     const viewed = _simSessions[_selectedSession];
@@ -914,34 +923,58 @@ async function _pollSimStatus() {
   } catch {}
 }
 
-function _tickCountdown() {
-  const el  = document.getElementById('sim-countdown');
-  const el2 = document.getElementById('run-ctx-countdown');
-  if (!el && !el2) return;
-  // Prefer server-computed next_cycle_at (aligned on GH Actions 5-min boundary
-  // in serverless mode). Falls back to the legacy cycle_started_at + cycle_seconds
-  // calculation for local dev (threading-based loop).
-  let rem;
+// Seconds until the live sim's next cycle. Prefers the server-computed
+// next_cycle_at (aligned on the GH Actions 5-min boundary in serverless mode);
+// falls back to cycle_started_at + cycle_seconds for local dev (threading loop).
+function _simRemaining() {
   if (_simNextCycleAt) {
-    rem = Math.max(0, Math.round((new Date(_simNextCycleAt+'Z').getTime() - Date.now())/1000));
-  } else if (_simCycleStartedAt && _simCycleSeconds) {
+    return Math.max(0, Math.round((new Date(_simNextCycleAt+'Z').getTime() - Date.now())/1000));
+  }
+  if (_simCycleStartedAt && _simCycleSeconds) {
     const elapsed = (Date.now() - new Date(_simCycleStartedAt+'Z').getTime())/1000;
-    rem = Math.max(0, Math.round(_simCycleSeconds - elapsed));
-  } else {
-    if (el)  el.textContent  = '—';
-    if (el2) el2.textContent = '—';
-    return;
+    return Math.max(0, Math.round(_simCycleSeconds - elapsed));
   }
-  let txt;
-  if (rem === 0) {
-    txt = 'exécution…';
-  } else {
-    const m = Math.floor(rem/60), s = rem%60;
-    txt = m > 0 ? `${m}m${String(s).padStart(2,'0')}s` : `${s}s`;
-  }
-  if (el)  el.textContent  = txt;
-  if (el2) el2.textContent = txt;
+  return null;
 }
+
+// Seconds until the selected run's next cycle, for the run-context bar. Real
+// runs fire on the cron heartbeat (every 5 min UTC pile), so the target is
+// simply the next 5-min boundary; sims defer to _simRemaining().
+function _ctxRemaining() {
+  if (_ctxCdMode === 'real') {
+    const nextMs = Math.ceil(Date.now() / 300000) * 300000;
+    return Math.max(0, Math.round((nextMs - Date.now()) / 1000));
+  }
+  if (_ctxCdMode === 'sim') return _simRemaining();
+  return null;
+}
+
+function _fmtRemaining(rem) {
+  if (rem == null) return '—';
+  if (rem === 0)   return 'exécution…';
+  const m = Math.floor(rem/60), s = rem%60;
+  return m > 0 ? `${m}m${String(s).padStart(2,'0')}s` : `${s}s`;
+}
+
+function _tickCountdown() {
+  const el  = document.getElementById('sim-countdown');      // live sim status row
+  const el2 = document.getElementById('run-ctx-countdown');  // selected-run ctx bar
+  if (el)  el.textContent  = _fmtRemaining(_simRemaining());
+  if (el2) el2.textContent = _fmtRemaining(_ctxRemaining());
+}
+
+// Run the 1s ticker whenever something can count down: the live sim, or a
+// selected run that exposes a next-cycle estimate in the context bar.
+function _syncCountdownTicker() {
+  const want = _simRunning || _ctxCdMode != null;
+  if (want && !_countdownIv) {
+    _tickCountdown();
+    _countdownIv = setInterval(_tickCountdown, 1000);
+  } else if (!want && _countdownIv) {
+    _stopCountdown();
+  }
+}
+
 function _stopCountdown() {
   clearInterval(_countdownIv); _countdownIv = null;
   const el  = document.getElementById('sim-countdown');
@@ -1000,7 +1033,7 @@ async function loadPerformance() {
     baseParams.set('session_id', _selectedSession);
   }
 
-  const fastLoaders = ['loading-kpis', 'loading-pnl', 'loading-trades', 'loading-holdings'];
+  const fastLoaders = ['loading-kpis', 'loading-pnl', 'loading-trades', 'loading-holdings', 'loading-pricemom'];
   _setLoaders(fastLoaders, true);
 
   try {
@@ -1026,17 +1059,22 @@ async function loadPerformance() {
     _setLoaders(['loading-kpis', 'loading-trades', 'loading-holdings'], false);
     // Keep PnL loader on — benchmarks still pending
 
-    // ── Slow path: benchmarks in the background (cached longer — slow-changing) ─
-    fetchJson(`/api/performance?${baseParams}`, 5 * 60_000).then(perfBench => {
+    // ── Slow path: benchmarks + per-crypto price series in the background ──────
+    // (cached longer — slow-changing, so the 60s poll won't re-hit the server).
+    const slowParams = new URLSearchParams(baseParams);
+    slowParams.set('with_prices', '1');
+    fetchJson(`/api/performance?${slowParams}`, 5 * 60_000).then(perfBench => {
       if (token !== _perfFetchToken) return;
       _lastPerf.bh_timeseries  = perfBench.bh_timeseries;
       _lastPerf.btc_timeseries = perfBench.btc_timeseries;
       _lastPerf.bh_breakdown   = perfBench.bh_breakdown;
       _lastPerf.btc_breakdown  = perfBench.btc_breakdown;
+      _lastPerf.price_series   = perfBench.price_series;
       _renderPnlChart();
       _renderKpis(_lastPerf);
+      _renderPriceMomentumChart();
     }).catch(()=>{}).finally(() => {
-      if (token === _perfFetchToken) _setLoading('loading-pnl', false);
+      if (token === _perfFetchToken) _setLoaders(['loading-pnl', 'loading-pricemom'], false);
     });
   } catch {
     _setLoaders(fastLoaders, false);
@@ -1044,9 +1082,11 @@ async function loadPerformance() {
 }
 
 function _renderHoldingsForSelection() {
-  // Active sim → live snapshot
-  if (_selectedMode === 'simulation' && _simRunning && _selectedSession === _simSessionId && _simSnap?.holdings) {
-    renderHoldings('holdings-list', _simSnap.holdings, _simSnap.prices || {});
+  // Active sim → live snapshot. Use the snapshot's `positions` array (each row
+  // carries current_price): the snapshot has no top-level `prices` dict, so
+  // pairing `holdings` with `prices` priced everything at the entry price (PnL 0).
+  if (_selectedMode === 'simulation' && _simRunning && _selectedSession === _simSessionId && _simSnap?.positions) {
+    renderHoldings('holdings-list', _simSnap.positions);
     return;
   }
   // Active real run (or the default live view) → live account (/api/portfolio)
@@ -1179,6 +1219,28 @@ function _renderTradesList(resetPage = false) {
     paginationId:     'trades-pagination',
     pageSize:         100,
     history:          _lastPerf.history || [],
+    // The price-momentum chart below shares this same Cryptos filter.
+    onSymbolChange:   _renderPriceMomentumChart,
+  });
+}
+
+// Per-crypto price curves + BUY/SELL signals, sitting under the trades table in
+// the Performance tab and driven by the same Cryptos filter (trades-symbol-filter).
+function _renderPriceMomentumChart() {
+  if (!_lastPerf) return;
+  // For the active real run, anchor the "% du cash" on the real USDC balance so
+  // it reflects the actual account rather than a budget reconstruction.
+  const realActive = _selectedMode === 'real'
+    && (!_selectedSession || _selectedSession === _activeRealSessionId)
+    && _livePortfolio && !_livePortfolio.error;
+  renderPriceMomentumChart({
+    canvasId: 'price-mom-chart', emptyId: 'price-mom-empty',
+    sharedFilterId: 'trades-symbol-filter',
+    chartRef: _refs.priceMom,
+    frames: _lastPerf.price_series || [],
+    trades: _lastPerf.history || [],
+    budget: _lastPerf.budget,
+    anchorCash: realActive ? _livePortfolio.cash : null,
   });
 }
 
