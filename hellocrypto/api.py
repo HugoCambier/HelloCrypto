@@ -722,8 +722,7 @@ def get_my_trades(symbol: str, limit: int = 1000) -> list[dict]:
     return api_get("/api/v3/myTrades", {"symbol": symbol, "limit": limit}, signed=True)
 
 
-def _funding_history(endpoint: str, coin: str, ok_status: int,
-                     time_field: str) -> list[dict]:
+def _funding_history(endpoint: str, coin: str, ok_status: int) -> list[dict]:
     """Page a SAPI funding endpoint in 90-day windows back to 2023-01-01.
 
     Binance caps deposit/withdraw history queries at a 90-day range, so we walk
@@ -758,9 +757,9 @@ def get_usdc_funding() -> dict:
     real capital base the dashboard measures PnL against in real mode.
     """
     deposits = _funding_history("/sapi/v1/capital/deposit/hisrec", "USDC",
-                                ok_status=1, time_field="insertTime")
+                                ok_status=1)
     withdraws = _funding_history("/sapi/v1/capital/withdraw/history", "USDC",
-                                 ok_status=6, time_field="applyTime")
+                                 ok_status=6)
     dep = sum(float(d.get("amount", 0) or 0) for d in deposits)
     wd  = sum(float(w.get("amount", 0) or 0) for w in withdraws)
     return {"deposits": round(dep, 2), "withdrawals": round(wd, 2),
