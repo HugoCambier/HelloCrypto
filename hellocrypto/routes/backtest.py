@@ -4,6 +4,7 @@ from __future__ import annotations
 import itertools
 import json
 import logging
+import os
 import threading
 from datetime import datetime
 
@@ -14,6 +15,21 @@ from ..api import load_config
 
 bp  = Blueprint("backtest", __name__)
 log = logging.getLogger(__name__)
+
+# Vercel kills the function process once the HTTP response is sent, so the
+# daemon thread a backtest runs in is terminated mid-run and never reaches
+# _persist_last_backtest — the run silently never completes. Unlike the
+# simulation (delegated to the cron runner), a backtest can't move there: it
+# fetches klines straight from api.binance.com, and the GitHub Actions runner
+# is Binance-blocked (451). So the backtest is a local-only dev tool; in
+# serverless we refuse the launch with a clear message instead of spawning a
+# thread that will be reaped.
+_IS_SERVERLESS = bool(os.getenv("VERCEL"))
+_SERVERLESS_MSG = (
+    "Le backtest n'est disponible qu'en local : l'environnement serverless "
+    "(Vercel) ne peut pas exécuter un run long en arrière-plan. Lance-le "
+    "depuis ton poste de dev."
+)
 
 _bt_lock       = threading.Lock()
 _bt_stop_event = threading.Event()
@@ -142,6 +158,8 @@ def bt_snapshot():
 @bp.post("/api/backtest/start")
 def bt_start():
     global _bt_state, _bt_stop_event
+    if _IS_SERVERLESS:
+        return jsonify({"error": _SERVERLESS_MSG}), 503
     with _bt_lock:
         if _bt_state["running"]:
             return jsonify({"error": "Backtest déjà en cours"}), 409
@@ -248,6 +266,8 @@ def grid_status():
 @bp.post("/api/backtest/grid/start")
 def grid_start():
     global _grid_stop
+    if _IS_SERVERLESS:
+        return jsonify({"error": _SERVERLESS_MSG}), 503
     with _grid_lock:
         if _grid_state["running"]:
             return jsonify({"error": "Grid search déjà en cours"}), 409
