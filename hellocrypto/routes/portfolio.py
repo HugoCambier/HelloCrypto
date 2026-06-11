@@ -45,7 +45,11 @@ def api_portfolio():
             if prices.get(sym)
         )
         total      = cash + portfolio_val
-        budget     = float(config.get("budget", 100))
+        # Real-mode capital base = net USDC deposited (Binance funding sync),
+        # falling back to the manual budget until the first sync has run.
+        from ..binance_sync import real_capital_base
+        base       = real_capital_base()
+        budget     = float(base if base is not None else config.get("budget", 100))
         gain       = total - budget
         try:
             from db.store import sum_fees
@@ -82,6 +86,21 @@ def api_portfolio():
     except Exception:
         log.exception("Erreur api_portfolio")
         return jsonify({"error": "Erreur lors de la récupération du portefeuille"}), 500
+
+
+@bp.post("/api/real/sync-binance")
+@rate_limit(max_calls=3, per_seconds=120)  # signed Binance calls — limiter
+def api_sync_binance():
+    """Reconcile the real account against Binance: import manual/historical fills
+    and refresh the net-deposits capital base. Idempotent (dedup on order id)."""
+    try:
+        from ..binance_sync import sync_all
+        cfg = load_config()
+        result = sync_all(cfg.get("watchlist", []))
+        return jsonify({"ok": True, **result})
+    except Exception:
+        log.exception("Erreur api_sync_binance")
+        return jsonify({"error": "Erreur lors de la synchronisation Binance"}), 500
 
 
 @bp.post("/api/trade/buy")

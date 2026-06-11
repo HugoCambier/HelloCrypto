@@ -66,7 +66,8 @@ def _init_sqlite() -> None:
             reason       TEXT,
             mode         TEXT    DEFAULT 'real',
             session_id   TEXT,
-            session_name TEXT
+            session_name TEXT,
+            binance_order_id TEXT
         )""")
         c.execute("""CREATE TABLE IF NOT EXISTS agent_state (
             key        TEXT PRIMARY KEY,
@@ -120,12 +121,13 @@ def _migrate_sqlite() -> None:
     """Add new columns to existing tables (migration for older DBs)."""
     with _sqlite() as c:
         for table, col, definition in [
-            ("trades",          "session_id",    "TEXT"),
-            ("trades",          "session_name",  "TEXT"),
-            ("logs",            "session_id",    "TEXT"),
-            ("sessions",        "initial_state", "TEXT"),
-            ("market_analyses", "usage",         "TEXT"),
-            ("market_analyses", "reasoning",     "TEXT"),
+            ("trades",          "session_id",       "TEXT"),
+            ("trades",          "session_name",     "TEXT"),
+            ("trades",          "binance_order_id", "TEXT"),
+            ("logs",            "session_id",       "TEXT"),
+            ("sessions",        "initial_state",    "TEXT"),
+            ("market_analyses", "usage",            "TEXT"),
+            ("market_analyses", "reasoning",        "TEXT"),
         ]:
             try:
                 c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition}")
@@ -218,7 +220,8 @@ def _init_postgres() -> None:
             reason       TEXT,
             mode         TEXT             DEFAULT 'real',
             session_id   TEXT,
-            session_name TEXT
+            session_name TEXT,
+            binance_order_id TEXT
         )""")
         c.execute("""CREATE TABLE IF NOT EXISTS agent_state (
             key        TEXT PRIMARY KEY,
@@ -278,12 +281,13 @@ def _migrate_postgres() -> None:
     """Add missing columns to existing tables (idempotent)."""
     with _postgres() as c:
         for table, col, definition in [
-            ("trades",          "session_id",    "TEXT"),
-            ("trades",          "session_name",  "TEXT"),
-            ("logs",            "session_id",    "TEXT"),
-            ("sessions",        "initial_state", "TEXT"),
-            ("market_analyses", "usage",         "TEXT"),
-            ("market_analyses", "reasoning",     "TEXT"),
+            ("trades",          "session_id",       "TEXT"),
+            ("trades",          "session_name",     "TEXT"),
+            ("trades",          "binance_order_id", "TEXT"),
+            ("logs",            "session_id",       "TEXT"),
+            ("sessions",        "initial_state",    "TEXT"),
+            ("market_analyses", "usage",            "TEXT"),
+            ("market_analyses", "reasoning",        "TEXT"),
         ]:
             c.execute(
                 f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {definition}"
@@ -326,29 +330,53 @@ def save_trade(
     mode: str = "real",
     session_id: str | None = None,
     session_name: str | None = None,
+    binance_order_id: str | None = None,
+    timestamp: str | None = None,
 ) -> None:
-    ts = datetime.utcnow().isoformat()
+    # ``timestamp`` lets callers backfill historical fills with their real Binance
+    # execution time; live trades default to now.
+    ts = timestamp or datetime.utcnow().isoformat()
     if _USE_FIRESTORE:
         _fs().collection("trades").add(dict(
             timestamp=ts, action=action, symbol=symbol, amount=amount,
             qty=qty, price=price, pnl=pnl, fee=fee,
             fee_asset=fee_asset, reason=reason, mode=mode,
             session_id=session_id, session_name=session_name,
+            binance_order_id=binance_order_id,
         ))
     elif _USE_POSTGRES:
         with _postgres() as c:
             c.execute(
-                "INSERT INTO trades (timestamp,action,symbol,amount,qty,price,pnl,fee,fee_asset,reason,mode,session_id,session_name)"
-                " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                (ts, action, symbol, amount, qty, price, pnl, fee, fee_asset, reason, mode, session_id, session_name),
+                "INSERT INTO trades (timestamp,action,symbol,amount,qty,price,pnl,fee,fee_asset,reason,mode,session_id,session_name,binance_order_id)"
+                " VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                (ts, action, symbol, amount, qty, price, pnl, fee, fee_asset, reason, mode, session_id, session_name, binance_order_id),
             )
     else:
         with _sqlite() as c:
             c.execute(
-                "INSERT INTO trades (timestamp,action,symbol,amount,qty,price,pnl,fee,fee_asset,reason,mode,session_id,session_name)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (ts, action, symbol, amount, qty, price, pnl, fee, fee_asset, reason, mode, session_id, session_name),
+                "INSERT INTO trades (timestamp,action,symbol,amount,qty,price,pnl,fee,fee_asset,reason,mode,session_id,session_name,binance_order_id)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (ts, action, symbol, amount, qty, price, pnl, fee, fee_asset, reason, mode, session_id, session_name, binance_order_id),
             )
+
+
+def update_trade_binance_id(trade_pk, binance_order_id: str) -> None:
+    """Backfill the Binance trade id onto an already-recorded trade row.
+
+    Used by the Binance import to tag the agent's own historical trades (which
+    predate id capture) so re-imports dedupe cleanly. No-op on Firestore, whose
+    history rows don't expose a stable document id through ``load_history``.
+    """
+    if _USE_FIRESTORE:
+        return
+    elif _USE_POSTGRES:
+        with _postgres() as c:
+            c.execute("UPDATE trades SET binance_order_id=%s WHERE id=%s",
+                      (binance_order_id, trade_pk))
+    else:
+        with _sqlite() as c:
+            c.execute("UPDATE trades SET binance_order_id=? WHERE id=?",
+                      (binance_order_id, trade_pk))
 
 
 def list_simulation_sessions() -> list[dict]:

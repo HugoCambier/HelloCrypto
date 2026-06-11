@@ -55,6 +55,30 @@ async function loadOrdersTab(opts = {}) {
 
 function refreshOrdersTab() { return loadOrdersTab({ force: true }); }
 
+// Reconcile the real account against Binance: import manual/historical fills and
+// refresh the net-deposits capital base. Idempotent (server dedups on order id).
+async function syncBinance(btn) {
+  const spin = document.getElementById('loading-binance-sync');
+  spin?.classList.remove('hidden');
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch('/api/real/sync-binance', { method: 'POST' });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || 'Erreur');
+    const t = d.trades || {};
+    const f = d.funding || {};
+    toast(`Import Binance : ${t.inserted||0} trade(s) ajouté(s), ${t.backfilled||0} rattaché(s) · capital net $${fmt(f.net||0)}`, 'ok');
+    await refreshOrdersTab();
+    if (typeof loadRunsList === 'function')    loadRunsList();
+    if (typeof loadPerformance === 'function') loadPerformance();
+  } catch (e) {
+    toast(e.message || 'Erreur synchronisation Binance', 'err');
+  } finally {
+    spin?.classList.add('hidden');
+    if (btn) btn.disabled = false;
+  }
+}
+
 function _renderOrdersTab() {
   const { portfolio, enriched, recent } = _ordersData || {};
   const sellCardsEl = document.getElementById('orders-sell-cards');
@@ -71,6 +95,9 @@ function _renderOrdersTab() {
   const pnlEl = document.getElementById('orders-pnl');
   pnlEl.textContent = budget > 0 ? `${fmtPnl(pnl)} (${fmtPct(pnl/budget*100)})` : '—';
   pnlEl.className = 'text-xs mt-0.5 ' + pnlClass(pnl);
+  // Capital base = net USDC deposits (derived from Binance funding sync).
+  const capEl = document.getElementById('orders-capital-base');
+  if (capEl) capEl.textContent = budget > 0 ? `$${fmt(budget)}` : '—';
 
   // Lookup positions by symbol
   const posMap = {};

@@ -712,6 +712,61 @@ def get_open_positions(watchlist: list[str]) -> dict:
     return positions
 
 
+def get_my_trades(symbol: str, limit: int = 1000) -> list[dict]:
+    """Return the account's executed fills for *symbol* (most recent ``limit``).
+
+    Each fill: ``{id, orderId, price, qty, quoteQty, commission, commissionAsset,
+    time, isBuyer, ...}``. Signed endpoint — authoritative source for the real
+    trade history (manual + agent), used by the Binance import.
+    """
+    return api_get("/api/v3/myTrades", {"symbol": symbol, "limit": limit}, signed=True)
+
+
+def _funding_history(endpoint: str, coin: str, ok_status: int,
+                     time_field: str) -> list[dict]:
+    """Page a SAPI funding endpoint in 90-day windows back to 2023-01-01.
+
+    Binance caps deposit/withdraw history queries at a 90-day range, so we walk
+    backwards window by window. Returns only rows in ``ok_status`` (success).
+    """
+    out: list[dict] = []
+    now_ms   = int(time.time() * 1000)
+    floor_ms = 1_672_531_200_000  # 2023-01-01T00:00:00Z
+    window   = 90 * 24 * 3600 * 1000
+    end = now_ms
+    while end > floor_ms:
+        start = max(floor_ms, end - window)
+        try:
+            rows = api_get(endpoint,
+                           {"coin": coin, "startTime": start, "endTime": end},
+                           signed=True)
+        except Exception:
+            log.warning("Funding history fetch failed (%s) for window %d-%d",
+                        endpoint, start, end, exc_info=True)
+            rows = []
+        for r in rows or []:
+            if int(r.get("status", -1)) == ok_status:
+                out.append(r)
+        end = start - 1
+    return out
+
+
+def get_usdc_funding() -> dict:
+    """Net USDC capital injected: Σ deposits − Σ withdrawals (successful only).
+
+    Returns ``{"deposits": x, "withdrawals": y, "net": x - y}``. This is the
+    real capital base the dashboard measures PnL against in real mode.
+    """
+    deposits = _funding_history("/sapi/v1/capital/deposit/hisrec", "USDC",
+                                ok_status=1, time_field="insertTime")
+    withdraws = _funding_history("/sapi/v1/capital/withdraw/history", "USDC",
+                                 ok_status=6, time_field="applyTime")
+    dep = sum(float(d.get("amount", 0) or 0) for d in deposits)
+    wd  = sum(float(w.get("amount", 0) or 0) for w in withdraws)
+    return {"deposits": round(dep, 2), "withdrawals": round(wd, 2),
+            "net": round(dep - wd, 2)}
+
+
 # ── Fee extraction ────────────────────────────────────────────────────────────
 
 def _extract_fee_usdc(order: dict) -> tuple[float, str]:

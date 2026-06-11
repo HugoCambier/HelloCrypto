@@ -730,10 +730,20 @@
             <div id="orders-total" class="text-base font-semibold text-slate-200 mt-0.5">—</div>
             <div id="orders-pnl" class="text-xs mt-0.5">—</div>
           </div>
-          <button onclick="refreshOrdersTab()" class="text-xs text-slate-400 hover:text-slate-200 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center gap-1">
-            <span id="loading-orders" class="spinner-mini hidden"></span>
-            <span>Rafraîchir</span>
-          </button>
+          <div class="text-right">
+            <div class="text-[11px] text-slate-500 uppercase tracking-wider">Capital injecté <span class="text-slate-600 normal-case">dépôts − retraits</span></div>
+            <div id="orders-capital-base" class="text-base font-semibold text-slate-200 mt-0.5">—</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="syncBinance(this)" title="Importer l'historique réel depuis Binance (trades manuels + dépôts/retraits). Idempotent." class="text-xs text-slate-300 hover:text-slate-100 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center gap-1">
+              <span id="loading-binance-sync" class="spinner-mini hidden"></span>
+              <span>⟳ Importer Binance</span>
+            </button>
+            <button onclick="refreshOrdersTab()" class="text-xs text-slate-400 hover:text-slate-200 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center gap-1">
+              <span id="loading-orders" class="spinner-mini hidden"></span>
+              <span>Rafraîchir</span>
+            </button>
+          </div>
         </div>
 
         <!-- Sell section (only owned cryptos, sorted by sell urgency desc) -->

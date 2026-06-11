@@ -679,7 +679,20 @@ def api_performance():
     btc_ts: list = []
     bh_breakdown: list = []
     btc_breakdown: dict | None = None
-    effective_budget    = float(sess_budget if sess_budget is not None else config.get("budget", 100))
+    # The real catch-all view anchors PnL on the real capital injected (net USDC
+    # deposits); a specific real session keeps its own initial_total_value, and
+    # sims keep their chosen budget. Falls back to the manual budget until the
+    # first Binance funding sync has run.
+    real_base: float | None = None
+    if mode == "real" and not session_id:
+        try:
+            from ..binance_sync import real_capital_base
+            real_base = real_capital_base()
+        except Exception:
+            real_base = None
+    effective_budget    = float(
+        real_base if real_base is not None
+        else (sess_budget if sess_budget is not None else config.get("budget", 100)))
     effective_watchlist = sess_watchlist if sess_watchlist else config.get("watchlist", [])
     if with_bench and (sorted_trades or sess_started_at):
         start_iso = sess_started_at or sorted_trades[0]["timestamp"]
@@ -715,12 +728,26 @@ def api_performance():
     if mode == "simulation" and session_id and is_active:
         try:
             from .. import simulation as _sim_engine
-            sim_value_series = _sim_engine._load_state_value_series(session_id) or []
+            state_series = _sim_engine._load_state_value_series(session_id) or []
         except Exception:
             log.exception("Failed to load sim value timeseries")
-    # Finished sim, real run, or a live sim whose state series was wiped (e.g.
-    # repeated LLM errors) → reconstruct the dense MTM curve from trades +
-    # snapshots so held positions track the market instead of their entry price.
+            state_series = []
+        # The in-state series is the live, exact per-cycle total_value, but it's
+        # bounded (downsampled) and can reset on a restart, so it may no longer
+        # reach back to the run start. Trust it only when it still spans (most of)
+        # the run; otherwise fall through to the cycle-grid reconstruction so the
+        # chart begins at the run's first cycle instead of mid-run.
+        if state_series and cycle_timestamps:
+            run_span    = _iso_to_ms(cycle_timestamps[-1]) - _iso_to_ms(cycle_timestamps[0])
+            series_span = _iso_to_ms(state_series[-1]["ts"]) - _iso_to_ms(state_series[0]["ts"])
+            if run_span <= 0 or series_span >= 0.9 * run_span:
+                sim_value_series = state_series
+        elif state_series:
+            sim_value_series = state_series
+    # Finished sim, real run, or a live sim whose state series was wiped or
+    # truncated to a recent window (restart / repeated LLM errors) → reconstruct
+    # the dense MTM curve from trades + snapshots so the curve spans the whole run
+    # and held positions track the market instead of their entry price.
     if not sim_value_series and session_id:
         try:
             sim_value_series = _strategy_value_series(
