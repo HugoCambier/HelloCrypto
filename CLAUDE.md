@@ -36,6 +36,48 @@ Le rappel doit être bref et factuel : *"Ce changement touche la logique de déc
 pense à `make bench` avant de pousser en prod."* Ne pas le lancer automatiquement
 (coûte ~5-15 min + des appels LLM même throttlés).
 
+## Base de données — egress & stockage (hard constraint)
+
+Le projet tourne sur le **free tier Supabase**. L'egress et la taille de base sont
+des **contraintes dures** : les dépasser casse l'app en prod. À chaque fois que tu
+touches `db/`, ajoutes une lecture/écriture DB, ou un champ à une réponse d'API,
+**évalue explicitement l'impact** avant de livrer.
+
+Quotas (free tier) :
+
+| Ressource | Limite |
+|---|---|
+| Egress | 5 GB / mois |
+| Cached egress | 5 GB / mois |
+| Database size | 0.5 GB |
+| Storage size | 1 GB |
+| Realtime — connexions concurrentes | 200 |
+| Realtime — messages | 2 000 000 / mois |
+| MAU / MAU tiers | 50 000 |
+
+Les deux qui mordent en pratique : **egress 5 GB/mois** et **DB size 0.5 GB**.
+Objectif transverse : **garder une utilisation fluide de l'app** (pas de lecture
+lourde sur un chemin interactif).
+
+Règles à appliquer par défaut :
+
+- **Hot path ?** Un endpoint pollé (`/api/portfolio`, `/api/performance`,
+  `/api/simulation/status`, `/api/backtest/status`) multiplie chaque octet par
+  (onglets ouverts × fréquence × jours). Évites-y toute lecture superflue ;
+  **cache en process** (TTL, ou invalidation sur événement) une valeur qui change
+  rarement (cf. `_BENCH_CACHE` dans `routes/performance.py`).
+- **Projette les colonnes** (`load_snapshots(..., columns=[...])`) au lieu de
+  `SELECT *` dès que la table est large ou la ligne grosse — l'egress, c'est les
+  octets sortis, pas le nombre de lignes.
+- **Borne les volumes** : `limit`, pagination, fenêtres temporelles. Jamais de scan
+  non borné sur `trades` / `logs` / `price_snapshots`.
+- **Écris peu, agrégé** : pas d'insert par tick si un batch/upsert suffit. Purge le
+  volatile (cf. purge 5min snapshots > 7j, logs > 14j).
+- **Signale l'impact** à l'utilisateur quand tu ajoutes une lecture sur un chemin
+  pollé ou un champ volumineux à une réponse pollée (taille estimée × fréquence).
+
+Pour un audit ponctuel de l'egress d'un diff : skill `/db-review` (à la demande).
+
 ## Propreté du code
 
 Règles à appliquer **par défaut** quand tu écris ou modifies du code. Si une règle
