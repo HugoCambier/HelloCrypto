@@ -606,12 +606,17 @@ def run_one_cycle() -> None:
     except ImportError:
         pass
 
-    provider = cfg.get("llm", {}).get("provider", "claude")
-    model = cfg.get("llm", {}).get("model", "—")
+    decider = (cfg.get("decider") or "llm").lower()
     risk_level = int(cfg.get("risk_level", 3))
     budget = float(cfg["budget"])
-    log.info("Cycle #%d | Budget: $%.0f USDC | LLM: %s/%s | Risque: %d/10",
-             cycle, budget, provider, model, risk_level)
+    if decider == "deterministic":
+        engine = "déterministe"
+    else:
+        provider = cfg.get("llm", {}).get("provider", "claude")
+        model = cfg.get("llm", {}).get("model", "—")
+        engine = f"LLM {provider}/{model}"
+    log.info("Cycle #%d | Budget: $%.0f USDC | Décideur: %s | Risque: %d/10",
+             cycle, budget, engine, risk_level)
 
     try:
         new_state = _execute_cycle(
