@@ -785,10 +785,8 @@ def api_performance():
     # Graphiques tab sets with_prices=1; the 60s-polled Performance tab skips it).
     price_series: list = []
     if with_prices and cycle_timestamps:
-        traded_symbols = sorted({t["symbol"] for t in (buys + all_sells)
-                                 if t.get("symbol")})
         try:
-            price_series = _symbol_price_series(traded_symbols, cycle_timestamps)
+            price_series = _symbol_price_series(effective_watchlist, cycle_timestamps)
         except Exception:
             log.exception("Failed to build per-symbol price series")
 

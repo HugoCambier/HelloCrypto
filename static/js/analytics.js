@@ -1125,12 +1125,11 @@ function renderPriceMomentumChart(opts) {
   const trades = (opts.trades || []).filter(t =>
     t && t.symbol && /BUY|SELL/i.test(t.action || '') && t.price != null);
 
-  // Universe = symbols that actually traded (mirrors the trades table filter),
-  // restricted to those we have price data for.
+  // Universe = every symbol of the run's watchlist we have price data for, not
+  // just those that traded — individual curves are toggled via the legend click.
   const priced = new Set();
   for (const f of frames) for (const s of Object.keys(f.prices)) priced.add(s);
-  const allSymbols = [...new Set(trades.map(t => t.symbol))]
-    .filter(s => priced.has(s)).sort();
+  const allSymbols = [...priced].sort();
 
   // Selection comes from the shared filter (empty dataset.symbols == all).
   const csv = (opts.sharedFilterId && document.getElementById(opts.sharedFilterId)?.dataset.symbols) || '';
@@ -1217,7 +1216,7 @@ function renderPriceMomentumChart(opts) {
       responsive: true, animation: false,
       interaction: { mode: 'nearest', intersect: true },
       plugins: {
-        legend: { display: true, labels: { color: '#cbd5e1', font: { size: 11 }, boxWidth: 14, usePointStyle: true } },
+        legend: { display: true, position: 'right', labels: { color: '#cbd5e1', font: { size: 11 }, boxWidth: 14, usePointStyle: true } },
         tooltip: {
           callbacks: {
             title: (items) => items.length ? _fmtTsShort(items[0].parsed.x) : '',
