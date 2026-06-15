@@ -92,13 +92,20 @@ def _maybe_toggle_real_session(before: dict, after: dict) -> None:
             upsert_session(sid, name, mode="real", initial_state=initial_state)
             set_state("active_real_session_id", sid)
             set_state("active_real_session_name", name)
-            # Reset the deterministic decider's per-session timers so the new
-            # session starts from a clean slate (no stale entry_ts / bear_since
-            # / cooldown / portfolio_peak from a prior run). Other agent_real
-            # fields (cycle, peak_prices) are managed independently.
+            # Reset per-run state so the new session starts from a clean slate:
+            # - strat_state: the deterministic decider's timers (entry_ts,
+            #   bear_since, cooldown, portfolio_peak).
+            # - initial_total_value: must be re-captured for THIS session.
+            #   It lives in the global agent_real state, so without this reset a
+            #   new session inherits the prior run's value, the first cycle skips
+            #   _capture_run_baseline (gated on ==0.0), and the session never gets
+            #   its BUY (init) seeds nor an initial_total_value — leaving the
+            #   equity curve blind to inherited positions and PnL measured against
+            #   a stale baseline. Other agent_real fields (cycle, peak_prices) are
+            #   managed independently.
             prior = (get_state("agent_real") or {})
-            if prior.get("strat_state"):
-                set_state("agent_real", {**prior, "strat_state": {}})
+            set_state("agent_real",
+                      {**prior, "strat_state": {}, "initial_total_value": 0.0})
             log.info("[REAL-SESSION] Nouvelle session réelle ouverte: %s (%s) decider=%s",
                      sid, name, decider)
         elif not is_real_on and active_sid:

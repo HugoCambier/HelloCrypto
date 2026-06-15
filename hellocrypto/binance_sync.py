@@ -216,6 +216,30 @@ def real_capital_base() -> float | None:
     return None
 
 
+def active_real_baseline() -> float | None:
+    """Run-start account value of the currently-armed real session.
+
+    This is the single PnL reference the equity curve and the cards measure
+    against: cash + inherited positions valued at arm time, captured by
+    ``agent._capture_run_baseline`` into the session's ``initial_total_value``.
+    Returns None when no session is armed or the baseline hasn't been captured
+    yet (first cycle pending) — callers fall back to net deposits / budget.
+    """
+    try:
+        import json
+
+        from db.store import get_session, get_state
+        sid = get_state("active_real_session_id")
+        if not sid:
+            return None
+        raw = (get_session(sid) or {}).get("initial_state")
+        st = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        v = st.get("initial_total_value") if isinstance(st, dict) else None
+        return float(v) if v else None
+    except Exception:
+        return None
+
+
 def sync_all(watchlist: list[str]) -> dict:
     """Full reconcile: import trades, then refresh the funding base."""
     trades = import_trades(watchlist)

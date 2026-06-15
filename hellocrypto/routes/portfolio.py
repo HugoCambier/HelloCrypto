@@ -45,10 +45,15 @@ def api_portfolio():
             if prices.get(sym)
         )
         total      = cash + portfolio_val
-        # Real-mode capital base = net USDC deposited (Binance funding sync),
-        # falling back to the manual budget until the first sync has run.
-        from ..binance_sync import real_capital_base
-        base       = real_capital_base()
+        # Real-mode capital base, in priority order so /api/portfolio measures
+        # PnL against the same reference as the equity curve and the cards:
+        #   1. the active run's initial_total_value (run-start account value),
+        #   2. net USDC deposited (Binance funding sync),
+        #   3. the manual budget until either has been captured.
+        from ..binance_sync import active_real_baseline, real_capital_base
+        base       = active_real_baseline()
+        if base is None:
+            base = real_capital_base()
         budget     = float(base if base is not None else config.get("budget", 100))
         gain       = total - budget
         try:
