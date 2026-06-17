@@ -27,6 +27,17 @@ _BENCH_TTL  = 3600  # seconds — bumped from 600s: BH/BTC benchmarks shift on
 # meant ~6 unnecessary recomputes per hour, each triggering a multi-symbol
 # scan on price_snapshots.
 
+# Computed-response cache for /api/performance. The endpoint is polled every 60s
+# and its payload (equity reconstruction + benchmarks + price series) is pure CPU
+# to rebuild. We key on the request shape + the trades generation counter so any
+# new trade busts it instantly within the process; a TTL bounds staleness across
+# serverless instances. A finished run's payload never changes between trades, so
+# it caches long; an active run only advances on the 5-min cycle grid, so a short
+# TTL is loss-free in practice while still collapsing multi-tab / repeated polls.
+_PERF_CACHE: dict = {}
+_PERF_TTL_ACTIVE   = 90.0
+_PERF_TTL_FINISHED = 600.0
+
 
 def _load_close_series(symbol: str, start_iso: str, end_iso: str,
                        start_ms: int, end_ms: int) -> list:
@@ -565,6 +576,18 @@ def api_performance():
     session_id     = request.args.get("session_id")
     with_bench     = request.args.get("with_benchmarks", "1") not in ("0", "false", "no")
     with_prices    = request.args.get("with_prices", "0") not in ("0", "false", "no")
+
+    try:
+        from db.store import trades_generation
+        _gen = trades_generation()
+    except Exception:
+        _gen = 0
+    _cache_key = (mode, session_id, period, with_bench, with_prices)
+    _now = time.time()
+    _hit = _PERF_CACHE.get(_cache_key)
+    if _hit and _hit[1] == _gen and (_now - _hit[0]) < _hit[2]:
+        return jsonify(_hit[3])
+
     config         = load_config()
 
     # Resolve the actual budget / watchlist / start anchor for the selected session.
@@ -797,7 +820,7 @@ def api_performance():
         except Exception:
             log.exception("Failed to build per-symbol price series")
 
-    return jsonify({
+    payload = {
         "period":            period,
         "mode":              mode,
         "trades":            len(filtered),
@@ -823,4 +846,14 @@ def api_performance():
         "frozen_prices":     frozen_prices,
         "sessions":          sessions,
         "budget":            round(effective_budget, 2),
-    })
+    }
+    # A finished run's payload is stable until a trade mutates it (gen bump);
+    # an active run advances only on the 5-min cycle grid → short TTL is lossless.
+    ttl = _PERF_TTL_FINISHED if (session_id and not is_active) else _PERF_TTL_ACTIVE
+    _PERF_CACHE[_cache_key] = (_now, _gen, ttl, payload)
+    # Bound memory: drop entries past the longest TTL (cheap, runs on cache miss).
+    if len(_PERF_CACHE) > 64:
+        for k, v in list(_PERF_CACHE.items()):
+            if _now - v[0] > _PERF_TTL_FINISHED:
+                _PERF_CACHE.pop(k, None)
+    return jsonify(payload)

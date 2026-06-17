@@ -471,11 +471,21 @@ _TRADE_COLUMNS = frozenset({
 _HISTORY_CACHE: dict[tuple, tuple[float, list[dict]]] = {}
 _HISTORY_TTL   = 90.0
 _HISTORY_LOCK  = threading.Lock()
+# Monotonic counter bumped on every trade mutation. Lets out-of-module caches
+# (e.g. the computed /api/performance payload) invalidate on a new trade without
+# importing the cache itself — they fold trades_generation() into their key.
+_TRADES_GEN = 0
+
+
+def trades_generation() -> int:
+    return _TRADES_GEN
 
 
 def _invalidate_history_cache() -> None:
+    global _TRADES_GEN
     with _HISTORY_LOCK:
         _HISTORY_CACHE.clear()
+        _TRADES_GEN += 1
 
 
 def _history_projection(columns: list[str] | None) -> str:

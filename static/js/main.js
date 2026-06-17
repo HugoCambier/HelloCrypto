@@ -885,7 +885,10 @@ let _simPollIv = null;
 function _startSimPoll() {
   if (_simPollIv) return;
   _pollSimStatus();
-  _simPollIv = setInterval(_pollSimStatus, 5000);
+  // 15s (was 5s): the decision cycle is gated by cycle_seconds (minutes/hours),
+  // so the status barely moves between ticks — slower poll cuts Vercel Active CPU
+  // invocations 3× with no perceptible UI lag.
+  _simPollIv = setInterval(_pollSimStatus, 15000);
 }
 function _stopSimPoll() { clearInterval(_simPollIv); _simPollIv = null; }
 
@@ -1628,7 +1631,10 @@ async function pollLogs() {
 function startLogPolling() {
   pollLogs();
   if (_logPollIv) clearInterval(_logPollIv);
-  _logPollIv = setInterval(pollLogs, 8000);
+  // 20s (was 8s): logs are informational, not time-critical. The incremental
+  // fetch (since _logsSince) already keeps each call tiny; a slower cadence
+  // mainly trims Vercel Active CPU invocations.
+  _logPollIv = setInterval(pollLogs, 20000);
 }
 
 // ─── Boot ────────────────────────────────────────────────────────────────────
