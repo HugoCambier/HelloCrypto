@@ -10,6 +10,7 @@ import logging
 import os
 import sqlite3
 import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -358,6 +359,7 @@ def save_trade(
                 " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (ts, action, symbol, amount, qty, price, pnl, fee, fee_asset, reason, mode, session_id, session_name, binance_order_id),
             )
+    _invalidate_history_cache()
 
 
 def update_trade_binance_id(trade_pk, binance_order_id: str) -> None:
@@ -377,6 +379,7 @@ def update_trade_binance_id(trade_pk, binance_order_id: str) -> None:
         with _sqlite() as c:
             c.execute("UPDATE trades SET binance_order_id=? WHERE id=?",
                       (binance_order_id, trade_pk))
+    _invalidate_history_cache()
 
 
 def list_simulation_sessions() -> list[dict]:
@@ -454,7 +457,47 @@ def sum_fees(mode: str | None = None) -> float:
     return float(row[0] or 0)
 
 
-def load_history(mode: str | None = None, limit: int = 500) -> list[dict]:
+# In-process cache for load_history. The dashboard polls /api/performance every
+# 60s — and twice per refresh (fast path + slow benchmarks path) — each re-reading
+# up to 2000 trade rows from Supabase. Caching collapses those repeated reads (and
+# concurrent multi-tab polls hitting the same warm instance) into a handful of DB
+# hits. TTL bounds staleness across serverless instances; every trade mutation
+# clears it within the writing process so a manual order shows up immediately.
+_TRADE_COLUMNS = frozenset({
+    "id", "timestamp", "action", "symbol", "amount", "qty", "price", "pnl",
+    "fee", "fee_asset", "reason", "mode", "session_id", "session_name",
+    "binance_order_id",
+})
+_HISTORY_CACHE: dict[tuple, tuple[float, list[dict]]] = {}
+_HISTORY_TTL   = 90.0
+_HISTORY_LOCK  = threading.Lock()
+
+
+def _invalidate_history_cache() -> None:
+    with _HISTORY_LOCK:
+        _HISTORY_CACHE.clear()
+
+
+def _history_projection(columns: list[str] | None) -> str:
+    """Whitelisted column list for the SELECT, or ``*``. Guards the f-string
+    interpolation against anything but known trade columns."""
+    if not columns:
+        return "*"
+    safe = [c for c in columns if c in _TRADE_COLUMNS]
+    return ", ".join(safe) if safe else "*"
+
+
+def load_history(mode: str | None = None, limit: int = 500,
+                 columns: list[str] | None = None) -> list[dict]:
+    """Recent trades, newest first. ``columns`` projects the SELECT to cut
+    egress (egress is bytes out, not row count); ``None`` keeps every column."""
+    key = (mode, limit, tuple(columns) if columns else None)
+    now = time.time()
+    with _HISTORY_LOCK:
+        cached = _HISTORY_CACHE.get(key)
+        if cached and (now - cached[0]) < _HISTORY_TTL:
+            return list(cached[1])
+
     if _USE_FIRESTORE:
         from google.cloud import firestore as _firestore  # type: ignore
         q = _fs().collection("trades").order_by(
@@ -463,33 +506,39 @@ def load_history(mode: str | None = None, limit: int = 500) -> list[dict]:
         docs = [doc.to_dict() for doc in q.stream()]
         if mode:
             docs = [d for d in docs if d.get("mode") == mode]
-        return docs[:limit]
+        rows = docs[:limit]
     elif _USE_POSTGRES:
+        proj = _history_projection(columns)
         with _postgres() as c:
             if mode:
                 c.execute(
-                    "SELECT * FROM trades WHERE mode=%s ORDER BY timestamp DESC LIMIT %s",
+                    f"SELECT {proj} FROM trades WHERE mode=%s ORDER BY timestamp DESC LIMIT %s",
                     (mode, limit),
                 )
             else:
                 c.execute(
-                    "SELECT * FROM trades ORDER BY timestamp DESC LIMIT %s",
+                    f"SELECT {proj} FROM trades ORDER BY timestamp DESC LIMIT %s",
                     (limit,),
                 )
-            return [dict(r) for r in c.fetchall()]
+            rows = [dict(r) for r in c.fetchall()]
     else:
+        proj = _history_projection(columns)
         with _sqlite() as c:
             if mode:
-                rows = c.execute(
-                    "SELECT * FROM trades WHERE mode=? ORDER BY timestamp DESC LIMIT ?",
+                res = c.execute(
+                    f"SELECT {proj} FROM trades WHERE mode=? ORDER BY timestamp DESC LIMIT ?",
                     (mode, limit),
                 ).fetchall()
             else:
-                rows = c.execute(
-                    "SELECT * FROM trades ORDER BY timestamp DESC LIMIT ?",
+                res = c.execute(
+                    f"SELECT {proj} FROM trades ORDER BY timestamp DESC LIMIT ?",
                     (limit,),
                 ).fetchall()
-        return [dict(r) for r in rows]
+        rows = [dict(r) for r in res]
+
+    with _HISTORY_LOCK:
+        _HISTORY_CACHE[key] = (now, rows)
+    return list(rows)
 
 
 def get_state(key: str) -> Any | None:
@@ -798,6 +847,7 @@ def delete_session(session_id: str) -> None:
             c.execute("DELETE FROM trades WHERE session_id=?", (session_id,))
             c.execute("DELETE FROM logs WHERE session_id=?", (session_id,))
             c.execute("DELETE FROM market_analyses WHERE session_id=?", (session_id,))
+    _invalidate_history_cache()
 
 
 def list_simulation_sessions_v2() -> list[dict]:

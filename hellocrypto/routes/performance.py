@@ -595,7 +595,14 @@ def api_performance():
 
     try:
         from db.store import load_history as _db_load
-        history = _db_load(mode=mode, limit=2000)
+        # Project only the columns the KPIs, equity curve, trade list and analytics
+        # tooltips actually read — drops binance_order_id / session_name / per-row mode
+        # from this 60s-polled read. `reason` (tooltips) and `fee`/`fee_asset` (real
+        # Binance commission or the sim 0.1% proxy) are kept — no displayed loss.
+        history = _db_load(mode=mode, limit=2000, columns=[
+            "id", "timestamp", "action", "symbol", "amount", "qty",
+            "price", "pnl", "fee", "fee_asset", "reason", "session_id",
+        ])
     except ImportError:
         history = load_history()
 
