@@ -67,7 +67,9 @@ async function syncBinance(btn) {
     if (!r.ok || d.error) throw new Error(d.error || 'Erreur');
     const t = d.trades || {};
     const f = d.funding || {};
-    toast(`Import Binance : ${t.inserted||0} trade(s) ajouté(s), ${t.backfilled||0} rattaché(s) · capital net $${fmt(f.net||0)}`, 'ok');
+    const rec = (d.reconciled || {}).reconciled || 0;
+    const recPart = rec ? `, ${rec} position(s) clôturée(s)` : '';
+    toast(`Import Binance : ${t.inserted||0} trade(s) ajouté(s), ${t.backfilled||0} rattaché(s)${recPart} · capital net $${fmt(f.net||0)}`, 'ok');
     await refreshOrdersTab();
     if (typeof loadRunsList === 'function')    loadRunsList();
     if (typeof loadPerformance === 'function') loadPerformance();

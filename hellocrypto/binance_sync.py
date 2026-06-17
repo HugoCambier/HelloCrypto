@@ -278,9 +278,87 @@ def active_real_baseline() -> float | None:
         return None
 
 
+_RECONCILE_DUST_USDC = 1.0  # below this notional, a balance counts as "gone"
+
+
+def reconcile_balances() -> dict:
+    """Close phantom positions: a symbol the DB still reconstructs as held but
+    whose real Binance balance is ~0.
+
+    A disposal via Binance Convert, a dust→BNB sweep, or a non-USDC pair never
+    surfaces in ``/myTrades`` (which ``import_trades`` reads pair by pair), so the
+    sold coin lingers in the dashboard's trade-reconstruction view. Here we trust
+    the authoritative ``/account`` balance: when it's dust/zero but the DB still
+    shows a meaningful position, we record a market-priced reconciling SELL,
+    attributed to the active run so both its view and the global view net to zero.
+    Idempotent — once squared, the position reads 0 and nothing more is written.
+    """
+    from db.store import get_state, load_history, save_trade
+
+    from .api import api_get, get_ticker
+
+    active_sid = get_state("active_real_session_id") or None
+    try:
+        balances = api_get("/api/v3/account", signed=True).get("balances", [])
+    except Exception:
+        log.warning("[RECONCILE] /account indisponible", exc_info=True)
+        return {"reconciled": 0}
+    held = {b["asset"]: float(b.get("free", 0) or 0) + float(b.get("locked", 0) or 0)
+            for b in balances}
+
+    # Net qty the dashboard currently believes is held. With an active run we use
+    # its own trades (which include its single BUY (init) seed); otherwise the
+    # global real view, which excludes "(init)" bookkeeping entries.
+    hist = load_history(mode="real", limit=5000)
+    pos: dict[str, float] = {}
+    for t in hist:
+        sym = t.get("symbol")
+        if not sym:
+            continue
+        action = (t.get("action") or "").upper()
+        if active_sid:
+            if t.get("session_id") != active_sid:
+                continue
+        elif "(INIT)" in action:
+            continue
+        q = float(t.get("qty") or 0)
+        if "BUY" in action:
+            pos[sym] = pos.get(sym, 0.0) + q
+        elif "SELL" in action:
+            pos[sym] = pos.get(sym, 0.0) - q
+
+    reconciled = 0
+    for sym, qty in pos.items():
+        if qty <= 1e-6:
+            continue
+        base = sym.replace("USDC", "").replace("USDT", "").replace("BUSD", "")
+        try:
+            price = get_ticker(sym)
+        except Exception:
+            price = 0.0
+        if not price:
+            continue
+        real_bal = held.get(base, 0.0)
+        # Phantom: real balance is dust/zero, DB still holds a meaningful position.
+        if real_bal * price >= _RECONCILE_DUST_USDC or qty * price < _RECONCILE_DUST_USDC:
+            continue
+        save_trade(
+            action="SELL", symbol=sym, amount=round(qty * price, 2),
+            price=round(price, 8),
+            reason="Réconciliation Binance — sortie hors spot (Convert / dust / autre paire)",
+            fee=0.0, qty=round(qty, 8), pnl=None,
+            mode="real", session_id=active_sid,
+        )
+        reconciled += 1
+        log.info("[RECONCILE] %s clôturé : DB %.6f, solde Binance %.6f → SELL @ $%.6f",
+                 sym, qty, real_bal, price)
+    return {"reconciled": reconciled}
+
+
 def sync_all(watchlist: list[str]) -> dict:
-    """Full reconcile: import trades, then refresh the funding base."""
+    """Full reconcile: import spot fills, close phantom positions, refresh funding."""
     trades = import_trades(watchlist)
+    reconciled = reconcile_balances()
     funding = sync_funding()
-    log.info("[BINANCE SYNC] trades=%s funding=%s", trades, funding)
-    return {"trades": trades, "funding": funding}
+    log.info("[BINANCE SYNC] trades=%s reconciled=%s funding=%s", trades, reconciled, funding)
+    return {"trades": trades, "reconciled": reconciled, "funding": funding}
