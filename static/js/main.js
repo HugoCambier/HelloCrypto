@@ -1022,12 +1022,18 @@ function _showContentState() {
 // Strategy: fast fetch first (no benchmarks → ~100ms), render immediately;
 // then async benchmark fetch updates the PnL chart in the background.
 let _perfFetchToken = 0;
-async function loadPerformance() {
+async function loadPerformance(opts = {}) {
   if (_selectedMode === null) {
     _showEmptyState();
     return;
   }
   _showContentState();
+
+  // After a user action (Binance import, manual order) we must bypass both the
+  // client cache and the 90s server-side /api/performance cache so the change
+  // shows up immediately instead of lagging behind on a stale serverless instance.
+  const fresh = !!opts.fresh;
+  const fjOpts = fresh ? { force: true } : {};
 
   const token = ++_perfFetchToken;
   const baseParams = new URLSearchParams({ mode: _selectedMode, period: 'all' });
@@ -1035,6 +1041,7 @@ async function loadPerformance() {
     // Both sim sessions and real sessions are filtered by session_id.
     baseParams.set('session_id', _selectedSession);
   }
+  if (fresh) baseParams.set('fresh', '1');
 
   const fastLoaders = ['loading-kpis', 'loading-pnl', 'loading-trades', 'loading-holdings', 'loading-pricemom'];
   _setLoaders(fastLoaders, true);
@@ -1044,9 +1051,9 @@ async function loadPerformance() {
     const fastParams = new URLSearchParams(baseParams);
     fastParams.set('with_benchmarks', '0');
 
-    const fastFetches = [fetchJson(`/api/performance?${fastParams}`)];
+    const fastFetches = [fetchJson(`/api/performance?${fastParams}`, undefined, fjOpts)];
     if (_selectedMode === 'real') {
-      fastFetches.push(fetchJson('/api/portfolio').catch(()=>null));
+      fastFetches.push(fetchJson('/api/portfolio', undefined, fjOpts).catch(()=>null));
     } else {
       fastFetches.push(Promise.resolve(null));
     }
@@ -1066,7 +1073,7 @@ async function loadPerformance() {
     // (cached longer — slow-changing, so the 60s poll won't re-hit the server).
     const slowParams = new URLSearchParams(baseParams);
     slowParams.set('with_prices', '1');
-    fetchJson(`/api/performance?${slowParams}`, 5 * 60_000).then(perfBench => {
+    fetchJson(`/api/performance?${slowParams}`, 5 * 60_000, fjOpts).then(perfBench => {
       if (token !== _perfFetchToken) return;
       _lastPerf.bh_timeseries  = perfBench.bh_timeseries;
       _lastPerf.btc_timeseries = perfBench.btc_timeseries;

@@ -72,7 +72,7 @@ async function syncBinance(btn) {
     toast(`Import Binance : ${t.inserted||0} trade(s) ajouté(s), ${t.backfilled||0} rattaché(s)${recPart} · capital net $${fmt(f.net||0)}`, 'ok');
     await refreshOrdersTab();
     if (typeof loadRunsList === 'function')    loadRunsList();
-    if (typeof loadPerformance === 'function') loadPerformance();
+    if (typeof loadPerformance === 'function') loadPerformance({ fresh: true });
   } catch (e) {
     toast(e.message || 'Erreur synchronisation Binance', 'err');
   } finally {
@@ -353,7 +353,7 @@ async function confirmOrder() {
     invalidateCache('/api/performance');
     closeOrderModal();
     await loadOrdersTab();
-    if (typeof loadPerformance === 'function') loadPerformance();
+    if (typeof loadPerformance === 'function') loadPerformance({ fresh: true });
   } catch (e) {
     toast(e.message || 'Erreur', 'err');
   } finally {
@@ -394,7 +394,7 @@ async function confirmLiquidateAll() {
     invalidateCache('/api/portfolio');
     invalidateCache('/api/performance');
     await loadOrdersTab({ force: true });
-    if (typeof loadPerformance === 'function') loadPerformance();
+    if (typeof loadPerformance === 'function') loadPerformance({ fresh: true });
   } catch (e) {
     toast(e.message || 'Erreur', 'err');
   } finally {

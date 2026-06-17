@@ -582,10 +582,11 @@ def api_performance():
         _gen = trades_generation()
     except Exception:
         _gen = 0
+    _fresh = request.args.get("fresh") in ("1", "true", "yes")
     _cache_key = (mode, session_id, period, with_bench, with_prices)
     _now = time.time()
     _hit = _PERF_CACHE.get(_cache_key)
-    if _hit and _hit[1] == _gen and (_now - _hit[0]) < _hit[2]:
+    if not _fresh and _hit and _hit[1] == _gen and (_now - _hit[0]) < _hit[2]:
         return jsonify(_hit[3])
 
     config         = load_config()
