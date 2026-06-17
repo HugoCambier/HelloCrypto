@@ -231,7 +231,7 @@ function _buildRecapMarkdown() {
   const pnl    = snap.pnl ?? (total - budget);
   const pnlPct = snap.pnl_pct ?? (budget > 0 ? pnl / budget * 100 : 0);
   const wr     = snap.win_rate;
-  const tn     = snap.trades_count ?? snap.trades ?? history.filter(t => t.action !== 'ANALYSE').length;
+  const tn     = snap.trades_count ?? snap.trades ?? history.filter(t => t.action !== 'ANALYSE' && t.action !== 'BUY (init)').length;
   const alpha  = snap.alpha;
   const btcDiff = (snap.pnl != null && snap.btc_bh_pnl != null) ? snap.pnl - snap.btc_bh_pnl : null;
   const best   = sellsAll.length ? Math.max(...sellsAll.map(t => t.pnl || 0)) : null;

@@ -383,7 +383,7 @@ def _snapshot(cycle, cash, holdings, prices, history, total_fees,
             btc_bh_pnl = round(btc_val - base, 2)
             btc_bh_pct = round((btc_val - base) / base * 100, 2)
 
-    trades_only = [t for t in history if t["action"] != "ANALYSE"]
+    trades_only = [t for t in history if t["action"] not in ("ANALYSE", "BUY (init)")]
     sells_only  = [t for t in trades_only if "SELL" in t["action"] and "stop" not in t["action"]]
     profitable  = [t for t in sells_only if t.get("pnl", 0) > 0]
     # Pre-aggregated so the dashboard's live poll can drop the (heavy) history

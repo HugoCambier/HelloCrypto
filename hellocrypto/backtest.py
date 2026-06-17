@@ -274,7 +274,7 @@ def _make_snapshot(current_step, total_steps, ts_ms, cash, budget, holdings,
     sells_only = [t for t in history if "SELL" in t.get("action","") and "stop" not in t.get("action","")]
     profitable = [t for t in sells_only if t.get("pnl", 0) > 0]
 
-    trades_count = len([t for t in history if t.get("action") != "ANALYSE"])
+    trades_count = len([t for t in history if t.get("action") not in ("ANALYSE", "BUY (init)")])
 
     return {
         "loading":           False,

@@ -137,6 +137,41 @@ def _candidate_symbols(watchlist: list[str]) -> list[str]:
     return sorted(syms)
 
 
+def _real_session_windows() -> list[tuple[int, str, str | None]]:
+    """``(start_ms, id, name)`` for real sessions, ascending by start.
+
+    Real sessions have only a start (``created_at``); a run owns the account
+    from its start until the next run starts. A manually-imported fill is thus
+    attributed to the run with the latest start at or before the fill time."""
+    try:
+        from db.store import list_real_sessions
+        out = []
+        for s in list_real_sessions():
+            ms = _iso_to_ms(str(s.get("created_at", "")))
+            if ms is not None and s.get("id"):
+                out.append((ms, str(s["id"]), s.get("name")))
+        out.sort(key=lambda w: w[0])
+        return out
+    except Exception:
+        log.warning("Could not load real session windows", exc_info=True)
+        return []
+
+
+def _session_for_fill(windows: list[tuple[int, str, str | None]],
+                      fill_ms: int | None) -> tuple[str | None, str | None]:
+    """Run (id, name) that owned the account when ``fill_ms`` happened, or
+    ``(None, None)`` for a fill predating the first real session."""
+    if fill_ms is None:
+        return None, None
+    sid = name = None
+    for start_ms, s, n in windows:
+        if start_ms <= fill_ms:
+            sid, name = s, n
+        else:
+            break
+    return sid, name
+
+
 def import_trades(watchlist: list[str]) -> dict:
     """Import/reconcile real fills from Binance. Returns a counts summary."""
     from db.store import load_history, save_trade, update_trade_binance_id
@@ -146,6 +181,7 @@ def import_trades(watchlist: list[str]) -> dict:
                  if t.get("binance_order_id")}
     unmatched = [t for t in existing
                  if not t.get("binance_order_id") and t.get("id") is not None]
+    windows = _real_session_windows()
 
     inserted = backfilled = skipped = 0
     for symbol in _candidate_symbols(watchlist):
@@ -168,6 +204,7 @@ def import_trades(watchlist: list[str]) -> dict:
                 continue
             qty   = g["qty"]
             price = g["quote"] / qty if qty else 0.0
+            sid, sname = _session_for_fill(windows, g["time"])
             save_trade(
                 action="BUY" if g["is_buyer"] else "SELL",
                 symbol=symbol,
@@ -178,7 +215,8 @@ def import_trades(watchlist: list[str]) -> dict:
                 fee_asset=g["commission_asset"],
                 qty=round(qty, 8),
                 mode="real",
-                session_id=None,
+                session_id=sid,
+                session_name=sname,
                 binance_order_id=oid,
                 timestamp=_ms_to_iso(g["time"]),
             )

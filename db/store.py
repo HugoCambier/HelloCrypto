@@ -402,13 +402,15 @@ def list_simulation_sessions() -> list[dict]:
                 g["start_ts"] = ts
             if ts > g["end_ts"]:
                 g["end_ts"] = ts
-            g["trade_count"] += 1
+            if d.get("action") != "BUY (init)":
+                g["trade_count"] += 1
         return sorted(groups.values(), key=lambda x: x["start_ts"], reverse=True)
     elif _USE_POSTGRES:
         with _postgres() as c:
             c.execute(
                 "SELECT session_id, session_name, MIN(timestamp) as start_ts,"
-                " MAX(timestamp) as end_ts, COUNT(*) as trade_count"
+                " MAX(timestamp) as end_ts,"
+                " SUM(CASE WHEN action <> 'BUY (init)' THEN 1 ELSE 0 END) as trade_count"
                 " FROM trades WHERE mode='simulation' AND session_id IS NOT NULL"
                 " GROUP BY session_id, session_name ORDER BY start_ts DESC"
             )
@@ -417,7 +419,8 @@ def list_simulation_sessions() -> list[dict]:
         with _sqlite() as c:
             rows = c.execute(
                 "SELECT session_id, session_name, MIN(timestamp) as start_ts,"
-                " MAX(timestamp) as end_ts, COUNT(*) as trade_count"
+                " MAX(timestamp) as end_ts,"
+                " SUM(CASE WHEN action <> 'BUY (init)' THEN 1 ELSE 0 END) as trade_count"
                 " FROM trades WHERE mode='simulation' AND session_id IS NOT NULL"
                 " GROUP BY session_id ORDER BY start_ts DESC"
             ).fetchall()
@@ -807,7 +810,7 @@ def list_simulation_sessions_v2() -> list[dict]:
         with _postgres() as c:
             c.execute(
                 "SELECT s.id, s.name, s.mode, s.created_at,"
-                " COUNT(t.id) as trade_count,"
+                " COALESCE(SUM(CASE WHEN t.action <> 'BUY (init)' THEN 1 ELSE 0 END), 0) as trade_count,"
                 " MIN(t.timestamp) as start_ts, MAX(t.timestamp) as end_ts,"
                 " (SELECT MAX(cycle) FROM logs WHERE session_id = s.id) as cycle_count"
                 " FROM sessions s"
@@ -820,7 +823,7 @@ def list_simulation_sessions_v2() -> list[dict]:
         with _sqlite() as c:
             rows = c.execute(
                 "SELECT s.id, s.name, s.mode, s.created_at,"
-                " COUNT(t.id) as trade_count,"
+                " COALESCE(SUM(CASE WHEN t.action <> 'BUY (init)' THEN 1 ELSE 0 END), 0) as trade_count,"
                 " MIN(t.timestamp) as start_ts, MAX(t.timestamp) as end_ts,"
                 " (SELECT MAX(cycle) FROM logs WHERE session_id = s.id) as cycle_count"
                 " FROM sessions s"
@@ -847,7 +850,7 @@ def list_real_sessions() -> list[dict]:
         with _postgres() as c:
             c.execute(
                 "SELECT s.id, s.name, s.mode, s.created_at,"
-                " COUNT(t.id) as trade_count,"
+                " COALESCE(SUM(CASE WHEN t.action <> 'BUY (init)' THEN 1 ELSE 0 END), 0) as trade_count,"
                 " MIN(t.timestamp) as start_ts, MAX(t.timestamp) as end_ts,"
                 " (SELECT MAX(cycle) FROM logs WHERE session_id = s.id) as cycle_count"
                 " FROM sessions s"
@@ -860,7 +863,7 @@ def list_real_sessions() -> list[dict]:
         with _sqlite() as c:
             rows = c.execute(
                 "SELECT s.id, s.name, s.mode, s.created_at,"
-                " COUNT(t.id) as trade_count,"
+                " COALESCE(SUM(CASE WHEN t.action <> 'BUY (init)' THEN 1 ELSE 0 END), 0) as trade_count,"
                 " MIN(t.timestamp) as start_ts, MAX(t.timestamp) as end_ts,"
                 " (SELECT MAX(cycle) FROM logs WHERE session_id = s.id) as cycle_count"
                 " FROM sessions s"
