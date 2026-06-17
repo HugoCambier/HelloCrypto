@@ -309,8 +309,10 @@ def reconcile_balances() -> dict:
     # Net qty the dashboard currently believes is held. With an active run we use
     # its own trades (which include its single BUY (init) seed); otherwise the
     # global real view, which excludes "(init)" bookkeeping entries.
+    # Track qty *and* cost basis (weighted-average entry) so the reconciling SELL
+    # carries a realized PnL vs the position's entry, not a blank.
     hist = load_history(mode="real", limit=5000)
-    pos: dict[str, float] = {}
+    pos: dict[str, dict] = {}
     for t in hist:
         sym = t.get("symbol")
         if not sym:
@@ -322,13 +324,19 @@ def reconcile_balances() -> dict:
         elif "(INIT)" in action:
             continue
         q = float(t.get("qty") or 0)
+        p = float(t.get("price") or 0)
+        e = pos.setdefault(sym, {"qty": 0.0, "cost": 0.0})
         if "BUY" in action:
-            pos[sym] = pos.get(sym, 0.0) + q
+            e["cost"] += q * p
+            e["qty"]  += q
         elif "SELL" in action:
-            pos[sym] = pos.get(sym, 0.0) - q
+            if e["qty"] > 0:
+                e["cost"] -= (e["cost"] / e["qty"]) * min(q, e["qty"])
+            e["qty"] = max(0.0, e["qty"] - q)
 
     reconciled = 0
-    for sym, qty in pos.items():
+    for sym, e in pos.items():
+        qty = e["qty"]
         if qty <= 1e-6:
             continue
         base = sym.replace("USDC", "").replace("USDT", "").replace("BUSD", "")
@@ -342,16 +350,18 @@ def reconcile_balances() -> dict:
         # Phantom: real balance is dust/zero, DB still holds a meaningful position.
         if real_bal * price >= _RECONCILE_DUST_USDC or qty * price < _RECONCILE_DUST_USDC:
             continue
+        avg_entry = e["cost"] / qty if qty else 0.0
+        realized_pnl = round(qty * (price - avg_entry), 4) if avg_entry else None
         save_trade(
             action="SELL", symbol=sym, amount=round(qty * price, 2),
             price=round(price, 8),
             reason="Réconciliation Binance — sortie hors spot (Convert / dust / autre paire)",
-            fee=0.0, qty=round(qty, 8), pnl=None,
+            fee=0.0, qty=round(qty, 8), pnl=realized_pnl,
             mode="real", session_id=active_sid,
         )
         reconciled += 1
-        log.info("[RECONCILE] %s clôturé : DB %.6f, solde Binance %.6f → SELL @ $%.6f",
-                 sym, qty, real_bal, price)
+        log.info("[RECONCILE] %s clôturé : DB %.6f @ entrée $%.6f, solde Binance %.6f → "
+                 "SELL @ $%.6f (PnL %s)", sym, qty, avg_entry, real_bal, price, realized_pnl)
     return {"reconciled": reconciled}
 
 
