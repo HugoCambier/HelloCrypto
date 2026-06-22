@@ -63,7 +63,14 @@ def _maybe_toggle_real_session(before: dict, after: dict) -> None:
     - Resume (enabled=true, mode=real) AND no active session → open one
       (also covers the self-healing case where ``cfg.enabled`` was already
       true on disk before the lifecycle hook existed)
-    - Stop (enabled=false OR mode≠real) AND active session → clear pointer
+    - Stop (enabled=false) AND active session → clear pointer
+
+    A ``mode`` switch alone must NOT stop a live real run: starting a simulation
+    persists ``mode='simulation'`` to the shared config, and simulations are
+    independent (tracked in ``active_sims``). Only an explicit disable — the
+    "Désactiver le runner réel" button posting ``enabled=false`` — tears down the
+    real session. (Previously ``mode≠real`` also cleared the pointer, so launching
+    a sim silently killed a running real session.)
 
     Idempotent and best-effort: a DB failure must never block a config save.
     """
@@ -108,8 +115,8 @@ def _maybe_toggle_real_session(before: dict, after: dict) -> None:
                       {**prior, "strat_state": {}, "initial_total_value": 0.0})
             log.info("[REAL-SESSION] Nouvelle session réelle ouverte: %s (%s) decider=%s",
                      sid, name, decider)
-        elif not is_real_on and active_sid:
-            # Stop — clear the pointer; the record stays for history.
+        elif active_sid and not bool(after.get("enabled")):
+            # Stop — only on an explicit disable; the record stays for history.
             set_state("active_real_session_id", None)
             set_state("active_real_session_name", None)
             log.info("[REAL-SESSION] Session réelle %s arrêtée (record conservé)", active_sid)
