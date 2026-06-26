@@ -130,13 +130,21 @@ def _maybe_purge_old_snapshots() -> None:
 
 
 def _capture_5min_market_data() -> None:
-    """Fetch + persist a 5-min market snapshot for the configured watchlist.
+    """Fetch + persist a market snapshot for the configured watchlist.
 
-    Runs at every cron heartbeat so prices / indicators are refreshed in DB
-    even when no decision cycle fires (e.g. a deterministic run with
-    cycle=4h). Best-effort: any failure is logged and swallowed.
+    Throttled to ~once per 15 min (every 3rd 5-min heartbeat) via a DB
+    sentinel: capturing on every tick dominated Vercel Active CPU even with
+    no run armed. Rows stay tagged interval='5m' (the dense intraday stream).
+    Best-effort: any failure is logged and swallowed.
     """
+    import db.store as store
     try:
+        last = store.get_state("last_5min_capture_at")
+        if last:
+            elapsed = (datetime.utcnow() - datetime.fromisoformat(last)).total_seconds()
+            if elapsed < 840:
+                return
+
         from hellocrypto.api import (
             get_btc_dominance,
             get_enriched_market_data,
@@ -165,6 +173,7 @@ def _capture_5min_market_data() -> None:
         except Exception:
             pass
         n = capture_snapshots_5min(market, fng, dom)
+        store.set_state("last_5min_capture_at", datetime.utcnow().isoformat())
         if n:
             log.info("[CRON] Capture 5min: %d snapshots persistés", n)
     except Exception:

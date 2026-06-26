@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import threading
+import time
 import uuid
 from datetime import datetime
 
@@ -136,10 +137,23 @@ def _read_active_sims() -> dict:
         return {}
 
 
+# Collapses the 15s status poll (× open tabs) within a warm serverless
+# container — each call otherwise does 1 + N DB reads. Status only advances on
+# the 5-min cron cycle, so an 8s TTL is lossless; start/stop bust it for an
+# instant UI reflection.
+_STATUS_CACHE: dict = {"t": 0.0, "data": None}
+_STATUS_TTL = 8.0
+
+
+def _bust_status_cache() -> None:
+    _STATUS_CACHE["data"] = None
+
+
 def _write_active_sims(d: dict) -> None:
     try:
         from db.store import set_state
         set_state("active_sims", d)
+        _bust_status_cache()
     except Exception:
         log.warning("Impossible d'écrire active_sims", exc_info=True)
 
@@ -288,7 +302,11 @@ def sim_status():
     wrap it in the list so the UI has a single shape to consume.
     """
     if _IS_SERVERLESS:
-        return jsonify({"sessions": _serverless_status_list()})
+        now = time.time()
+        if _STATUS_CACHE["data"] is None or (now - _STATUS_CACHE["t"]) >= _STATUS_TTL:
+            _STATUS_CACHE["data"] = _serverless_status_list()
+            _STATUS_CACHE["t"] = now
+        return jsonify({"sessions": _STATUS_CACHE["data"]})
     global _auto_resumed
     if not _auto_resumed:
         _auto_resumed = True

@@ -1573,6 +1573,7 @@ function toggleLogs() {
   document.getElementById('logs-drawer').classList.toggle('open', _logsOpen);
   document.getElementById('logs-overlay').classList.toggle('open', _logsOpen);
   if (_logsOpen && !_logPollIv) startLogPolling();
+  else if (!_logsOpen && _logPollIv) { clearInterval(_logPollIv); _logPollIv = null; }
 }
 
 function setLogFilter(cat, btn) {
@@ -1678,7 +1679,8 @@ async function boot() {
     _startSimPoll();
   }
 
-  startLogPolling();
+  // Logs poll only while the drawer is open (toggleLogs starts it). Polling a
+  // closed drawer hit /api/logs every 20s for nothing — pure Vercel Active CPU.
   _startDashboardPolling();
   _wireVisibilityPause();
 }
